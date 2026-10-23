@@ -115,7 +115,7 @@ export function WorkoutList({ ws, exs }: { ws: Workout[]; exs: Map<string, Exerc
     if (listMem.restore) { // back from a workout: put the tapped card where it was on screen (card heights off-screen are estimates)
       listMem.restore = false; const y = listMem.y;
       const fix = () => { const el = document.querySelector(`a.card[href="#/history/${listMem.anchor}"]`); if (el) scrollTo(0, scrollY + el.getBoundingClientRect().top - listMem.off); else scrollTo(0, y); };
-      setTimeout(() => { scrollTo(0, y); fix(); requestAnimationFrame(() => requestAnimationFrame(fix)); }, 30);
+      setTimeout(() => { scrollTo(0, y); fix(); requestAnimationFrame(() => requestAnimationFrame(fix)); }, 30); setTimeout(fix, 300); // again once slow layouts settle
     }
     else if (/[?&]at=all/.test(location.hash)) setTimeout(() => document.getElementById('workout-list')?.scrollIntoView({ block: 'start' }), 30);
   }, [ws.length > 0]);
@@ -130,10 +130,10 @@ export function WorkoutList({ ws, exs }: { ws: Workout[]; exs: Map<string, Exerc
 const monthKey = (w: Workout) => (Number.isFinite(w.start) ? new Date(w.start).toLocaleString('en-AU', { month: 'long', year: 'numeric' }) : 'Unknown date');
 
 export function WorkoutCard({ w, exs }: { w: Workout; exs: Map<string, Exercise> }) {
-  const s = useSettings(); const bws = useBW();
+  const s = useSettings(); const bws = useQuery(() => all<BodyWeight>('bodyweight'), []) as BodyWeight[] | undefined; // undefined while loading: no '0 kcal' flash
   return <a class="card" style="display:block;color:inherit;text-decoration:none" href={`#/history/${w.id}`} onClick={(e) => { listMem.restore = true; listMem.anchor = w.id; listMem.off = (e.currentTarget as HTMLElement).getBoundingClientRect().top; }}>
     <div class="row between"><div class="b">{w.name}</div><div class="mut sm">{fmtDate(w.start)}</div></div>{w.importSource && <div style="margin-top:-2px"><SrcTag w={w} /></div>}
-    <div class="row mut sm wrap" style="gap:14px;margin:6px 0"><span>⏱ {fmtDur((w.end || w.start) - w.start)}</span><span>🏋️ {Math.round(Number(wDisp(workoutVolume(w), s)))} {s.weightUnit}</span><span>{workoutSetCount(w)} set{workoutSetCount(w) === 1 ? '' : 's'}</span><span data-testid="card-kcal">🔥 {workoutKcal(w, kgFor(bws, w), exs)} kcal{w.kcalOverride != null ? '*' : ''}</span>{!!w.prs?.length && <span class="pill warn">🏆 {w.prs.length} PR</span>}{w.needsReview && <span class="pill info" data-testid="autoended-badge" title="Ended automatically after 2 h without activity — tap to review">⏹ Auto-ended</span>}</div>
+    <div class="row mut sm wrap" style="gap:14px;margin:6px 0"><span>⏱ {fmtDur((w.end || w.start) - w.start)}</span><span>🏋️ {Math.round(Number(wDisp(workoutVolume(w), s)))} {s.weightUnit}</span><span>{workoutSetCount(w)} set{workoutSetCount(w) === 1 ? '' : 's'}</span><span data-testid="card-kcal">🔥 {bws ? workoutKcal(w, kgFor(bws, w), exs) : '…'} kcal{w.kcalOverride != null ? '*' : ''}</span>{!!w.prs?.length && <span class="pill warn">🏆 {w.prs.length} PR</span>}{w.needsReview && <span class="pill info" data-testid="autoended-badge" title="Ended automatically after 2 h without activity — tap to review">⏹ Auto-ended</span>}</div>
     <div class="sm">{w.exercises.slice(0, 5).map((e) => <div class="row ell" style="gap:8px;margin-top:3px"><ExThumb ex={exs.get(e.exerciseId)} size={28} /><span class="ell">{e.sets.filter((x) => x.done).length} × {exs.get(e.exerciseId)?.name || 'Unknown'}</span></div>)}{w.exercises.length > 5 && <div class="mut">+{w.exercises.length - 5} more</div>}</div>
   </a>;
 }

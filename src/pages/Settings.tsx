@@ -1,6 +1,7 @@
 import { useQuota, quotaText } from './Coach';
 import { coachMode, fetchStatus } from '../coach';
-import { useEffect, useState } from 'preact/hooks';
+import { useEffect, useRef, useState } from 'preact/hooks';
+import { SCALED, scaleMacros } from '../targets';
 import { clearAll, exportAll, importAll, getSettings, put } from '../db';
 import { useSettings } from '../hooks';
 import type { Settings } from '../types';
@@ -71,7 +72,18 @@ export function SettingsPage() {
     inp.onchange = async () => { const f = inp.files?.[0]; if (!f) return; try { const j = JSON.parse(await f.text()); if (mode === 'replace' && !confirmDo('Replace ALL current data with this backup?')) return; await importAll(j, mode); toast('Backup restored'); scheduleReminders(); } catch (e: any) { alert('Import failed: ' + e.message); } };
     inp.click();
   };
-  const field = (k: string, label: string) => <label class="f">{label}<input inputMode="decimal" value={t[k] ?? ''} onInput={(e) => setT({ ...t, [k]: e.currentTarget.value })} /></label>;
+  // calorie edits scale protein/carbs/fat live from the values before this calorie edit; editing a macro resets that base
+  const base = useRef<Record<string, number | null> | null>(null);
+  const onField = (k: string, v: string) => {
+    if (k === 'kcal') {
+      base.current ||= { kcal: num(t.kcal || ''), protein: num(t.protein || ''), carbs: num(t.carbs || ''), fat: num(t.fat || '') };
+      const sc = scaleMacros(base.current as any, num(v)); const nt = { ...t, kcal: v }; for (const m of SCALED) if (sc[m] != null) nt[m] = String(sc[m]); setT(nt); return;
+    }
+    if ((SCALED as readonly string[]).includes(k)) base.current = null;
+    setT({ ...t, [k]: v });
+  };
+  useEffect(() => { base.current = null; }, [s]);
+  const field = (k: string, label: string) => <label class="f">{label}<input inputMode="decimal" value={t[k] ?? ''} data-testid={'target-' + k} onInput={(e) => onField(k, e.currentTarget.value)} /></label>;
   return <><Top title="Settings" /><div class="page col">
     <InstallSetting />
     <h2>Profile & calorie burn</h2>
@@ -79,7 +91,8 @@ export function SettingsPage() {
     <h2>Daily targets</h2>
     <div class="card col"><div class="grid2">{field('kcal', 'Energy (kcal)')}{field('protein', 'Protein (g)')}{field('carbs', 'Net carbs (g)')}{field('fat', 'Fat (g)')}{field('fibre', 'Fibre (g)')}</div>
       <details><summary class="b sm">Micronutrient targets</summary><div class="grid2" style="margin-top:10px">{MICROS.map((m) => field(m.key, `${m.label} (${m.unit})`))}</div></details>
-      <div class="mut xs">Macro split: P {r1(((num(t.protein || '') || 0) * 4 / (num(t.kcal || '') || 1)) * 100)}% · C {r1(((num(t.carbs || '') || 0) * 4 / (num(t.kcal || '') || 1)) * 100)}% · F {r1(((num(t.fat || '') || 0) * 9 / (num(t.kcal || '') || 1)) * 100)}%</div>
+      <div class="mut xs">Changing calories scales protein, carbs and fat to keep their ratio (fibre stays); editing a macro changes only that macro.</div>
+      <div class="mut xs" data-testid="macro-split">Macro split: P {r1(((num(t.protein || '') || 0) * 4 / (num(t.kcal || '') || 1)) * 100)}% · C {r1(((num(t.carbs || '') || 0) * 4 / (num(t.kcal || '') || 1)) * 100)}% · F {r1(((num(t.fat || '') || 0) * 9 / (num(t.kcal || '') || 1)) * 100)}%</div>
       <div class="grid2"><button class="btn" onClick={() => { if (confirmDo('Reset targets to defaults (1800 kcal, P 157.5, C 202.5, F 40)?')) save({ targets: DEFAULT_SETTINGS.targets }); }}>Reset defaults</button><button class="btn p" onClick={saveTargets}>Save targets</button></div></div>
     <h2>Units & workout</h2>
     <div class="card col"><label class="f">Energy<Seg value={s.energyUnit} onChange={(energyUnit) => save({ energyUnit })} options={[['kcal', 'kcal'], ['kJ', 'kJ']]} /></label>

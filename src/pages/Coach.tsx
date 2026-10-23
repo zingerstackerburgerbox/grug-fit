@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { all, get, getSettings, put } from '../db';
+import { applyTargetChange } from '../targets';
 import { go, useQuery, useSettings } from '../hooks';
 import type { Exercise, Routine, RoutineEx, Settings } from '../types';
 import { Top, confirmDo, toast } from '../ui';
@@ -104,12 +105,12 @@ function ActionCard({ a, state, onDone }: { a: CoachAction; state?: 'saved' | 'd
       {state === 'saved' && <button class="btn g sm" onClick={() => go(savedId ? `/routine/${savedId}` : '/workouts?list=1')}>Open in Workouts ›</button>}
     </div>;
   }
-  const t = s.targets; const keys = (['kcal', 'protein', 'carbs', 'fat', 'fibre'] as const).filter((k) => a[k] != null);
+  const t = s.targets; const { next: eff, scaled } = applyTargetChange(t, a); const keys = (['kcal', 'protein', 'carbs', 'fat', 'fibre'] as const).filter((k) => a[k] != null || (scaled as string[]).includes(k));
   const label: Record<string, string> = { kcal: 'Calories', protein: 'Protein', carbs: 'Net carbs', fat: 'Fat', fibre: 'Fibre' };
-  const save = async () => { const cur: Settings = await getSettings(); const nt = { ...cur.targets }; for (const k of keys) (nt as any)[k] = a[k]; await put('kv', { ...cur, targets: nt }); onDone('saved'); toast('Targets updated'); };
+  const save = async () => { const cur: Settings = await getSettings(); const nt = applyTargetChange(cur.targets, a).next; await put('kv', { ...cur, targets: nt }); onDone('saved'); toast('Targets updated'); };
   return <div class={'card col action-card ' + (state || '')} data-testid="coach-action" data-type="update_targets">
     <div class="row between"><b class="sm">🎯 Update daily targets</b>{state && <span class={'pill ' + (state === 'saved' ? 'ok' : '')}>{state === 'saved' ? 'Saved' : 'Dismissed'}</span>}</div>
-    <div class="xs">{keys.map((k) => <div class="row between"><span>{label[k]}</span><span>{state === 'saved' ? '' : <><span class="mut">{(t as any)[k]}</span> → </>}<b>{a[k]}</b> {k === 'kcal' ? 'kcal' : 'g'}</span></div>)}</div>
+    <div class="xs">{keys.map((k) => <div class="row between"><span>{label[k]}</span><span>{state === 'saved' ? '' : <><span class="mut">{(t as any)[k]}</span> → </>}<b>{(eff as any)[k]}</b> {k === 'kcal' ? 'kcal' : 'g'}{(scaled as string[]).includes(k) ? <span class="mut"> (scaled)</span> : null}</span></div>)}</div>
     {!state && <div class="grid2"><button class="btn sm" data-testid="action-dismiss" onClick={() => onDone('dismissed')}>Dismiss</button><button class="btn sm p" data-testid="action-save" onClick={save}>Save targets</button></div>}
   </div>;
 }

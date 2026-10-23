@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'preact/hooks';
+import { useEffect, useRef, useState } from 'preact/hooks';
+import { scaleMacros } from '../targets';
 import { InstallBanner } from './Install';
 import { all, getSettings, put } from '../db';
 import { go, useQuery } from '../hooks';
@@ -42,7 +43,12 @@ export function Onboarding({ onDone }: { onDone?: () => void }) {
   const B = heightCm && kg && ageN != null && sex ? bmr(kg, heightCm, ageN, sex) : null;
   const sed = B != null ? sedentaryBurn(B) : null;
   const sug = sed != null && kg && goal ? suggestTargets(kg, sed, goal) : null;
-  useEffect(() => { if (step === 'result' && sug) setT({ ...sug }); }, [step, sug?.kcal, sug?.protein]);
+  // v1.8.5: protein / carbs / fat keep the current targets' ratio, scaled to the suggested calories
+  const ratioBase = s ? { kcal: s.targets.kcal, protein: s.targets.protein, carbs: s.targets.carbs, fat: s.targets.fat } : null;
+  const obBase = useRef<any>(null);
+  useEffect(() => { if (step === 'result' && sug && ratioBase) { obBase.current = null; { const m = scaleMacros(ratioBase, sug.kcal); setT({ kcal: sug.kcal, protein: m.protein ?? null, carbs: m.carbs ?? null, fat: m.fat ?? null }); } } }, [step, sug?.kcal, s?.targets.kcal]);
+  const setKcal = (v: number | null) => { obBase.current ||= { kcal: t.kcal, protein: t.protein, carbs: t.carbs, fat: t.fat }; { const m = scaleMacros(obBase.current, v); setT({ ...t, kcal: v as any, protein: m.protein ?? t.protein, carbs: m.carbs ?? t.carbs, fat: m.fat ?? t.fat }); } };
+  const setMacro = (k: 'protein' | 'fat' | 'carbs', v: number | null) => { obBase.current = null; setT({ ...t, [k]: v as any }); };
 
   const idx = STEPS.indexOf(step);
   const next = () => {
@@ -103,11 +109,11 @@ export function Onboarding({ onDone }: { onDone?: () => void }) {
           <div class="mut xs">BMR <span data-testid="ob-bmr">{r0(B)}</span> kcal (Mifflin-St Jeor: {r1(kg!)} kg, {heightCm} cm, {ageN} y, {sex}) × 1.2 sedentary. Workouts are added on top each day.</div></div>
         <div class="card col"><div class="row between"><b>Suggested for {GOAL_LABEL[goal!]}</b><span class="pill">{goal === 'cut' ? `${r0(sug.kcal - sed)}` : goal === 'bulk' ? `+${r0(sug.kcal - sed)}` : '±0'} kcal</span></div>
           <div class="grid2">
-            <label class="f">Calories (kcal)<NumInput int value={t.kcal} onValue={(v) => setT({ ...t, kcal: v })} aria-label="Target calories" /></label>
-            <label class="f">Protein (g)<NumInput int value={t.protein} onValue={(v) => setT({ ...t, protein: v })} aria-label="Target protein" /></label>
-            <label class="f">Fat (g)<NumInput int value={t.fat} onValue={(v) => setT({ ...t, fat: v })} aria-label="Target fat" /></label>
-            <label class="f">Net carbs (g)<NumInput int value={t.carbs} onValue={(v) => setT({ ...t, carbs: v })} aria-label="Target carbs" /></label></div>
-          <div class="mut xs">Protein {goal === 'maintain' ? '1.6' : '2'} g/kg · fat ~27.5 % of calories · rest carbs.{t.kcal && t.protein != null && t.fat != null && t.carbs != null && Math.abs(t.protein * 4 + t.fat * 9 + t.carbs * 4 - t.kcal) > 60 ? ` ⚠️ Your macros add up to ${r0(t.protein * 4 + t.fat * 9 + t.carbs * 4)} kcal.` : ''}</div></div>
+            <label class="f">Calories (kcal)<NumInput int value={t.kcal} onValue={setKcal} aria-label="Target calories" /></label>
+            <label class="f">Protein (g)<NumInput int value={t.protein} onValue={(v) => setMacro('protein', v)} aria-label="Target protein" /></label>
+            <label class="f">Fat (g)<NumInput int value={t.fat} onValue={(v) => setMacro('fat', v)} aria-label="Target fat" /></label>
+            <label class="f">Net carbs (g)<NumInput int value={t.carbs} onValue={(v) => setMacro('carbs', v)} aria-label="Target carbs" /></label></div>
+          <div class="mut xs" data-testid="ob-ratio-note">Protein, carbs and fat keep the ratio of your current targets, scaled to these calories (changing calories here scales them too).{t.kcal && t.protein != null && t.fat != null && t.carbs != null && Math.abs(t.protein * 4 + t.fat * 9 + t.carbs * 4 - t.kcal) > 60 ? ` ⚠️ Your macros add up to ${r0(t.protein * 4 + t.fat * 9 + t.carbs * 4)} kcal.` : ''}</div></div>
         {existing ? <><div class="card sm" data-testid="ob-current">Your current targets: <b>{r0(s.targets.kcal)} kcal</b> · P {r0(s.targets.protein)} g · F {r0(s.targets.fat)} g · C {r0(s.targets.carbs)} g</div>
           <button class="btn p" onClick={() => finish(true)} data-testid="ob-use">Use these targets</button>
           <button class="btn" onClick={() => finish(false)} data-testid="ob-keep">Keep my current targets</button></>
