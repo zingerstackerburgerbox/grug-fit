@@ -19,6 +19,14 @@ GLOBAL_DAILY_CAP = "500"
 MAX_INPUT_CHARS = "24000"
 MAX_TOKENS = "1200"
 KILL_SWITCH = "0"
+# v1.10.0 Smart Estimate (Food tab): successful estimates per device per UTC day (raise when a paid tier exists);
+# per network = EST_DAILY_CAP x EST_NETWORK_MULT. Separate from coach messages.
+EST_DAILY_CAP = "1"
+EST_NETWORK_MULT = "3"
+EST_MAX_IMAGE_CHARS = "1500000"
+EST_MAX_TOKENS = "1500"
+# reasoning_effort sent to xAI for estimates ("none" = omit)
+EST_REASONING = "low"
 ALLOWED_ORIGINS = "https://zingerstackerburgerbox.github.io,http://localhost:5173,http://localhost:4173,http://127.0.0.1:5173,http://127.0.0.1:4173"
 # Secrets (never in this file): XAI_API_KEY (required), IP_SALT (required for private IP hashing), OWNER_TOKEN (optional)
 

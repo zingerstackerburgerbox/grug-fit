@@ -25,6 +25,14 @@ Deploy `dist/` to any static HTTPS host (GitHub Pages, Netlify, Cloudflare Pages
 Steps are typed in per day (Workout tab › Steps, any date; optional goal in Settings › Steps). Calories above the first
 2,000 steps a day are added to burned-today (stride from height, 0.5 kcal per kg per km); see `src/steps.ts`.
 
+## Smart Estimate (v1.10.0)
+Food tab › "≈ Estimate" (on each meal, and on the Add food screen) opens `#/food/estimate/<date>/<meal>`. You describe a meal (and can add a photo), get an
+editable per-item estimate (name, grams, kcal, protein, carbs, fat), and nothing is saved until you tap Log. Logged items are normal diary entries with an
+`est` flag (shown as "≈ est.") and no saved food. A one-time notice (`settings.estNotice`) comes first and also covers sending the description or photo.
+Requests go to the coach proxy's `POST /estimate`, which builds the prompt, checks the JSON reply and enforces the daily cap
+(`EST_DAILY_CAP`, 1 per device per UTC day, ×3 per network). Only successful estimates count, the owner token bypasses the cap, and coach messages aren't used.
+The user-facing copy never says "AI". Photos are shrunk in memory (≤1024 px JPEG), sent once and never stored. Code: `src/estimate.ts`, `src/pages/Estimate.tsx`.
+
 ## Name (v1.9.4)
 The app is called **Lunk** (formerly "Grug Fit"); the AI Coach persona is still **Grug**. Renamed only where users see it.
 Kept as `grug-fit` / `grugfit` on purpose so existing installs update in place and keep their data: the URL/base path

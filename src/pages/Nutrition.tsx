@@ -67,9 +67,9 @@ export function Diary({ date }: { date: string }) {
           <div class="row between"><div><b>{label}</b> <span class="mut sm">{energy(mt.kcal, s)} {eu(s)} · P {r0(mt.protein)} · C {r0(netCarbs(mt))} · F {r0(mt.fat)}</span></div>
             <button class="btn ic" aria-label={`${label} menu`} onClick={() => setMenu(m)}>⋮</button></div>
           <div class="list">{es.map((e) => <button class="item" style="min-height:48px;padding:8px 0" onClick={() => setEdit(e)}>
-            <div class="grow"><div class="ell">{e.name}</div><div class="mut xs">{amountText(e)}</div></div>
+            <div class="grow"><div class="ell">{e.name}{e.est && <span class="pill info est-badge" data-testid="est-badge" title={e.est.note ? `Smart Estimate: ${e.est.note}` : 'Smart Estimate'} style="margin-left:6px;vertical-align:middle">≈ est.</span>}</div><div class="mut xs">{amountText(e)}</div></div>
             <div class="sm" style="text-align:right">{energy(e.n.kcal, s)}<div class="mut xs">P{r0(e.n.protein)} C{r0(netCarbs(e.n))} F{r0(e.n.fat)}</div></div></button>)}</div>
-          <div class="row" style="margin-top:4px;gap:6px"><a class="btn g sm grow" href={`#/food/add/${date}/${m}`}>+ Add food</a><a class="btn sm b2" href={`#/food/add/${date}/${m}?scan=1`} aria-label={`Scan barcode into ${label}`}>▥ Scan</a></div>
+          <div class="row" style="margin-top:4px;gap:6px"><a class="btn g sm grow" href={`#/food/add/${date}/${m}`}>+ Add food</a><a class="btn sm b2" href={`#/food/add/${date}/${m}?scan=1`} aria-label={`Scan barcode into ${label}`}>▥ Scan</a><a class="btn sm" data-testid={`est-open-${m}`} href={`#/food/estimate/${date}/${m}`} aria-label={`Smart Estimate for ${label}`}>≈ Estimate</a></div>
         </div>; })}
       <h2>Nutrients</h2>
       <div class="card"><Micros n={total} s={s} /></div>
@@ -190,8 +190,9 @@ export function FoodAmountSheet({ open, onClose, food: food0, entry, date, meal,
     const label = ui === 0 ? base : unit.label;
     const e: DiaryEntry = { id: entry?.id || uid(), date: entry?.date || date, meal: m, foodId: food.id, name: food.brand ? `${food.name} (${food.brand})` : food.name, grams, qty: q, serving: label, n, created: entry?.created || Date.now(),
       // imported entries stay tagged (so 'Remove imported data' still finds them); unknown-weight units show as logged, e.g. '2 cup'
-      ...(entry?.importSource ? { importSource: entry.importSource } : {}), ...(food.gramsUnknown && ui > 0 ? { amountLabel: `${r1(q)} ${label}` } : {}) };
+      ...(entry?.importSource ? { importSource: entry.importSource } : {}), ...(entry?.est ? { est: entry.est } : {}), ...(food.gramsUnknown && ui > 0 ? { amountLabel: `${r1(q)} ${label}` } : {}) };
     await put('diary', e);
+    if (entry?.est) { toast('Updated'); onClose(); onAdded?.(); return; } // estimated items have no saved food (kept out of My foods / Recent)
     const stored = (await get<Food>('foods', food.id)) || food;
     await put('foods', { ...stored, servings: stored.servings, lastServing: { label, qty: q }, ...(entry ? {} : { lastUsed: Date.now(), useCount: (stored.useCount || 0) + 1 }) });
     toast(entry ? 'Updated' : `Added to ${m}`); onClose(); onAdded?.();
@@ -215,7 +216,7 @@ export function FoodAmountSheet({ open, onClose, food: food0, entry, date, meal,
       <div class="mut xs" data-testid="grams">= {r1(grams)} {base} · fibre {r1(n.fibre)} g{MICROS.filter((x) => n[x.key] != null && (n[x.key] as number) > 0).map((x) => ` · ${x.label} ${r1(n[x.key] as number)} ${x.unit}`).join('')}</div>
       <button class="btn p" disabled={grams <= 0} onClick={save}>{entry ? 'Save changes' : 'Add to diary'}</button>
       {entry && <button class="btn d" onClick={async () => { await del('diary', entry.id); onClose(); }}>Remove from diary</button>}
-      {(food.source !== 'off' && food.source !== 'usda') && <a class="btn g" href={food.source === 'recipe' ? `#/recipe/${food.id}` : `#/food/edit/${food.id}`} onClick={onClose}>Edit {food.source === 'recipe' ? 'recipe' : 'food'}</a>}
+      {(food.source !== 'off' && food.source !== 'usda' && !entry?.est) && <a class="btn g" href={food.source === 'recipe' ? `#/recipe/${food.id}` : `#/food/edit/${food.id}`} onClick={onClose}>Edit {food.source === 'recipe' ? 'recipe' : 'food'}</a>}
     </div></Sheet>;
 }
 
@@ -296,6 +297,7 @@ export function AddFood({ date, meal }: { date: string; meal: Meal }) {
       <div class="grid2"><button class="btn sm" data-testid="retry-lookup" onClick={() => barcode(notFound)}>↻ Retry lookup</button><button class="btn sm" onClick={() => setScan(true)}>Scan again</button></div>
       {diag && <div class="xs mut" data-testid="lookup-diag" style="word-break:break-word">Details: {diag}</div>}</div>}
     <div class="chips" style="margin:10px 0">{([['search', 'Search'], ['recent', 'Recent'], ['frequent', 'Frequent'], ['mine', 'My foods & recipes']] as const).map(([k, l]) => <button class={'chip ' + (tab === k ? 'on' : '')} onClick={() => setTab(k)}>{l}</button>)}</div>
+    <a class="btn sm full" style="margin-bottom:10px" data-testid="est-open" href={`#/food/estimate/${date}/${meal}`}>≈ Smart Estimate – describe or photograph a meal</a>
     <div class="grid3"><a class="btn sm" href={`#/food/label?ret=${date}/${meal}`} data-testid="scan-label">📷 Scan label</a><a class="btn sm" href={`#/food/edit/new?ret=${date}/${meal}`}>+ Custom food</a><a class="btn sm" href="#/recipe/new">+ Recipe</a></div>
     {busy && <div class="empty">Searching Open Food Facts…</div>}
     {err && !notFound && <div class="card sm" style="border-color:var(--warn);margin-top:10px">{err}</div>}

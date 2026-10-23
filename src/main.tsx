@@ -12,6 +12,7 @@ import { Home } from './pages/Home';
 import { ActiveWorkout, BodyWeightPage, ExerciseDetail, ExercisesPage, HistoryRedirect, RestBar, RoutineEdit, WorkoutDetail, WorkoutsHome } from './pages/Workouts';
 import { LabelScan } from './pages/LabelScan';
 import { AddFood, Diary, FoodEdit, MyFoods, RecipeEdit, Trends } from './pages/Nutrition';
+import { EstimatePage } from './pages/Estimate';
 import { CalendarPage, SuppEdit, SuppsPage } from './pages/Supps';
 import { SettingsPage } from './pages/Settings';
 import { Onboarding } from './pages/Onboarding';
@@ -57,6 +58,7 @@ function route(h: string) {
       if (p[1] === 'edit') return <FoodEdit id={p[2]} key={p[2]} />;
       if (p[1] === 'trends') return <Trends />;
       if (p[1] === 'label') return <LabelScan />;
+      if (p[1] === 'estimate') return <EstimatePage date={p[2] || ymd()} meal={(p[3] as Meal) || 'snacks'} key={`${p[2]}/${p[3]}`} />;
       return <Diary date={p[1] || ymd()} />;
     case 'foods': return <MyFoods />;
     case 'recipe': return <RecipeEdit id={p[1]} key={p[1]} />;

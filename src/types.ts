@@ -37,7 +37,8 @@ export type Food = ImportTag & {
   defaultServing?: string;
 };
 export type Meal = 'breakfast' | 'lunch' | 'dinner' | 'snacks';
-export type DiaryEntry = ImportTag & { id: string; date: string; meal: Meal; foodId: string; name: string; grams: number; qty: number; serving: string; n: Nutrients; created: number; /** imported entries whose grams are unknown: amount as logged in the other app, e.g. '1 cup' */ amountLabel?: string };
+export type DiaryEntry = ImportTag & { id: string; date: string; meal: Meal; foodId: string; name: string; grams: number; qty: number; serving: string; n: Nutrients; created: number; /** imported entries whose grams are unknown: amount as logged in the other app, e.g. '1 cup' */ amountLabel?: string;
+  /** v1.10.0 logged from a Smart Estimate (shown with an 'est.' badge): overall confidence + the one-line assumption note */ est?: { conf: 'low' | 'med' | 'high'; note?: string } };
 export type Supplement = {
   id: string; name: string; kind: 'supplement' | 'medication'; doseAmount: number; unit: string; form: string; notes?: string;
   nutrients?: Partial<Nutrients>; stock?: number | null; unitsPerDose: number; lowStock: number; color: string; archived?: boolean;
@@ -68,6 +69,8 @@ export type Settings = {
   theme?: { mode: 'dark' | 'light' | 'amoled' | 'system'; accent: string };
   /** v1.9.3 seasonal overlay choice per season+year, e.g. { 'halloween-2026': 'off' } (default on during the season) */
   seasonal?: Record<string, 'on' | 'off'>;
+  /** v1.10.0 Smart Estimate first-open notice accepted ('Got it', timestamp; also covers sending the description/photo) */
+  estNotice?: number;
   /** onboarding finished/skipped (timestamp) */
   onboarded?: number;
 };
