@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'preact/hooks';
-import { clearAll, exportAll, importAll, put } from '../db';
+import { clearAll, exportAll, importAll, getSettings, put } from '../db';
 import { useSettings } from '../hooks';
 import type { Settings } from '../types';
 import { NumInput, Seg, Top, confirmDo, num, toast } from '../ui';
@@ -38,6 +38,14 @@ function ProfileCard({ s }: { s: Settings }) {
   </div>;
 }
 
+/** Optional personal api.data.gov key. Loads the stored value before enabling the field so a fast tap can't be overwritten by the initial load. */
+function UsdaKeyField() {
+  const [v, setV] = useState<string | null>(null);
+  useEffect(() => { getSettings().then((x) => setV(x.usdaKey || '')); }, []);
+  const commit = async (val: string) => { const cur = await getSettings(); await put('kv', { ...cur, usdaKey: val.trim() || undefined }); toast(val.trim() ? 'USDA key saved' : 'USDA key cleared — using DEMO_KEY'); };
+  return <label class="f">USDA API key (optional)<input data-testid="usda-key" aria-label="USDA API key" autocomplete="off" spellcheck={false} placeholder="Blank = shared DEMO_KEY" disabled={v === null} value={v ?? ''}
+    onInput={(e) => setV(e.currentTarget.value)} onChange={(e) => commit(e.currentTarget.value)} /></label>;
+}
 export function SettingsPage() {
   const s = useSettings(); const [t, setT] = useState<Record<string, string>>({});
   const [perm, setPerm] = useState(typeof Notification !== 'undefined' ? Notification.permission : 'unsupported');
@@ -75,7 +83,7 @@ export function SettingsPage() {
       <label class="row sm"><input type="checkbox" style="width:24px;min-height:24px" checked={s.vibrate} onChange={(e) => { save({ vibrate: e.currentTarget.checked }); localStorage.setItem('vibrate', e.currentTarget.checked ? '1' : '0'); }} /> Vibrate on set complete & rest end</label>
       <div class="mut xs">Dates are shown as DD/MM/YYYY. Food quantities in grams.</div></div>
     <h2>Food lookup</h2>
-    <div class="card col"><label class="f">USDA API key (optional)<input data-testid="usda-key" aria-label="USDA API key" autocomplete="off" spellcheck={false} placeholder="Blank = shared DEMO_KEY" value={s.usdaKey || ''} onChange={(e) => { save({ usdaKey: e.currentTarget.value.trim() || undefined }); toast('USDA key saved'); }} /></label>
+    <div class="card col"><UsdaKeyField />
       <div class="mut xs">Barcodes Open Food Facts doesn't know are checked in USDA FoodData Central (US branded foods). The shared DEMO_KEY allows only ~30 lookups an hour; a <a href="https://fdc.nal.usda.gov/api-key-signup" target="_blank" rel="noopener">free personal key</a> raises that to 1,000.</div></div>
     <h2>Dose reminders</h2>
     <div class="card col"><label class="row sm"><input type="checkbox" style="width:24px;min-height:24px" checked={s.reminders} onChange={async (e) => { const on = e.currentTarget.checked; if (on && typeof Notification !== 'undefined' && Notification.permission !== 'granted') setPerm(await Notification.requestPermission()); await save({ reminders: on }); setTimeout(scheduleReminders, 50); }} /> Enable reminder notifications</label>
