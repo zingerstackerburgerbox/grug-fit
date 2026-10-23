@@ -130,3 +130,10 @@ label.f.missing input { border: 2px dashed var(--bad) !important; }
 .ob-nav { margin-top: 14px; }
 .burnbar { display: flex; gap: 16px; justify-content: space-between; align-items: center; padding: 8px 12px; margin: 0 0 10px; border-radius: 12px; background: var(--bg2); border: 1px solid var(--line); font-size: 13px; text-decoration: none; color: inherit; }
 .burnbar b { font-size: 16px; } .burnbar .rem b { color: var(--acc); } .burnbar .rem.over b { color: var(--bad); }
+.exthumb { display: inline-flex; flex: none; border-radius: 10px; background: #171a21; border: 1px solid var(--line); overflow: hidden; padding: 0; }
+.exthumb svg, .exanim svg { width: 100%; height: 100%; display: block; }
+button.exthumb.tap { cursor: pointer; min-height: 0; }
+.exanim { border-radius: 16px; background: #171a21; }
+.iconpick { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
+.iconpick button { padding: 2px; border-radius: 10px; border: 2px solid var(--line); background: #171a21; min-height: 0; color: var(--mut); font-size: 10px; }
+.iconpick button.on { border-color: var(--acc); }

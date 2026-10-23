@@ -3,7 +3,7 @@ export type Nutrients = {
   calcium?: number; iron?: number; vitC?: number; vitA?: number; vitD?: number; b12?: number;
   folate?: number; magnesium?: number; potassium?: number; sodium?: number;
 };
-export type Exercise = { id: string; name: string; muscle: string; equipment: string; custom?: boolean };
+export type Exercise = { id: string; name: string; muscle: string; equipment: string; custom?: boolean; /** custom exercises: generic visual 'g:<Muscle>' (default: from muscle group) */ icon?: string };
 export type SetType = 'W' | 'N' | 'D' | 'F';
 export type WSet = { id: string; type: SetType; kg: number | null; reps: number | null; rpe?: number | null; done: boolean };
 export type WExercise = { id: string; exerciseId: string; sets: WSet[]; restSec: number; notes?: string };

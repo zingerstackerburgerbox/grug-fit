@@ -7,6 +7,7 @@ import { e1rm, fmtDate, fmtDM, fmtDur, fmtTime, r1, uid, vibrate, wDisp, wIn, ym
 import { detectPRs, exerciseHistory, previousSets, workoutSetCount, workoutVolume } from '../workoutLogic';
 import { CustomExerciseForm, ExerciseFilter, ExercisePicker, useExercises } from './ExercisePicker';
 import { rest } from '../rest';
+import { ExAnim, ExThumb } from '../exviz/ExViz';
 import { MET, weightAt, workoutKcal, type Intensity } from '../energy';
 
 const useBW = () => useQuery(() => all<BodyWeight>('bodyweight'), [], []) as BodyWeight[];
@@ -56,7 +57,8 @@ export function WorkoutsHome() {
       <div class="row between"><h2>Routines</h2><a class="btn g sm" href="#/routine/new">+ New routine</a></div>
       {!routines.length && <div class="card empty">No routines yet. Create one (e.g. "Push Day") to start workouts quickly.</div>}
       {routines.map((r) => <div class="card">
-        <div class="row between"><div class="grow"><div class="b">{r.name}</div><div class="mut sm ell">{r.exercises.map((e) => exs.get(e.exerciseId)?.name || '?').join(', ') || 'No exercises'}</div></div>
+        <div class="row between"><div class="grow"><div class="b">{r.name}</div><div class="mut sm ell">{r.exercises.map((e) => exs.get(e.exerciseId)?.name || '?').join(', ') || 'No exercises'}</div>
+          {r.exercises.length > 0 && <div class="row" style="gap:4px;margin-top:6px;flex-wrap:wrap">{r.exercises.slice(0, 6).map((e) => <ExThumb ex={exs.get(e.exerciseId)} size={34} />)}</div>}</div>
           <a class="btn sm" href={`#/routine/${r.id}`}>Edit</a></div>
         <button class="btn b2 full" style="margin-top:10px" onClick={() => startWorkout(r)}>Start routine</button>
       </div>)}
@@ -69,7 +71,7 @@ export function WorkoutCard({ w, exs }: { w: Workout; exs: Map<string, Exercise>
   return <a class="card" style="display:block;color:inherit;text-decoration:none" href={`#/history/${w.id}`}>
     <div class="row between"><div class="b">{w.name}</div><div class="mut sm">{fmtDate(w.start)}</div></div>
     <div class="row mut sm wrap" style="gap:14px;margin:6px 0"><span>⏱ {fmtDur((w.end || w.start) - w.start)}</span><span>🏋️ {Math.round(Number(wDisp(workoutVolume(w), s)))} {s.weightUnit}</span><span>{workoutSetCount(w)} sets</span><span data-testid="card-kcal">🔥 {workoutKcal(w, kgFor(bws, w))} kcal{w.kcalOverride != null ? '*' : ''}</span>{!!w.prs?.length && <span class="pill warn">🏆 {w.prs.length} PR</span>}</div>
-    <div class="sm">{w.exercises.slice(0, 5).map((e) => <div class="ell">{e.sets.filter((x) => x.done).length} × {exs.get(e.exerciseId)?.name || 'Unknown'}</div>)}{w.exercises.length > 5 && <div class="mut">+{w.exercises.length - 5} more</div>}</div>
+    <div class="sm">{w.exercises.slice(0, 5).map((e) => <div class="row ell" style="gap:8px;margin-top:3px"><ExThumb ex={exs.get(e.exerciseId)} size={28} /><span class="ell">{e.sets.filter((x) => x.done).length} × {exs.get(e.exerciseId)?.name || 'Unknown'}</span></div>)}{w.exercises.length > 5 && <div class="mut">+{w.exercises.length - 5} more</div>}</div>
   </a>;
 }
 
@@ -85,7 +87,7 @@ export function RoutineEdit({ id }: { id: string }) {
     <div class="page">
       <label class="f">Routine name<input value={r.name} placeholder="e.g. Push Day" onInput={(e) => setR({ ...r, name: e.currentTarget.value })} /></label>
       {r.exercises.map((e, i) => <div class="card" style="margin-top:10px">
-        <div class="row between"><div class="b grow ell">{exs.get(e.exerciseId)?.name}</div>
+        <div class="row between"><ExThumb ex={exs.get(e.exerciseId)} size={40} /><div class="b grow ell">{exs.get(e.exerciseId)?.name}</div>
           <button class="btn ic" onClick={() => move(i, -1)} aria-label="Move up">↑</button><button class="btn ic" onClick={() => move(i, 1)} aria-label="Move down">↓</button>
           <button class="btn ic" style="color:var(--bad)" onClick={() => setR({ ...r, exercises: r.exercises.filter((_, j) => j !== i) })} aria-label="Remove">✕</button></div>
         <div class="grid2" style="grid-template-columns:repeat(4,1fr);gap:6px">
@@ -114,7 +116,7 @@ export function ActiveWorkout() {
   const exList = useExercises(); const exs = exMap(exList); const s = useSettings(); const hist = useWorkouts();
   const [w, setW] = useState<Workout | null | undefined>(undefined);
   const [pick, setPick] = useState(false); const [setMenu, setSetMenu] = useState<{ ei: number; si: number } | null>(null);
-  const [exMenu, setExMenu] = useState<number | null>(null); const [finish, setFinish] = useState(false); const [summary, setSummary] = useState<Workout | null>(null);
+  const [exMenu, setExMenu] = useState<number | null>(null); const [finish, setFinish] = useState(false); const [summary, setSummary] = useState<Workout | null>(null); const [demo, setDemo] = useState<string | null>(null);
   const now = useNow(1000); const bwsA = useBW(); const liveKg = weightAt(bwsA, ymd());
   useEffect(() => { get<{ w: Workout }>('kv', 'active').then((x) => { wRef.current = x?.w || null; setW(x?.w || null); }); }, []);
   const wRef = useRef<Workout | null | undefined>(undefined); wRef.current = wRef.current === undefined ? w : wRef.current;
@@ -158,7 +160,7 @@ export function ActiveWorkout() {
         const ex = exs.get(e.exerciseId); const prev = prevMap.get(e.exerciseId) || [];
         let n = 0;
         return <div class="card" style="margin-top:12px;padding:12px 8px">
-          <div class="row between" style="padding:0 4px"><a class="b grow ell" style="color:var(--acc2);text-decoration:none" href={`#/exercise/${e.exerciseId}`}>{ex?.name || 'Unknown exercise'}</a>
+          <div class="row between" style="padding:0 4px;gap:8px"><ExThumb ex={ex} size={44} onClick={() => setDemo(e.exerciseId)} /><a class="b grow ell" style="color:var(--acc2);text-decoration:none" href={`#/exercise/${e.exerciseId}`}>{ex?.name || 'Unknown exercise'}</a>
             <span class="pill">⏲ {e.restSec ? `${e.restSec}s` : 'off'}</span><button class="btn ic" aria-label="Exercise menu" onClick={() => setExMenu(ei)}>⋮</button></div>
           {e.notes != null && <input placeholder="Notes" value={e.notes} onInput={(x) => updEx(ei, { notes: x.currentTarget.value })} style="margin:4px 0 6px" />}
           <table class="sets"><thead><tr><th style="width:42px">Set</th><th>Previous</th><th style="width:20%">{s.weightUnit}</th><th style="width:16%">Reps</th><th style="width:13%">RPE</th><th style="width:46px">✓</th></tr></thead>
@@ -191,6 +193,9 @@ export function ActiveWorkout() {
         <div class="grid2"><button class="btn" onClick={() => { const l = [...cur().exercises]; if (exMenu > 0) { [l[exMenu - 1], l[exMenu]] = [l[exMenu], l[exMenu - 1]]; save({ ...cur(), exercises: l }); } setExMenu(null); }}>Move up</button>
           <button class="btn" onClick={() => { const l = [...cur().exercises]; if (exMenu < l.length - 1) { [l[exMenu + 1], l[exMenu]] = [l[exMenu], l[exMenu + 1]]; save({ ...cur(), exercises: l }); } setExMenu(null); }}>Move down</button></div>
         <button class="btn d" onClick={() => { save({ ...cur(), exercises: cur().exercises.filter((_, j) => j !== exMenu) }); setExMenu(null); }}>Remove exercise</button></div>}
+    </Sheet>
+    <Sheet open={!!demo} onClose={() => setDemo(null)} title={demo ? exs.get(demo)?.name : ''}>
+      {demo && <div class="col" data-testid="exdemo"><ExAnim ex={exs.get(demo)} size={260} /><div class="mut sm center">{exs.get(demo)?.muscle} · {exs.get(demo)?.equipment} · highlighted = main muscles</div></div>}
     </Sheet>
     <Sheet open={finish} onClose={() => setFinish(false)} title="Finish workout?">
       {(() => { const inc = w.exercises.reduce((a, e) => a + e.sets.filter((x) => !x.done).length, 0); return <div class="col">
@@ -236,7 +241,7 @@ export function WorkoutDetail({ id }: { id: string }) {
     <div class="kpi" style="margin-top:8px"><div><span class="mut xs">Duration</span><b>{fmtDur((w.end || 0) - w.start)}</b></div><div><span class="mut xs">Volume</span><b>{Math.round(Number(wDisp(workoutVolume(w), s)))} {s.weightUnit}</b></div><div><span class="mut xs">Sets</span><b>{workoutSetCount(w)}</b></div></div>
     {!!w.prs?.length && <div class="card" style="margin-top:12px;border-color:var(--warn)"><h3>🏆 Personal records</h3>{w.prs.map((p) => <div class="row between sm"><span>{exs.get(p.exerciseId)?.name}</span><span class="pill warn">{PR_LABEL[p.kind]}: {p.kind === 'reps' ? p.value : `${wDisp(p.value, s)} ${s.weightUnit}`}</span></div>)}</div>}
     <WorkoutKcalCard w={w} onChange={() => {}} />
-    {w.exercises.map((e) => { let n = 0; return <div class="card" style="margin-top:12px"><a class="b" style="color:var(--acc2);text-decoration:none" href={`#/exercise/${e.exerciseId}`}>{exs.get(e.exerciseId)?.name}</a>
+    {w.exercises.map((e) => { let n = 0; return <div class="card" style="margin-top:12px"><div class="row" style="gap:8px"><ExThumb ex={exs.get(e.exerciseId)} size={40} /><a class="b" style="color:var(--acc2);text-decoration:none" href={`#/exercise/${e.exerciseId}`}>{exs.get(e.exerciseId)?.name}</a></div>
       {e.notes && <div class="mut sm">{e.notes}</div>}
       {e.sets.map((st) => <div class="row between sm" style="padding:4px 0"><span class={'stype ' + st.type} style="min-height:0">{st.type === 'N' ? ++n : st.type}</span><span class="grow">{wDisp(st.kg, s) || 0} {s.weightUnit} × {st.reps}{st.rpe ? ` @ RPE ${st.rpe}` : ''}</span><span class="mut">1RM {r1(Number(wDisp(e1rm(st.kg || 0, st.reps || 0), s)))}</span></div>)}</div>; })}
     <button class="btn d full" style="margin-top:20px" onClick={async () => { if (confirmDo('Delete this workout from history?')) { await del('workouts', w.id); history.back(); } }}>Delete workout</button>
@@ -260,7 +265,7 @@ export function ExerciseDetail({ id }: { id: string }) {
   const best = h.length ? { r: Math.max(...h.map((x) => x.best1rm)), k: Math.max(...h.map((x) => x.bestKg)), v: Math.max(...h.map((x) => x.volume)) } : null;
   const pts = h.map((x) => ({ x: x.date, y: Number(wDisp(metric === '1rm' ? x.best1rm : metric === 'kg' ? x.bestKg : x.volume, s)) }));
   return <><Top title={ex.name} backBtn right={ex.custom ? <button class="btn sm" onClick={() => setEdit(true)}>Edit</button> : undefined} /><div class="page">
-    <div class="mut sm">{ex.muscle} · {ex.equipment}</div>
+    <div class="card" style="padding:8px"><ExAnim ex={ex} size={240} /><div class="mut xs center" style="margin-top:4px">{ex.muscle} · {ex.equipment} · <span style="color:#fb923c">■</span> main muscles</div></div>
     {best && <div class="kpi" style="margin-top:10px"><div><span class="mut xs">Best est. 1RM</span><b>{r1(Number(wDisp(best.r, s)))}</b></div><div><span class="mut xs">Heaviest</span><b>{wDisp(best.k, s)}</b></div><div><span class="mut xs">Best volume</span><b>{Math.round(Number(wDisp(best.v, s)))}</b></div></div>}
     <div class="card" style="margin-top:12px"><Seg value={metric} onChange={setMetric} options={[['1rm', 'Est. 1RM'], ['kg', 'Best weight'], ['vol', 'Volume']]} />
       <div style="margin-top:10px"><LineChart points={pts} fmtX={(x) => fmtDM(x)} color={metric === 'vol' ? '#a78bfa' : '#22c55e'} /></div>
