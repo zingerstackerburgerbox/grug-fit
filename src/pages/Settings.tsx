@@ -10,6 +10,7 @@ import { APP_VERSION, BUILD_ID, BUILD_TIME } from '../update';
 import { scheduleReminders } from '../doses';
 import { KCAL_EXPLAIN } from '../setKcal';
 import { ImportSection } from './Import';
+import { InstallSetting } from './Install';
 import { GOAL_LABEL, ageFromBirthYear, bmr, eatBackOn, latestWeight, sedentaryBurn, type Goal } from '../energy';
 import { go, useQuery } from '../hooks';
 import { LB } from '../util';
@@ -54,9 +55,7 @@ function UsdaKeyField() {
 export function SettingsPage() {
   const s = useSettings(); const [t, setT] = useState<Record<string, string>>({});
   const [perm, setPerm] = useState(typeof Notification !== 'undefined' ? Notification.permission : 'unsupported');
-  const [installEvt, setInstallEvt] = useState<any>((window as any).__installPrompt);
   useEffect(() => { const v: any = {}; for (const k in s.targets) v[k] = String((s.targets as any)[k]); setT(v); }, [s]);
-  useEffect(() => { const f = () => setInstallEvt((window as any).__installPrompt); addEventListener('installprompt', f); return () => removeEventListener('installprompt', f); }, []);
   const save = async (p: Partial<Settings>) => { await put('kv', { ...s, ...p }); };
   const saveTargets = async () => { const targets: any = { ...s.targets }; for (const k in t) { const v = num(t[k]); if (v != null) targets[k] = v; } await save({ targets }); toast('Targets saved'); };
   const doExport = async () => {
@@ -73,7 +72,7 @@ export function SettingsPage() {
   };
   const field = (k: string, label: string) => <label class="f">{label}<input inputMode="decimal" value={t[k] ?? ''} onInput={(e) => setT({ ...t, [k]: e.currentTarget.value })} /></label>;
   return <><Top title="Settings" /><div class="page col">
-    {installEvt && <button class="btn p" onClick={async () => { installEvt.prompt(); await installEvt.userChoice; (window as any).__installPrompt = null; setInstallEvt(null); }}>📲 Install Grug Fit app</button>}
+    <InstallSetting />
     <h2>Profile & calorie burn</h2>
     <ProfileCard s={s} />
     <h2>Daily targets</h2>

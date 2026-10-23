@@ -23,7 +23,7 @@ export default defineConfig({
         name: 'Grug Fit',
         short_name: 'Grug Fit',
         description: 'Workouts, nutrition, supplements and dose calendar — all on your device.',
-        id: './',
+        id: '/grug-fit/', // absolute: a relative id resolves against the origin root (github.io/), not the app path
         start_url: './',
         scope: './',
         display: 'standalone',

@@ -1,4 +1,5 @@
 import { BurnBar, useDayEnergy } from './Burn';
+import { InstallBanner } from './Install';
 import { all } from '../db';
 import { useQuery, useSettings } from '../hooks';
 import type { DiaryEntry, Exercise, Workout } from '../types';
@@ -27,6 +28,7 @@ export function Home() {
   const now = new Date();
   return <><Top title="Grug Fit" right={<a class="btn ic" href="#/settings" aria-label="Settings">⚙️</a>} /><div class="page">
     <div class="mut sm" style="margin:-2px 2px 10px">{WD[now.getDay()]} {now.getDate()} {MONTHS[now.getMonth()]}</div>
+    <InstallBanner />
     <BurnBar date={today} />
     <PackageFixNote />
     <a class="card" style="display:block;color:inherit;text-decoration:none" href={`#/food/${today}`}>

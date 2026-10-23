@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'preact/hooks';
+import { InstallBanner } from './Install';
 import { all, getSettings, put } from '../db';
 import { go, useQuery } from '../hooks';
 import { GOAL_LABEL, ageFromBirthYear, bmr, latestWeight, sedentaryBurn, suggestTargets, type Goal, type Sex } from '../energy';
@@ -71,6 +72,7 @@ export function Onboarding({ onDone }: { onDone?: () => void }) {
       {step === 'welcome' && <>
         <div class="ob-hero">💪🍗</div><h1>Welcome{existing ? ' back' : ''} to Grug Fit</h1>
         <p class="mut">{existing ? 'New: Grug Fit can now estimate how many calories you burn each day — including workouts — and suggest targets for your goal. Takes 30 seconds. Your existing data and targets stay untouched unless you choose otherwise.' : 'A few quick questions so Grug Fit can estimate your daily calorie burn and suggest calorie and protein targets. Takes about 30 seconds — you can change everything later in Settings.'}</p>
+        {!existing && <InstallBanner compact />}
       </>}
       {step === 'body' && <>
         <h1>Your body</h1>

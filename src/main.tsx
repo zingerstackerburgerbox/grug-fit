@@ -19,8 +19,9 @@ import type { Meal } from './types';
 import { checkStale } from './autoend';
 import { AutoEndReview, WorkoutMiniBar } from './pages/AutoEndReview';
 import { CoachPage } from './pages/Coach';
+import { initInstall } from './install';
 
-addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); (window as any).__installPrompt = e; dispatchEvent(new Event('installprompt')); });
+initInstall();
 
 const I = {
   home: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 11l9-7 9 7v9a1 1 0 01-1 1h-5v-6H9v6H4a1 1 0 01-1-1z" /></svg>,
