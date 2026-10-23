@@ -1,5 +1,5 @@
 import { openDB, type IDBPDatabase } from 'idb';
-import { SEED_EXERCISES, SEED_ADDED } from './seed';
+import { SEED_EXERCISES, SEED_ADDED, SEED_REFRESH } from './seed';
 import { DEFAULT_SETTINGS } from './util';
 import { normaliseServings, isBase } from './servings';
 import type { Settings } from './types';
@@ -12,7 +12,7 @@ export type StoreName = (typeof STORES)[number];
  *  - SCHEMA_VERSION: data-shape version stored in kv 'schema'; MIGRATIONS[n] transforms records from n-1 to n (see migrate()).
  */
 export const DB_VERSION = 1;
-export const SCHEMA_VERSION = 3;
+export const SCHEMA_VERSION = 4;
 let dbp: Promise<IDBPDatabase> | null = null;
 export function db() {
   if (!dbp) dbp = openDB('grugfit', DB_VERSION, {
@@ -69,8 +69,19 @@ const MIGRATIONS: Record<number, (tx: Tx) => Promise<void>> = {
     }
   },
   // v3: add new built-in exercises to existing installs. Never overwrites: skips ids already present and names the user already has (e.g. a custom one).
-  3: (tx) => addSeed(tx, SEED_ADDED[3])
+  3: (tx) => addSeed(tx, SEED_ADDED[3]),
+  // v4: Reverse Cable Crunch (ex086) is now the kneeling, back-to-the-stack movement: refresh only its how-to text. Same id, so logged sets,
+  // routines, notes and any rename stay as they are; the visual comes from code. Custom exercises are never touched.
+  4: (tx) => refreshSeed(tx, SEED_REFRESH[4])
 };
+async function refreshSeed(tx: Tx, ids: string[]) {
+  const store = tx.objectStore('exercises');
+  for (const e of SEED_EXERCISES.filter((x) => ids.includes(x.id))) {
+    const cur = await store.get(e.id);
+    if (!cur || cur.custom || cur.how === e.how) continue;
+    await store.put({ ...cur, how: e.how });
+  }
+}
 async function addSeed(tx: Tx, ids: string[]) {
   const store = tx.objectStore('exercises');
   const have = await store.getAll();

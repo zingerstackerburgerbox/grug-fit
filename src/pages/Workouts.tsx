@@ -266,6 +266,7 @@ export function ExerciseDetail({ id }: { id: string }) {
   const pts = h.map((x) => ({ x: x.date, y: Number(wDisp(metric === '1rm' ? x.best1rm : metric === 'kg' ? x.bestKg : x.volume, s)) }));
   return <><Top title={ex.name} backBtn right={ex.custom ? <button class="btn sm" onClick={() => setEdit(true)}>Edit</button> : undefined} /><div class="page">
     <div class="card" style="padding:8px"><ExAnim ex={ex} size={240} /><div class="mut xs center" style="margin-top:4px">{ex.muscle} · {ex.equipment} · <span style="color:#fb923c">■</span> main muscles</div></div>
+    {ex.how && <div class="card sm" data-testid="ex-how" style="margin-top:10px;line-height:1.45"><b>How to</b><div style="margin-top:4px">{ex.how}</div></div>}
     {best && <div class="kpi" style="margin-top:10px"><div><span class="mut xs">Best est. 1RM</span><b>{r1(Number(wDisp(best.r, s)))}</b></div><div><span class="mut xs">Heaviest</span><b>{wDisp(best.k, s)}</b></div><div><span class="mut xs">Best volume</span><b>{Math.round(Number(wDisp(best.v, s)))}</b></div></div>}
     <div class="card" style="margin-top:12px"><Seg value={metric} onChange={setMetric} options={[['1rm', 'Est. 1RM'], ['kg', 'Best weight'], ['vol', 'Volume']]} />
       <div style="margin-top:10px"><LineChart points={pts} fmtX={(x) => fmtDM(x)} color={metric === 'vol' ? '#a78bfa' : '#22c55e'} /></div>

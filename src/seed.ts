@@ -36,10 +36,16 @@ const raw: [string, string, string][] = [
   ['Kettlebell Swing', 'Full Body', 'Kettlebell'], ['Power Clean (Barbell)', 'Full Body', 'Barbell'], ['Farmer\'s Walk (Dumbbell)', 'Full Body', 'Dumbbell'],
   ['Burpee', 'Full Body', 'Bodyweight'], ['Thruster (Barbell)', 'Full Body', 'Barbell'],
   // Added later: ALWAYS append (ids are positional) and list the new ids in SEED_ADDED for the install migration.
-  ['Reverse Cable Crunch', 'Core', 'Cable'] // ex086, v1.4.1
+  ['Reverse Cable Crunch', 'Core', 'Cable'] // ex086, v1.4.1 (v1.4.2: changed from a lying to the kneeling, back-to-the-stack movement)
 ];
-export const SEED_EXERCISES: Exercise[] = raw.map(([name, muscle, equipment], i) => ({ id: 'ex' + String(i + 1).padStart(3, '0'), name, muscle, equipment }));
+/** How-to text for built-ins (shown on the exercise screen). Changing one needs a migration that refreshes `how` on existing installs. */
+export const HOW: Record<string, string> = {
+  'Reverse Cable Crunch': 'Set a rope on a high pulley. Kneel with your back to the stack, holding the rope ends beside your ears so the cable runs down over the back of your head. Keep your hips still and crunch forward and down, curling your spine to bring your elbows toward your thighs. Squeeze your abs, then return slowly to upright kneeling.'
+};
+export const SEED_EXERCISES: Exercise[] = raw.map(([name, muscle, equipment], i) => ({ id: 'ex' + String(i + 1).padStart(3, '0'), name, muscle, equipment, ...(HOW[name] ? { how: HOW[name] } : {}) }));
 /** Built-ins added after the first release, keyed by the schema version whose migration adds them to existing installs. */
 export const SEED_ADDED: Record<number, string[]> = { 3: ['ex086'] };
+/** Built-ins whose definition (how-to text) changed, keyed by the schema version whose migration refreshes them. */
+export const SEED_REFRESH: Record<number, string[]> = { 4: ['ex086'] };
 export const MUSCLES = ['Chest', 'Back', 'Shoulders', 'Traps', 'Biceps', 'Triceps', 'Forearms', 'Quadriceps', 'Hamstrings', 'Glutes', 'Calves', 'Core', 'Full Body', 'Cardio', 'Other'];
 export const EQUIPMENT = ['Barbell', 'Dumbbell', 'Machine', 'Cable', 'Bodyweight', 'Kettlebell', 'Band', 'Other'];

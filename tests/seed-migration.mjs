@@ -27,7 +27,7 @@ const asV140 = (page, extra = '') => idb(page, `await p(tx('exercises','readwrit
   const before = await asV140(page); await boot(page);
   const after = await idb(page, `return { n: (await p(tx('exercises').getAll())).length, schema: (await p(tx('kv').get('schema'))).v, ex010: await p(tx('exercises').get('ex010')), mine: await p(tx('exercises').get('cxmine')), w: await p(tx('workouts').get('w1')), d: await p(tx('diary').get('d1')) }`);
   log('existing install: exercises', before, '→', after.n, 'schema', after.schema);
-  if (after.n !== before + 1) fail('expected exactly one new built-in'); if (after.schema !== 3) fail('schema not 3');
+  if (after.n !== before + 1) fail('expected exactly one new built-in'); if (after.schema !== 4) fail('schema not 4');
   if (after.ex010.name !== 'My Push Up' || after.ex010.notes !== 'mine') fail('edited built-in was overwritten');
   if (!after.mine || !after.w || after.w.exercises[0].sets[0].kg !== 100 || !after.d) fail('user data lost'); else log('user data intact (custom exercise, renamed built-in, workout, diary)');
   const rc = await named(page, 'Reverse Cable Crunch'); if (rc.length !== 1) fail('Reverse Cable Crunch count ' + rc.length); else log('added once:', rc[0].id, rc[0].muscle, rc[0].equipment);
@@ -39,6 +39,24 @@ const asV140 = (page, extra = '') => idb(page, `await p(tx('exercises','readwrit
   await page.goto(BASE + '#/workouts'); await page.click('text=+ Start empty workout'); await page.click('text=+ Add exercise');
   await page.fill('.sheet input[type=search]', 'reverse cable'); await page.waitForTimeout(250);
   const items = await page.locator('.sheet .item:has-text("Reverse Cable Crunch") .exthumb svg').count(); if (items !== 1) fail('not in picker with thumbnail'); else log('in picker with thumbnail');
+  await ctx.close();
+}
+{ // a v1.4.1 install that already has the old (lying) ex086 and logged it: same id, history kept, only the how-to refreshed
+  const ctx = await b.newContext({ ...devices['Pixel 7'], colorScheme: 'dark' }); const page = await ctx.newPage(); page.setDefaultTimeout(10000);
+  page.on('pageerror', (e) => fail('pageerror ' + e.message));
+  await page.goto(BASE); await page.click('[data-testid=ob-skip]'); await page.waitForSelector("text=Today's nutrition");
+  const n0 = await idb(page, `const e = await p(tx('exercises').get('ex086')); delete e.how; await p(tx('exercises','readwrite').put(e)); await p(tx('kv','readwrite').put({ id: 'schema', v: 3 }));
+    await p(tx('workouts','readwrite').put({ id: 'w86', name: 'Abs', start: 1761100000000, end: 1761103600000, exercises: [{ id: 'we86', exerciseId: 'ex086', restSec: 60, notes: 'felt it', sets: [{ id: 's86', reps: 15, kg: 30, done: true }] }] }));
+    await p(tx('routines','readwrite').put({ id: 'r86', name: 'Core day', updated: 1, exercises: [{ exerciseId: 'ex086', sets: 3, reps: 15, kg: 30, restSec: 60 }] }));
+    return (await p(tx('exercises').getAll())).length;`);
+  await boot(page);
+  const r = await idb(page, `return { n: (await p(tx('exercises').getAll())).length, e: await p(tx('exercises').get('ex086')), w: await p(tx('workouts').get('w86')), r: await p(tx('routines').get('r86')), schema: (await p(tx('kv').get('schema'))).v }`);
+  if (r.schema !== 4 || r.n !== n0) fail('v1.4.1 upgrade: schema/count ' + r.schema + ' ' + n0 + '→' + r.n);
+  if (!/back to the stack/.test(r.e.how || '') || r.e.name !== 'Reverse Cable Crunch' || r.e.muscle !== 'Core' || r.e.equipment !== 'Cable') fail('ex086 not refreshed: ' + JSON.stringify(r.e)); else log('v1.4.1 install: ex086 refreshed in place (kneeling how-to), count unchanged');
+  if (r.w.exercises[0].exerciseId !== 'ex086' || r.w.exercises[0].sets[0].kg !== 30 || r.w.exercises[0].notes !== 'felt it' || r.r.exercises[0].exerciseId !== 'ex086') fail('history/routine changed'); else log('logged workout + routine still point at ex086, sets/notes intact');
+  await page.goto(BASE + '#/exercise/ex086'); await page.waitForSelector('[data-testid=ex-how]');
+  const how = await page.textContent('[data-testid=ex-how]'); if (!/high pulley/.test(how)) fail('how-to not shown'); else log('exercise screen shows how-to + animation:', await page.locator('.exanim svg').count() === 1);
+  if (!(await page.textContent('body')).includes('15')) fail('history not shown on exercise screen');
   await ctx.close();
 }
 { // a user who already made a custom "Reverse Cable Crunch" doesn't get a second one
