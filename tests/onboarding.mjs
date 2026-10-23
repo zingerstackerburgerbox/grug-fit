@@ -13,9 +13,10 @@ const idb = (page, fn, arg) => page.evaluate(async ([src, arg]) => {
 }, [fn, arg]);
 const num = (t) => Number(String(t).replace(/[^\d.-]/g, ''));
 
+const NOON = (() => { const d = new Date(); d.setHours(12, 0, 0, 0); return d.getTime(); })(); // today 12:00 local: workouts "an hour ago" never fall on yesterday (tests run at any hour)
 // ---------- fresh install ----------
 {
-  const ctx = await b.newContext({ ...devices['Pixel 7'], colorScheme: 'dark' }); const page = await ctx.newPage(); page.setDefaultTimeout(10000);
+  const ctx = await b.newContext({ ...devices['Pixel 7'], colorScheme: 'dark' }); await ctx.clock.setFixedTime(NOON); const page = await ctx.newPage(); page.setDefaultTimeout(10000);
   page.on('pageerror', (e) => fail('pageerror ' + e.message));
   await page.goto(BASE); await page.waitForSelector('[data-testid=onboarding][data-step=username]'); log('fresh: onboarding opens on "Pick a username"');
   if (await page.locator('[data-testid=ob-skip]').count()) fail('username step must not be skippable');
@@ -44,7 +45,7 @@ const num = (t) => Number(String(t).replace(/[^\d.-]/g, ''));
   const bw = await idb(page, `return p(tx('bodyweight').getAll())`); eq('first body-weight entry', bw.map((x) => x.kg).join(','), '85');
   eq('header burned (no workout)', num(await page.textContent('[data-testid=burned]')), '2196');
   // completed workout today, 3×10 bench at 80 kg (+1 unticked set) over 1 h, 85 kg lifter → per-set estimate 26 kcal (time not counted)
-  const now = Date.now();
+  const now = NOON;
   await idb(page, `const S = (i, done) => ({ id: 's' + i, type: 'N', kg: 80, reps: 10, done }); return p(tx('workouts','readwrite').put({ id: 'wtest', name: 'Test lift', start: arg - 3600000, end: arg, exercises: [{ id: 'e1', exerciseId: 'ex001', restSec: 180, sets: [S(1, true), S(2, true), S(3, true), S(4, false)] }] }))`, now);
   await page.reload(); await page.waitForSelector('[data-testid=burned]');
   eq('header burned incl. workout', num(await page.textContent('[data-testid=burned]')), '2222');

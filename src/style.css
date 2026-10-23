@@ -208,3 +208,35 @@ details.tut ol { margin: 6px 0 6px; padding-left: 22px; line-height: 1.5; } deta
 .theme-preview { display: flex; flex-direction: column; gap: 10px; background: var(--bg); border: 1px solid var(--line); border-radius: var(--r); padding: 12px; }
 :root[data-mode=light] .btn.d { background: #fde2e2; color: #9b1c1c; }
 :root[data-mode=light] .private-banner { background: #fef3c7; color: #78350f; } :root[data-mode=light] .private-banner a { color: #78350f; }
+/* v1.9.3 Halloween overlay (seasonal) – on top of the user's own mode + accent. Everything is behind content and pointer-events: none. */
+:root[data-season=halloween] body { background: transparent; } /* html keeps --bg; lets the decoration layer (z-index -1) show */
+:root[data-season=halloween][data-mode=light] { --mut: #4b5260; } /* keeps muted text ≥ 4.5:1 over the light vignette */
+:root[data-season=halloween] .card { position: relative; isolation: isolate; }
+:root[data-season=halloween] .card::before { content: ''; position: absolute; top: 0; right: 0; width: 44px; height: 44px; background: var(--hw-web-tr) no-repeat top right / contain; opacity: .17; pointer-events: none; z-index: -1; border-top-right-radius: var(--r); }
+:root[data-season=halloween] .card:nth-of-type(3n+2)::before { right: auto; left: 0; background-image: var(--hw-web-tl); background-position: top left; border-radius: var(--r) 0 0 0; }
+:root[data-season=halloween][data-mode=light] .card::before { background-image: var(--hw-web-tr-d); opacity: .2; }
+:root[data-season=halloween][data-mode=light] .card:nth-of-type(3n+2)::before { background-image: var(--hw-web-tl-d); }
+.hw-layer { position: fixed; inset: 0; z-index: -1; pointer-events: none; overflow: hidden; }
+.hw-layer i { position: absolute; display: block; pointer-events: none; }
+.hw-vignette { inset: 0; background: radial-gradient(ellipse 130% 95% at 50% 42%, transparent 38%, var(--hw-vig) 100%), linear-gradient(var(--hw-vig), transparent 18%, transparent 82%, var(--hw-vig)); opacity: .9; }
+.hw-pattern { inset: 0; background: var(--hw-tile) repeat 0 60px / 180px 180px; opacity: .09; filter: saturate(.7); }
+:root[data-mode=light] .hw-pattern { opacity: .12; filter: none; }
+.hw-web { width: 104px; height: 104px; opacity: .15; background: var(--hw-web-tl) no-repeat top left / contain; }
+.hw-web.tl { top: calc(50px + env(safe-area-inset-top)); left: 0; }
+.hw-web.tr { top: calc(50px + env(safe-area-inset-top)); right: 0; background-image: var(--hw-web-tr); background-position: top right; }
+.hw-web.bl, .hw-web.br { width: 90px; height: 90px; bottom: calc(60px + env(safe-area-inset-bottom)); opacity: .14; }
+.hw-web.bl { left: 0; transform: scaleY(-1); }
+.hw-web.br { right: 0; background-image: var(--hw-web-tr); background-position: top right; transform: scaleY(-1); }
+:root[data-mode=light] .hw-web { background-image: var(--hw-web-tl-d); opacity: .22; }
+:root[data-mode=light] .hw-web.tr, :root[data-mode=light] .hw-web.br { background-image: var(--hw-web-tr-d); }
+.hw-spider { top: calc(50px + env(safe-area-inset-top)); width: 12px; height: calc(var(--len) + 12px); opacity: .55; transform-origin: 50% 0; animation: hw-sway 7s ease-in-out infinite alternate;
+  background: linear-gradient(var(--hw-thread), var(--hw-thread)) no-repeat 50% 0 / 1px var(--len), var(--hw-spider) no-repeat 50% 100% / 12px 12px; }
+:root[data-mode=light] .hw-spider { opacity: .6; background: linear-gradient(var(--hw-thread-d), var(--hw-thread-d)) no-repeat 50% 0 / 1px var(--len), var(--hw-spider-d) no-repeat 50% 100% / 12px 12px; }
+.hw-pumpkin { bottom: calc(66px + env(safe-area-inset-bottom)); width: 22px; height: 20px; opacity: .45; background: var(--hw-pumpkin) no-repeat center / contain; }
+.hw-pumpkin.big { width: 30px; height: 27px; opacity: .35; }
+@keyframes hw-sway { from { transform: rotate(-5deg); } to { transform: rotate(5deg); } }
+@media (prefers-reduced-motion: reduce) { .hw-spider { animation: none !important; } }
+.season-box { border: 1px dashed color-mix(in srgb, var(--acc) 55%, var(--line)); border-radius: 12px; padding: 10px 12px; background: color-mix(in srgb, var(--acc) 7%, var(--bg2)); }
+.season-notice { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(74px + env(safe-area-inset-bottom)); z-index: 60; display: flex; align-items: center; gap: 2px; width: max-content; max-width: calc(100vw - 20px);
+  background: var(--toast-bg); color: var(--toast-fg); border: 1px solid color-mix(in srgb, var(--acc) 50%, transparent); border-radius: 14px; padding: 4px 4px 4px 14px; font-size: 14px; box-shadow: 0 6px 20px var(--shadow); }
+.season-notice .btn { color: var(--acc-text); min-height: 36px; padding: 0 10px; }

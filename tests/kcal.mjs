@@ -4,7 +4,8 @@ const BASE = process.env.BASE || 'http://127.0.0.1:4173/';
 const log = (...a) => console.log('•', ...a); let failed = 0; const fail = (m) => { console.error('FAIL:', m); failed++; };
 const MIN = 60e3;
 const b = await chromium.launch();
-const ctx = await b.newContext({ ...devices['Pixel 7'], colorScheme: 'dark', timezoneId: 'Australia/Sydney' }); const page = await ctx.newPage(); page.setDefaultTimeout(12000);
+const NOON = (() => { const d = new Date(); d.setHours(12, 0, 0, 0); return d.getTime(); })(); // today 12:00 local: workouts "an hour ago" never fall on yesterday (tests run at any hour)
+const ctx = await b.newContext({ ...devices['Pixel 7'], colorScheme: 'dark', timezoneId: 'Australia/Sydney' }); await ctx.clock.setFixedTime(NOON); const page = await ctx.newPage(); page.setDefaultTimeout(12000);
 page.on('pageerror', (e) => fail('pageerror ' + e.message)); page.on('dialog', (d) => d.accept());
 await page.goto(BASE); await page.fill('[data-testid=ob-username]', 'grug_tester').then(() => page.click('[data-testid=ob-next]')).then(() => page.click('[data-testid=ob-skip]')); await page.waitForSelector("text=Today's nutrition");
 const idb = (src, arg) => page.evaluate(async ([src, arg]) => {
@@ -13,7 +14,7 @@ const idb = (src, arg) => page.evaluate(async ([src, arg]) => {
   const p = (req) => new Promise((r, j) => { req.onsuccess = () => r(req.result); req.onerror = () => j(req.error); });
   const res = await new Function('tx', 'p', 'arg', `return (async () => { ${src} })()`)(tx, p, arg); d.close(); return res;
 }, [src, arg]);
-const now = Date.now();
+const now = NOON;
 const sets = (t0, gap) => [1, 2, 3].map((i) => ({ id: 'b' + i, type: 'N', kg: 80, reps: 10, done: true, doneAt: t0 + i * gap }));
 const ymd = new Date(now).toLocaleDateString('en-CA', { timeZone: 'Australia/Sydney' });
 await idb(`await p(tx('bodyweight','readwrite').put({ id: 'bw' + arg.ymd, date: arg.ymd, kg: 85 }));

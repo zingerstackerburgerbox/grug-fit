@@ -66,6 +66,8 @@ export type Settings = {
   factCard?: 'open' | 'collapsed' | 'off';
   /** v1.9.2 Settings › Appearance (also mirrored to localStorage for a flash-free start) */
   theme?: { mode: 'dark' | 'light' | 'amoled' | 'system'; accent: string };
+  /** v1.9.3 seasonal overlay choice per season+year, e.g. { 'halloween-2026': 'off' } (default on during the season) */
+  seasonal?: Record<string, 'on' | 'off'>;
   /** onboarding finished/skipped (timestamp) */
   onboarded?: number;
 };

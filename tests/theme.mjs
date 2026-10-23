@@ -4,7 +4,8 @@ import { chromium, devices } from 'playwright'; import { readFileSync } from 'no
 const BASE = process.env.BASE || 'http://127.0.0.1:4173/';
 const log = (...a) => console.log('•', ...a); let failed = 0; const fail = (m) => { console.error('FAIL:', m); failed++; };
 const b = await chromium.launch(); const opts = { ...devices['Pixel 7'], colorScheme: 'dark', locale: 'en-AU', timezoneId: 'Australia/Sydney' };
-const ctx = await b.newContext(opts); const page = await ctx.newPage(); page.setDefaultTimeout(15000); page.on('pageerror', (e) => fail('pageerror ' + e.message)); page.on('dialog', (d) => d.accept());
+const OFF_SEASON = new Date('2026-06-15T12:00:00+10:00'); // v1.9.3: outside the Halloween season so the plain defaults apply
+const ctx = await b.newContext(opts); await ctx.clock.setFixedTime(OFF_SEASON); const page = await ctx.newPage(); page.setDefaultTimeout(15000); page.on('pageerror', (e) => fail('pageerror ' + e.message)); page.on('dialog', (d) => d.accept());
 const state = (p = page) => p.evaluate(() => { const cs = getComputedStyle(document.documentElement); const btn = document.querySelector('.btn.p'); const bs = btn && getComputedStyle(btn);
   return { mode: document.documentElement.dataset.mode || 'dark', acc: cs.getPropertyValue('--acc').trim(), bg: getComputedStyle(document.body).backgroundColor, meta: document.querySelector('meta[name=theme-color]')?.content,
     btnBg: bs?.backgroundColor, btnFg: bs?.color, ls: localStorage.getItem('theme') }; });
@@ -58,7 +59,7 @@ await page.goto(BASE + '#/food'); await page.waitForTimeout(500); await page.scr
 await page.goto(BASE + '#/settings'); await page.waitForSelector('text=Export all data');
 const [dl] = await Promise.all([page.waitForEvent('download'), page.click('text=Export all data')]); const file = await dl.path();
 const bj = JSON.parse(readFileSync(file, 'utf8')); const bt = (bj.data.kv || []).find((r) => r.id === 'settings' || r.key === 'settings')?.theme; log('theme in backup:', JSON.stringify(bt)); if (bt?.mode !== 'system' || bt?.accent !== '#a855f7') fail('backup has theme');
-const ctx2 = await b.newContext(opts); const p2 = await ctx2.newPage(); p2.on('dialog', (d) => d.accept()); p2.on('pageerror', (e) => fail('pageerror2 ' + e.message));
+const ctx2 = await b.newContext(opts); await ctx2.clock.setFixedTime(OFF_SEASON); const p2 = await ctx2.newPage(); p2.on('dialog', (d) => d.accept()); p2.on('pageerror', (e) => fail('pageerror2 ' + e.message));
 await p2.goto(BASE); await p2.fill('[data-testid=ob-username]', 'grug_tester').then(() => p2.click('[data-testid=ob-next]')).then(() => p2.click('[data-testid=ob-skip]')); await p2.waitForSelector("text=Today's nutrition"); await p2.goto(BASE + '#/settings'); await p2.waitForSelector('text=Import (replace)');
 const [fc] = await Promise.all([p2.waitForEvent('filechooser'), p2.click('text=Import (replace)')]); await fc.setFiles(file); await p2.waitForTimeout(800);
 const s2 = await state(p2); log('fresh device after restore:', s2.mode, s2.acc, s2.ls); if (s2.acc !== '#a855f7' || !s2.ls?.includes('system')) fail('restore applies theme');

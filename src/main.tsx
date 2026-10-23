@@ -1,4 +1,5 @@
 import { render } from 'preact';
+import { SeasonDecor, SeasonNotice } from './pages/Season';
 import { UsernameGate } from './pages/Username';
 import { StepsPage } from './pages/Steps';
 import { useEffect, useState } from 'preact/hooks';
@@ -106,11 +107,12 @@ function App() {
     <nav class="tabs">{TABS.map(([href, label, ic, segs]) => <a href={'#' + href} class={segs.includes(seg) ? 'on' : ''}>{I[ic]}<span>{label}</span></a>)}</nav>
     <AutoEndReview />
     <UsernameGate />
+    <SeasonNotice />
     <UpdateBanner />
     <Toaster />
   </>;
 }
 initTheme();
-render(<><ThemeSync /><App /></>, document.getElementById('app')!);
+render(<><ThemeSync /><SeasonDecor /><App /></>, document.getElementById('app')!);
 
 registerSW();
