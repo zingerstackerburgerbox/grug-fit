@@ -1,5 +1,4 @@
 /** v1.8.1 install support: capture beforeinstallprompt, detect standalone / platform / in-app browsers, snooze. */
-import { isApp } from './native';
 type BIP = Event & { prompt: () => Promise<void>; userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }> };
 let deferred: BIP | null = null;
 const ls = new Set<() => void>(); const emit = () => ls.forEach((f) => f());
@@ -23,7 +22,7 @@ export async function promptInstall(): Promise<boolean> {
   if (c.outcome === 'accepted') { localStorage.setItem('installedAt', String(Date.now())); emit(); }
   return c.outcome === 'accepted';
 }
-export const isStandalone = () => isApp() || ['standalone', 'fullscreen', 'minimal-ui', 'window-controls-overlay'].some((m) => matchMedia(`(display-mode: ${m})`).matches) || (navigator as any).standalone === true;
+export const isStandalone = () => ['standalone', 'fullscreen', 'minimal-ui', 'window-controls-overlay'].some((m) => matchMedia(`(display-mode: ${m})`).matches) || (navigator as any).standalone === true;
 export const installedHere = () => !!localStorage.getItem('installedAt');
 export const snoozed = (now = Date.now()) => now < Number(localStorage.getItem('installSnoozeUntil') || 0);
 export const snooze = (now = Date.now()) => { localStorage.setItem('installSnoozeUntil', String(now + SNOOZE_MS)); emit(); };

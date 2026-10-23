@@ -1,5 +1,4 @@
 // Private/incognito window detection (heuristic!) + storage persistence.
-import { isApp } from './native';
 // Browsers deliberately try to hide private mode, so this can only ever be a best guess:
 //  - Chrome/Edge/Samsung ≥147 report a "predictable" quota (usage + 10 GiB); Chrome 147–15x incognito leaked usage + 9 GiB,
 //    newer Chrome reports the same 10 GiB in incognito (IncognitoStaticStorageQuota) → NOT detectable there.
@@ -72,7 +71,7 @@ export function browserEnv(): Env {
 }
 
 let cached: Promise<PrivateResult> | null = null;
-export const checkPrivate = () => (cached ||= isApp() ? Promise.resolve({ private: false, reason: 'android-app', engine: 'chromium' } as any) : detectPrivate(browserEnv()).catch(() => ({ private: false, reason: 'error', engine: 'other' })));
+export const checkPrivate = () => (cached ||= detectPrivate(browserEnv()).catch(() => ({ private: false, reason: 'error', engine: 'other' })));
 export const privateDismissed = () => { try { return localStorage.getItem('privateDismissed') === '1'; } catch { return false; } };
 export const dismissPrivate = () => { try { localStorage.setItem('privateDismissed', '1'); } catch {} };
 

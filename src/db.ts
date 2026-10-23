@@ -14,7 +14,7 @@ export type StoreName = (typeof STORES)[number];
  *  - SCHEMA_VERSION: data-shape version stored in kv 'schema'; MIGRATIONS[n] transforms records from n-1 to n (see migrate()).
  */
 export const DB_VERSION = 1;
-export const SCHEMA_VERSION = 5;
+export const SCHEMA_VERSION = 6;
 let dbp: Promise<IDBPDatabase> | null = null;
 export function db() {
   if (!dbp) dbp = openDB('grugfit', DB_VERSION, {
@@ -76,7 +76,12 @@ const MIGRATIONS: Record<number, (tx: Tx) => Promise<void>> = {
   4: (tx) => refreshSeed(tx, SEED_REFRESH[4]),
   // v5 (app v1.8.3): imported Hevy/Cronometer history behaves exactly like native (normalised workouts, built-in exercise ids, PRs over the
   // whole history, real foods for Cronometer entries). Same code runs after every import; see reconcile.ts.
-  5: async (tx) => { await reconcileTx(tx); }
+  5: async (tx) => { await reconcileTx(tx); },
+  // v6 (app v1.9.1): automatic step counting was removed – drop its device cache (kv 'steps') and the old Home-card toggle. Manual steps live in kv 'stepLog'.
+  6: async (tx) => {
+    const kv = tx.objectStore('kv'); if (await kv.get('steps')) await kv.delete('steps');
+    const s = await kv.get('settings'); if (s && 'stepsCard' in s) { const { stepsCard, ...rest } = s; await kv.put(rest); }
+  }
 };
 /** Load everything reconcile() needs from a readwrite tx over all stores, apply its changes in the same tx. */
 export async function reconcileTx(tx: Tx, extra?: (d: Data) => Changes & { exAliases?: Record<string, string> }) {
@@ -142,7 +147,11 @@ export async function importAll(json: any, mode: 'replace' | 'merge' = 'replace'
   for (const s of STORES) {
     const st = tx.objectStore(s);
     if (mode === 'replace') await st.clear();
-    for (const v of json.data[s] || []) await st.put(v);
+    for (const v of json.data[s] || []) {
+      // merging two step logs keeps both sides' days (the backup wins for a day present in both)
+      if (mode === 'merge' && s === 'kv' && v?.id === 'stepLog') { const cur = await st.get('stepLog'); await st.put({ id: 'stepLog', days: { ...(cur?.days || {}), ...(v.days || {}) } }); continue; }
+      await st.put(v);
+    }
   }
   await tx.done; await migrate(true); bump();
 }

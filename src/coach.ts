@@ -1,5 +1,6 @@
 /** AI Coach: backend selection (proxy or user's own xAI key), compact data context, streaming client, action parsing, tiny markdown. */
 import { all, get, getSettings } from './db';
+import { stepGoal, stepLog } from './steps';
 import type { BodyWeight, DiaryEntry, DoseLog, Exercise, Routine, Schedule, Settings, Supplement, Workout } from './types';
 import { addDays, e1rm, netCarbs, r0, r1, sumN, workingSets, ymd, EMPTY } from './util';
 import { ageFromBirthYear, sortBW } from './energy';
@@ -43,7 +44,7 @@ export async function buildContext(now = new Date()): Promise<any> {
   const s = await getSettings(); const today = ymd(now); const from14 = addDays(today, -13);
   const [diary, workouts, bws, supps, schedules, logs, exs, active] = await Promise.all([
     all<DiaryEntry>('diary'), all<Workout>('workouts'), all<BodyWeight>('bodyweight'), all<Supplement>('supplements'), all<Schedule>('schedules'), all<DoseLog>('doselogs'), all<Exercise>('exercises'), get<{ w: Workout | null }>('kv', 'active')]);
-  const exName = new Map(exs.map((e) => [e.id, e.name]));
+  const exName = new Map(exs.map((e) => [e.id, e.name])); const stepDays = await stepLog();
   const bw = sortBW(bws); const latest = bw[bw.length - 1]; const ago30 = bw.filter((x) => x.date <= addDays(today, -30)).pop() || bw[0];
   const p = s.profile; const t = s.targets;
   const days: any[] = []; const totals: any[] = [];
@@ -72,6 +73,9 @@ export async function buildContext(now = new Date()): Promise<any> {
     supplements: supps.filter((x) => !x.archived).map((x) => ({ name: x.name, kind: x.kind, dose: `${x.doseAmount} ${x.unit}`, adherence14d: slots14[x.id] ? `${slots14[x.id].taken}/${slots14[x.id].due}` : 'no schedule' })),
     routines: (await all<Routine>('routines')).slice(0, 8).map((r) => r.name)
   };
+  // v1.9.1 manually logged steps (only days with an entry)
+  const st14 = Array.from({ length: 14 }, (_, i) => addDays(from14, i)).filter((d) => stepDays[d] > 0).map((d) => [md(d), stepDays[d]]);
+  if (st14.length) ctx.steps14d = { cols: 'MM-DD,steps (typed in by the user)', days: st14, goal: stepGoal(s) || null, avgPerLoggedDay: r0(st14.reduce((a, x) => a + (x[1] as number), 0) / st14.length) };
   if (active?.w) ctx.workoutInProgress = { name: active.w.name, startedMinAgo: Math.round((Date.now() - active.w.start) / 60000) };
   let j = JSON.stringify(ctx);
   if (j.length > 9000) { ctx.workouts.recent = ctx.workouts.recent.slice(0, 5); ctx.prs = ctx.prs.slice(0, 6); j = JSON.stringify(ctx); }

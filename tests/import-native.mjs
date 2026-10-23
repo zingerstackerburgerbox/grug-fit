@@ -161,7 +161,7 @@ const S = (kg, reps, x = {}) => ({ id: Math.random().toString(36).slice(2), type
   const m = await idb(`return { schema: (await p(tx('kv').get('schema'))).v, w: await p(tx('workouts').getAll()), ex: await p(tx('exercises').get('cx-hevy-old1')), r: await p(tx('routines').get('r-old')), f: await p(tx('foods').get('import-zzz')), d: await p(tx('diary').get('cron-old')) }`);
   const W = (id) => m.w.find((w) => w.id === id);
   log('migration: schema', m.schema, '| old1', JSON.stringify({ end: W('hevy-old1').end - W('hevy-old1').start, kg: W('hevy-old1').exercises[0].sets[0].kg, ex: W('hevy-old1').exercises[1].exerciseId, prs: W('hevy-old1').prs }), '| old2 PRs', JSON.stringify(W('hevy-old2').prs), '| native PRs', JSON.stringify(W('native-x').prs));
-  if (m.schema !== 5) fail('schema not migrated');
+  if (m.schema !== 6) fail('schema not migrated');
   if (W('hevy-old1').end - W('hevy-old1').start !== 3600e3 || W('hevy-old1').exercises[0].sets[0].kg !== 150 || !W('hevy-old1').exercises[0].sets[0].id || W('hevy-old1').exercises[1].exerciseId !== 'ex021') fail('workout not normalised/remapped');
   if (m.ex || m.r.exercises[0].exerciseId !== 'ex021') fail('custom duplicate not folded');
   if (!W('hevy-old2').prs?.some((p) => p.kind === 'weight')) fail('imported PRs not computed'); if (W('native-x').prs.some((p) => p.kind === 'weight')) fail('native stale PR');

@@ -38,6 +38,8 @@ log('placeholder:', (await page.textContent('[data-testid=coach-setup]')).replac
 await page.screenshot({ path: 'screenshots/38-coach-setup.png' });
 
 // 2. mocked proxy: consent → suggested prompt → streamed markdown reply with actions
+await idb(`const t = new Date(); const f = (d) => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); const y = new Date(t); y.setDate(t.getDate() - 1);
+  await p(tx('kv', 'readwrite').put({ id: 'stepLog', days: { [f(t)]: 9000, [f(y)]: 7000 } }));`);
 await page.evaluate(() => localStorage.setItem('coachProxyUrl', 'https://coach.test')); await page.reload(); await page.waitForSelector('[data-testid=coach-consent]');
 if (reqs.length) fail('data sent before consent'); log('privacy notice shown before first use');
 await page.click('[data-testid=coach-accept]'); await page.waitForSelector('[data-testid=coach-suggest]');
@@ -50,6 +52,7 @@ if (!/^[0-9a-f-]{36}$/.test(rq.h['x-device-id'] || '')) fail('device id header')
 const data = JSON.parse(sys.content.split('DATA (the user\'s own logs, JSON):\n')[1] || '{}');
 log('context keys:', Object.keys(data).join(','), '| workout', JSON.stringify(data.workouts?.recent?.[0]), '| bw', data.bodyWeight?.latestKg);
 if (!/not a doctor/.test(sys.content) || !data.targets || data.workouts?.recent?.[0]?.ex?.[0]?.[0] !== 'Bench Press (Barbell)' || data.bodyWeight?.latestKg !== 84.2) fail('context payload');
+log('steps in context:', JSON.stringify(data.steps14d)); if (data.steps14d?.days?.length !== 2 || data.steps14d.avgPerLoggedDay !== 8000 || data.steps14d.goal !== 8000) fail('steps in coach context');
 if (sys.content.length > 16000) fail('system prompt too big: ' + sys.content.length);
 const html = await page.innerHTML('[data-testid=coach-reply]');
 if (!/<strong>4-day PPL<\/strong>/.test(html) || !/<li>Push: chest/.test(html)) fail('markdown not rendered'); if (/grug-action/.test(await page.textContent('[data-testid=coach-reply]'))) fail('raw action block shown');

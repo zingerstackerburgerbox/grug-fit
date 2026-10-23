@@ -58,10 +58,10 @@ export type Settings = {
   eatBack?: boolean;
   /** AI Coach: optional own xAI key (calls api.x.ai directly), owner token for the proxy, privacy notice accepted (timestamp) */
   coachKey?: string; coachOwnerToken?: string; coachConsent?: number;
+  /** v1.9.1 manual steps: daily goal (undefined = 8,000, 0 = no goal) */
+  stepGoal?: number;
   /** Home 'Fitness fact of the day' card: open (default), collapsed, or off */
   factCard?: 'open' | 'collapsed' | 'off';
-  /** v1.9.0 steps (Android app): daily goal; hide the Home steps card */
-  stepGoal?: number; stepsCard?: 'on' | 'off';
   /** onboarding finished/skipped (timestamp) */
   onboarded?: number;
 };

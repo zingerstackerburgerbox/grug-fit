@@ -1,4 +1,5 @@
 import { render } from 'preact';
+import { StepsPage } from './pages/Steps';
 import { useEffect, useState } from 'preact/hooks';
 import './style.css';
 import { init } from './db';
@@ -15,8 +16,6 @@ import { Onboarding } from './pages/Onboarding';
 import { getSettings } from './db';
 import { scheduleReminders } from './doses';
 import { registerSW, showUpdatedToast } from './update';
-import { armStepSync } from './steps';
-import { AndroidAppPage } from './pages/Steps';
 import type { Meal } from './types';
 import { checkStale } from './autoend';
 import { AutoEndReview, WorkoutMiniBar } from './pages/AutoEndReview';
@@ -47,6 +46,8 @@ function route(h: string) {
     case 'exercises': return <ExercisesPage />;
     case 'exercise': return <ExerciseDetail id={p[1]} />;
     case 'body': return <BodyWeightPage />;
+    case 'steps': return <StepsPage />;
+    case 'android': location.replace('#/'); return null; // removed in v1.9.1
     case 'food':
       if (p[1] === 'add') return <AddFood date={p[2]} meal={p[3] as Meal} />;
       if (p[1] === 'edit') return <FoodEdit id={p[2]} key={p[2]} />;
@@ -59,7 +60,6 @@ function route(h: string) {
     case 'supp': return <SuppEdit id={p[1]} key={p[1]} />;
     case 'calendar': return <CalendarPage />;
     case 'settings': return <SettingsPage />;
-    case 'android': return <AndroidAppPage />;
     case 'coach': return <CoachPage />;
     case 'welcome': return <Onboarding />;
     default: return <Home />;
@@ -83,7 +83,7 @@ function App() {
     init().then(() => checkStale()).catch(() => null).then(async () => {
       const p = await pv; setPriv(p.private ? (privateDismissed() ? 'warn' : 'block') : 'no'); document.documentElement.dataset.private = p.reason;
       const ob = !!(await getSettings().catch(() => ({} as any))).onboarded; setOnboard(!ob); setReady(true);
-      if (ob) { armPersist(); protectStorage(); } scheduleReminders(); showUpdatedToast(); armStepSync(); });
+      if (ob) { armPersist(); protectStorage(); } scheduleReminders(); showUpdatedToast(); });
     const v = () => { if (document.visibilityState === 'visible') { scheduleReminders(); checkStale(); } };
     document.addEventListener('visibilitychange', v); const t = setInterval(() => checkStale(), 60e3);
     return () => { document.removeEventListener('visibilitychange', v); clearInterval(t); };

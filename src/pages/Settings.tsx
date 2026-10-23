@@ -1,4 +1,5 @@
 import { useQuota, quotaText } from './Coach';
+import { StepGoalSetting } from './Steps';
 import { coachMode, fetchStatus } from '../coach';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { SCALED, scaleMacros } from '../targets';
@@ -13,8 +14,6 @@ import { KCAL_EXPLAIN } from '../setKcal';
 import { ImportSection } from './Import';
 import { InstallSetting } from './Install';
 import { StorageCard } from './Private';
-import { StepSettings, saveBackup } from './Steps';
-import { isApp, isAndroidWeb } from '../native';
 import { GOAL_LABEL, ageFromBirthYear, bmr, eatBackOn, latestWeight, sedentaryBurn, type Goal } from '../energy';
 import { go, useQuery } from '../hooks';
 import { LB } from '../util';
@@ -62,7 +61,13 @@ export function SettingsPage() {
   useEffect(() => { const v: any = {}; for (const k in s.targets) v[k] = String((s.targets as any)[k]); setT(v); }, [s]);
   const save = async (p: Partial<Settings>) => { await put('kv', { ...s, ...p }); };
   const saveTargets = async () => { const targets: any = { ...s.targets }; for (const k in t) { const v = num(t[k]); if (v != null) targets[k] = v; } await save({ targets }); toast('Targets saved'); };
-  const doExport = async () => { toast(await saveBackup()); };
+  const doExport = async () => {
+    const data = await exportAll(); const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
+    const name = `grugfit-backup-${ymd()}.json`; const file = new File([blob], name, { type: 'application/json' });
+    if ((navigator as any).canShare?.({ files: [file] }) && confirmDo('Share the backup file (e.g. to Google Drive)? Cancel to download instead.')) { try { await navigator.share({ files: [file], title: name }); localStorage.setItem('lastBackup', String(Date.now())); return; } catch {} }
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+    localStorage.setItem('lastBackup', String(Date.now())); toast('Backup downloaded');
+  };
   const doImport = (mode: 'replace' | 'merge') => {
     const inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'application/json,.json';
     inp.onchange = async () => { const f = inp.files?.[0]; if (!f) return; try { const j = JSON.parse(await f.text()); if (mode === 'replace' && !confirmDo('Replace ALL current data with this backup?')) return; await importAll(j, mode); toast('Backup restored'); scheduleReminders(); } catch (e: any) { alert('Import failed: ' + e.message); } };
@@ -81,10 +86,7 @@ export function SettingsPage() {
   useEffect(() => { base.current = null; }, [s]);
   const field = (k: string, label: string) => <label class="f">{label}<input inputMode="decimal" value={t[k] ?? ''} data-testid={'target-' + k} onInput={(e) => onField(k, e.currentTarget.value)} /></label>;
   return <><Top title="Settings" /><div class="page col">
-    {isApp() ? <a class="card row between" style="color:inherit;text-decoration:none" href="#/android" data-testid="settings-android"><span>🤖 <b>Android app</b><span class="mut xs"> · version, updates, move data</span></span><b>→</b></a> : <InstallSetting />}
-    {isAndroidWeb() && <a class="card row between" style="color:inherit;text-decoration:none" href="#/android" data-testid="settings-get-android"><span>👣 <b>Get the Android app</b><div class="mut xs">Same Grug Fit + step counting with your phone's step sensor</div></span><b>→</b></a>}
-    <h2>Step counter</h2>
-    <StepSettings />
+    <InstallSetting />
     <h2>Profile & calorie burn</h2>
     <ProfileCard s={s} />
     <h2>Daily targets</h2>
@@ -93,6 +95,8 @@ export function SettingsPage() {
       <div class="mut xs">Changing calories scales protein, carbs and fat to keep their ratio (fibre stays); editing a macro changes only that macro.</div>
       <div class="mut xs" data-testid="macro-split">Macro split: P {r1(((num(t.protein || '') || 0) * 4 / (num(t.kcal || '') || 1)) * 100)}% · C {r1(((num(t.carbs || '') || 0) * 4 / (num(t.kcal || '') || 1)) * 100)}% · F {r1(((num(t.fat || '') || 0) * 9 / (num(t.kcal || '') || 1)) * 100)}%</div>
       <div class="grid2"><button class="btn" onClick={() => { if (confirmDo('Reset targets to defaults (1800 kcal, P 157.5, C 202.5, F 40)?')) save({ targets: DEFAULT_SETTINGS.targets }); }}>Reset defaults</button><button class="btn p" onClick={saveTargets}>Save targets</button></div></div>
+    <h2>Steps</h2>
+    <StepGoalSetting />
     <h2>Units & workout</h2>
     <div class="card col"><label class="f">Energy<Seg value={s.energyUnit} onChange={(energyUnit) => save({ energyUnit })} options={[['kcal', 'kcal'], ['kJ', 'kJ']]} /></label>
       <label class="f">Lifting weight<Seg value={s.weightUnit} onChange={(weightUnit) => save({ weightUnit })} options={[['kg', 'kg'], ['lb', 'lb']]} /></label>

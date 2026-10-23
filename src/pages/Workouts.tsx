@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
+import { WorkoutStepsCard } from './Steps';
 import { all, del, get, put, reconcileNow } from '../db';
 import { mergeExercise } from '../reconcile';
 import { go, useLatest, useNow, useQuery, useSettings } from '../hooks';
@@ -80,6 +81,7 @@ export function WorkoutsHome() {
       <div class="grid2" style="margin-top:10px">
         <a class="btn sm" href="#/exercises">Exercises</a><a class="btn sm" href="#/body">Body weight</a>
       </div>
+      <div style="margin-top:10px"><WorkoutStepsCard /></div>
       <div class="row between"><h2>Routines</h2><a class="btn g sm" href="#/routine/new">+ New routine</a></div>
       {!routines.length && <div class="card empty">No routines yet. Create one (e.g. "Push Day") to start workouts quickly.</div>}
       {routines.map((r) => <div class="card">

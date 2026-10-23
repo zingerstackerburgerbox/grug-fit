@@ -1,4 +1,5 @@
 import { BurnBar, useDayEnergy } from './Burn';
+import { stepGoal, stepLog } from '../steps';
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { all, byBarcode, byDate, del, get, getSettings, put } from '../db';
 import { go, useQuery, useSettings } from '../hooks';
@@ -405,6 +406,7 @@ export function MyFoods() {
 export function Trends() {
   const s = useSettings(); const [range, setRange] = useState<'7' | '30' | '84'>('7');
   const days = +range; const to = ymd(); const from = addDays(to, -(days - 1));
+  const steps = useQuery(stepLog, [], {} as Record<string, number>) || {};
   const data = useQuery(async () => { const [es, sn] = await Promise.all([byDate<DiaryEntry>('diary', from, to), suppNutrients(from, to)]); const m: Record<string, Nutrients> = {};
     for (let i = 0; i < days; i++) m[addDays(from, i)] = sn[addDays(from, i)] || { ...EMPTY };
     for (const e of es) m[e.date] = sumN([m[e.date], e.n]); return m; }, [from, to]);
@@ -423,6 +425,10 @@ export function Trends() {
       {[['Energy', energy(avg.kcal, s), energy(s.targets.kcal, s), eu(s)], ['Protein', avg.protein, s.targets.protein, 'g'], ['Net carbs', netCarbs(avg), s.targets.carbs, 'g'], ['Fat', avg.fat, s.targets.fat, 'g'], ['Fibre', avg.fibre, s.targets.fibre, 'g']].map(([l, v, t, u]) =>
         <div style="margin-bottom:8px"><div class="row between sm"><span>{l}</span><span class="mut">{r0(v as number)} / {r0(t as number)} {u}</span></div><Bar value={v as number} target={t as number} /></div>)}</div>
     <div class="card"><h3>Protein per day (g)</h3><BarChart color="#38bdf8" target={s.targets.protein} bars={days > 30 ? bars.map((b, w) => { const wk = list.slice(w * 7, w * 7 + 7).filter(([, n]) => n.kcal > 0); return { label: b.label, value: wk.length ? wk.reduce((a, [, n]) => a + n.protein, 0) / wk.length : 0 }; }) : list.map(([d, n], i) => ({ label: bars[i].label, value: n.protein }))} /></div>
+    {(() => { const sd = list.map(([d]) => steps[d] || 0); const lg = sd.filter((x) => x > 0); const goal = stepGoal(s);
+      const sb = days > 30 ? bars.map((b, w) => { const wk = sd.slice(w * 7, w * 7 + 7).filter((x) => x > 0); return { label: b.label, value: wk.length ? Math.round(wk.reduce((a, x) => a + x, 0) / wk.length) : 0 }; }) : list.map(([d], i) => ({ label: bars[i].label, value: sd[i] }));
+      return <div class="card" data-testid="trends-steps"><div class="row between"><h3>{days > 30 ? 'Steps (weekly average)' : 'Steps per day'}</h3><a class="btn g sm" href="#/steps">Log</a></div>
+        {lg.length ? <><BarChart color="var(--acc)" target={goal || undefined} bars={sb} /><div class="mut xs">Average {Math.round(lg.reduce((a, x) => a + x, 0) / lg.length).toLocaleString('en-AU')} steps on {lg.length} logged day{lg.length > 1 ? 's' : ''}{goal ? ` · goal ${goal.toLocaleString('en-AU')}` : ''}</div></> : <div class="mut sm">No steps logged in this period. Log them on the Workout tab.</div>}</div>; })()}
     <div class="card"><h3>Average micronutrients</h3><Micros n={avg} s={s} /></div>
   </div></>;
 }
