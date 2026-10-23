@@ -22,7 +22,7 @@ const asV140 = (page, extra = '') => idb(page, `await p(tx('exercises','readwrit
 {
   const ctx = await b.newContext({ ...devices['Pixel 7'], colorScheme: 'dark' }); const page = await ctx.newPage(); page.setDefaultTimeout(10000);
   page.on('pageerror', (e) => fail('pageerror ' + e.message));
-  await page.goto(BASE); await page.click('[data-testid=ob-skip]'); await page.waitForSelector("text=Today's nutrition");
+  await page.goto(BASE); await page.fill('[data-testid=ob-username]', 'grug_tester').then(() => page.click('[data-testid=ob-next]')).then(() => page.click('[data-testid=ob-skip]')); await page.waitForSelector("text=Today's nutrition");
   const fresh = await named(page, 'Reverse Cable Crunch'); if (fresh.length !== 1 || fresh[0].id !== 'ex086') fail('fresh install should have ex086 once'); else log('fresh install: Reverse Cable Crunch = ex086, Core / Cable');
   const before = await asV140(page); await boot(page);
   const after = await idb(page, `return { n: (await p(tx('exercises').getAll())).length, schema: (await p(tx('kv').get('schema'))).v, ex010: await p(tx('exercises').get('ex010')), mine: await p(tx('exercises').get('cxmine')), w: await p(tx('workouts').get('w1')), d: await p(tx('diary').get('d1')) }`);
@@ -44,7 +44,7 @@ const asV140 = (page, extra = '') => idb(page, `await p(tx('exercises','readwrit
 { // a v1.4.1 install that already has the old (lying) ex086 and logged it: same id, history kept, only the how-to refreshed
   const ctx = await b.newContext({ ...devices['Pixel 7'], colorScheme: 'dark' }); const page = await ctx.newPage(); page.setDefaultTimeout(10000);
   page.on('pageerror', (e) => fail('pageerror ' + e.message));
-  await page.goto(BASE); await page.click('[data-testid=ob-skip]'); await page.waitForSelector("text=Today's nutrition");
+  await page.goto(BASE); await page.fill('[data-testid=ob-username]', 'grug_tester').then(() => page.click('[data-testid=ob-next]')).then(() => page.click('[data-testid=ob-skip]')); await page.waitForSelector("text=Today's nutrition");
   const n0 = await idb(page, `const e = await p(tx('exercises').get('ex086')); delete e.how; await p(tx('exercises','readwrite').put(e)); await p(tx('kv','readwrite').put({ id: 'schema', v: 3 }));
     await p(tx('workouts','readwrite').put({ id: 'w86', name: 'Abs', start: 1761100000000, end: 1761103600000, exercises: [{ id: 'we86', exerciseId: 'ex086', restSec: 60, notes: 'felt it', sets: [{ id: 's86', reps: 15, kg: 30, done: true }] }] }));
     await p(tx('routines','readwrite').put({ id: 'r86', name: 'Core day', updated: 1, exercises: [{ exerciseId: 'ex086', sets: 3, reps: 15, kg: 30, restSec: 60 }] }));
@@ -61,7 +61,7 @@ const asV140 = (page, extra = '') => idb(page, `await p(tx('exercises','readwrit
 }
 { // a user who already made a custom "Reverse Cable Crunch" doesn't get a second one
   const ctx = await b.newContext({ ...devices['Pixel 7'], colorScheme: 'dark' }); const page = await ctx.newPage(); page.setDefaultTimeout(10000);
-  await page.goto(BASE); await page.click('[data-testid=ob-skip]'); await page.waitForSelector("text=Today's nutrition");
+  await page.goto(BASE); await page.fill('[data-testid=ob-username]', 'grug_tester').then(() => page.click('[data-testid=ob-next]')).then(() => page.click('[data-testid=ob-skip]')); await page.waitForSelector("text=Today's nutrition");
   await asV140(page, `await p(tx('exercises','readwrite').put({ id: 'cxrcc', name: 'reverse cable crunch', muscle: 'Core', equipment: 'Cable', custom: true }));`); await boot(page);
   const rc = await named(page, 'Reverse Cable Crunch'); if (rc.length !== 1 || rc[0].id !== 'cxrcc') fail('custom same-name exercise should win: ' + JSON.stringify(rc)); else log('custom same-name exercise kept, built-in not duplicated');
   await ctx.close();

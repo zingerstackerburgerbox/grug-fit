@@ -17,7 +17,15 @@ const num = (t) => Number(String(t).replace(/[^\d.-]/g, ''));
 {
   const ctx = await b.newContext({ ...devices['Pixel 7'], colorScheme: 'dark' }); const page = await ctx.newPage(); page.setDefaultTimeout(10000);
   page.on('pageerror', (e) => fail('pageerror ' + e.message));
-  await page.goto(BASE); await page.waitForSelector('[data-testid=onboarding][data-step=welcome]'); log('fresh: onboarding shown on first open');
+  await page.goto(BASE); await page.waitForSelector('[data-testid=onboarding][data-step=username]'); log('fresh: onboarding opens on "Pick a username"');
+  if (await page.locator('[data-testid=ob-skip]').count()) fail('username step must not be skippable');
+  for (const [v, msg] of [['', 'Pick a username'], ['ab', 'At least 3'], ['erik lifts', 'Only letters'], ['erik-lifts', 'Only letters'], ['a'.repeat(21), 'At most 20']]) {
+    await page.fill('[data-testid=ob-username]', v); await page.click('[data-testid=ob-next]'); await page.waitForTimeout(80);
+    const t = await page.textContent('[data-testid=onboarding]'); if (!t.includes(msg) || (await page.getAttribute('[data-testid=onboarding]', 'data-step')) !== 'username') fail(`"${v}" should be rejected (${msg})`); }
+  log('rejected: empty, 2 chars, space, dash, 21 chars');
+  await page.fill('[data-testid=ob-username]', '  Erik_Lifts.2  '); await page.screenshot({ path: 'screenshots/90-onboarding-username.png' });
+  await page.click('[data-testid=ob-next]'); await page.waitForSelector('[data-testid=onboarding][data-step=welcome]');
+  eq('stored (trimmed, case kept)', (await idb(page, `return p(tx('kv').get('settings'))`)).username, 'Erik_Lifts.2');
   await page.click('[data-testid=ob-next]');
   await page.fill('[aria-label="Height (cm)"]', '180'); await page.fill('[aria-label=Weight]', '85'); await page.click('[data-testid=ob-next]');
   await page.fill('[aria-label=Age]', '30'); await page.click('[data-testid=sex-male]'); await page.click('[data-testid=ob-next]');
@@ -30,6 +38,8 @@ const num = (t) => Number(String(t).replace(/[^\d.-]/g, ''));
   if (await page.locator('[data-testid=ob-keep]').count()) fail('fresh install should not offer "keep current"');
   await page.screenshot({ path: 'screenshots/20-onboarding-result.png' });
   await page.click('[data-testid=ob-use]'); await page.waitForSelector('text=Today\'s nutrition');
+  const gr = await page.textContent('[data-testid=greeting]').catch(() => ''); log('Home greeting:', gr); if (!/^(Hey|Morning|Afternoon|Evening), Erik_Lifts\.2$/.test(gr)) fail('greeting');
+  if (await page.locator('[data-testid=username-modal]').count()) fail('no extra prompt after onboarding'); await page.screenshot({ path: 'screenshots/91-home-greeting.png' });
   const st = await idb(page, `return p(tx('kv').get('settings'))`); eq('saved kcal target', st.targets.kcal, 1760); eq('saved protein target', st.targets.protein, 154); eq('profile goal', st.profile.goal, 'cut');
   const bw = await idb(page, `return p(tx('bodyweight').getAll())`); eq('first body-weight entry', bw.map((x) => x.kg).join(','), '85');
   eq('header burned (no workout)', num(await page.textContent('[data-testid=burned]')), '2196');
@@ -75,7 +85,8 @@ const num = (t) => Number(String(t).replace(/[^\d.-]/g, ''));
     await p(tx('kv','readwrite').put(s)); await p(tx('bodyweight','readwrite').put({ id: 'bw2026-10-01', date: '2026-10-01', kg: 84 }));
     await p(tx('diary','readwrite').put({ id: 'd1', date: '2026-10-20', meal: 'lunch', foodId: 'x', name: 'Rice', grams: 200, qty: 200, serving: 'g', n: { kcal: 260, protein: 5, carbs: 56, fibre: 1, fat: 1 }, created: 1 }));
     await p(tx('workouts','readwrite').put({ id: 'wold', name: 'Old push', start: 1760000000000, end: 1760003600000, exercises: [] }));`);
-  await page.reload(); await page.waitForSelector('[data-testid=onboarding][data-step=welcome]');
+  await page.reload(); await page.waitForSelector('[data-testid=onboarding][data-step=username]');
+  await page.fill('[data-testid=ob-username]', 'old_timer'); await page.click('[data-testid=ob-next]'); await page.waitForSelector('[data-testid=onboarding][data-step=welcome]');
   if (!(await page.textContent('[data-testid=onboarding]')).includes('Welcome back')) fail('existing install should say welcome back');
   await page.click('[data-testid=ob-next]'); await page.fill('[aria-label="Height (cm)"]', '180');
   eq('weight prefilled from latest log', await page.inputValue('[aria-label=Weight]'), '84');
@@ -91,6 +102,31 @@ const num = (t) => Number(String(t).replace(/[^\d.-]/g, ''));
   await page.goto(BASE + '#/settings'); await page.click('[data-testid=recalculate]'); await page.waitForSelector('[data-testid=ob-use]');
   await page.click('[data-testid=ob-use]'); await page.waitForURL(/#\/settings/);
   const st2 = await idb(page, `return p(tx('kv').get('settings'))`); eq('recalculated maintain kcal (2184 → 2180)', st2.targets.kcal, 2180); eq('maintain protein keeps the ratio (150 g × 2180/1800, v1.8.5)', st2.targets.protein, 182);
+  await ctx.close();
+}
+
+// ---------- existing user who finished onboarding before usernames (v1.9.1 and older): one-time prompt ----------
+{
+  const ctx = await b.newContext({ ...devices['Pixel 7'], colorScheme: 'dark' }); const page = await ctx.newPage(); page.setDefaultTimeout(10000); page.on('dialog', (d) => d.accept());
+  page.on('pageerror', (e) => fail('pageerror ' + e.message));
+  await page.goto(BASE); await page.waitForSelector('[data-testid=onboarding]');
+  await idb(page, `const s = await p(tx('kv').get('settings')); delete s.username; s.onboarded = 1760000000000; await p(tx('kv','readwrite').put(s));`);
+  await page.reload(); await page.waitForSelector('[data-testid=username-modal]'); log('existing user: "Add a username" prompt on next open');
+  await page.waitForTimeout(150); await page.screenshot({ path: 'screenshots/92-existing-user-username.png' });
+  await page.keyboard.press('Escape'); await page.mouse.click(10, 10); await page.waitForTimeout(150); if (!(await page.locator('[data-testid=username-modal]').count())) fail('prompt must not be dismissable');
+  await page.fill('[data-testid=username-input]', 'x!'); await page.click('[data-testid=username-save]'); if (!/At least 3|Only letters/.test(await page.textContent('[data-testid=username-err]'))) fail('modal validation');
+  await page.fill('[data-testid=username-input]', 'erik.l'); await page.keyboard.press('Enter'); await page.waitForSelector('[data-testid=username-modal]', { state: 'detached' });
+  await page.waitForSelector('[data-testid=greeting]'); log('saved → greeting:', await page.textContent('[data-testid=greeting]'));
+  await page.reload(); await page.waitForSelector('[data-testid=greeting]'); await page.waitForTimeout(300); if (await page.locator('[data-testid=username-modal]').count()) fail('prompt shown again');
+  // Settings › Profile: edit
+  await page.goto(BASE + '#/settings'); await page.waitForSelector('[data-testid=set-username]'); await page.waitForFunction(() => document.querySelector('[data-testid=set-username]').value === 'erik.l');
+  await page.fill('[data-testid=set-username]', 'no spaces please'); await page.click('[data-testid=set-username-save]'); if (!(await page.textContent('[data-testid=username-setting]')).includes('Only letters')) fail('settings validation');
+  await page.fill('[data-testid=set-username]', 'erik_lifts'); await page.click('[data-testid=set-username-save]'); await page.waitForTimeout(200);
+  await page.locator('[data-testid=username-setting]').scrollIntoViewIfNeeded(); await page.screenshot({ path: 'screenshots/93-settings-username.png' });
+  await page.goto(BASE); await page.waitForSelector('[data-testid=greeting]'); const g2 = await page.textContent('[data-testid=greeting]'); log('after editing in Settings:', g2); if (!g2.endsWith(', erik_lifts')) fail('settings edit');
+  // Backup includes it
+  await page.goto(BASE + '#/settings'); const [dl] = await Promise.all([page.waitForEvent('download'), page.click('text=Export all data')]);
+  const bj = JSON.parse((await import('node:fs')).readFileSync(await dl.path(), 'utf8')); const u = bj.data.kv.find((r) => r.id === 'settings')?.username; log('in backup:', u); if (u !== 'erik_lifts') fail('backup username');
   await ctx.close();
 }
 await b.close();

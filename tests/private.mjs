@@ -38,7 +38,7 @@ const visible = (page, s) => page.locator(s).isVisible();
   // escape hatch → onboarding + persistent banner, remembered across reloads
   await page.click('[data-testid=private-continue]'); await page.waitForSelector('[data-testid=onboarding]');
   if (!(await visible(page, '[data-testid=private-banner]'))) fail('banner after continue');
-  await page.click('[data-testid=ob-skip]'); await page.waitForSelector("text=Today's nutrition"); if (!(await visible(page, '[data-testid=private-banner]'))) fail('banner on home');
+  await page.fill('[data-testid=ob-username]', 'grug_tester').then(() => page.click('[data-testid=ob-next]')).then(() => page.click('[data-testid=ob-skip]')); await page.waitForSelector("text=Today's nutrition"); if (!(await visible(page, '[data-testid=private-banner]'))) fail('banner on home');
   await page.reload(); await page.waitForSelector("text=Today's nutrition"); if (await page.locator('[data-testid=private-block]').count() || !(await visible(page, '[data-testid=private-banner]'))) fail('reload: banner should persist, block gone');
   await page.screenshot({ path: 'screenshots/49-private-banner.png' }); log('escape → onboarding + persistent banner');
   await ctx.close();
@@ -54,7 +54,7 @@ const visible = (page, s) => page.locator(s).isVisible();
   const { ctx, page } = await open({ grant: true }); await page.waitForSelector('[data-testid=onboarding]');
   if (await page.locator('[data-testid=private-block], [data-testid=private-banner]').count()) fail('normal window blocked');
   if (await page.evaluate(() => window.__persistCalls)) fail('persist asked before onboarding');
-  await page.click('[data-testid=ob-skip]'); await page.waitForSelector("text=Today's nutrition"); await page.waitForTimeout(200);
+  await page.fill('[data-testid=ob-username]', 'grug_tester').then(() => page.click('[data-testid=ob-next]')).then(() => page.click('[data-testid=ob-skip]')); await page.waitForSelector("text=Today's nutrition"); await page.waitForTimeout(200);
   const pc = await page.evaluate(() => window.__persistCalls); log('persist() calls after onboarding:', pc); if (pc !== 1) fail('persist after onboarding');
   await page.goto(BASE + '#/settings'); await page.waitForSelector('[data-testid=storage-status][data-state=protected]');
   const s = await page.textContent('[data-testid=storage-status]'); log('settings:', s.slice(0, 60)); if (!/Protected/.test(s) || !/backup/i.test(s)) fail('settings storage text');
@@ -63,7 +63,7 @@ const visible = (page, s) => page.locator(s).isVisible();
 }
 // 6. Not granted → "Not protected"; returning user's first log re-asks once
 {
-  const { ctx, page } = await open({ grant: false }); await page.waitForSelector('[data-testid=onboarding]'); await page.click('[data-testid=ob-skip]'); await page.waitForSelector("text=Today's nutrition");
+  const { ctx, page } = await open({ grant: false }); await page.waitForSelector('[data-testid=onboarding]'); await page.fill('[data-testid=ob-username]', 'grug_tester').then(() => page.click('[data-testid=ob-next]')).then(() => page.click('[data-testid=ob-skip]')); await page.waitForSelector("text=Today's nutrition");
   await page.goto(BASE + '#/settings'); await page.waitForSelector('[data-testid=storage-status][data-state=unprotected]'); log('not granted → Not protected');
   await ctx.close();
 }

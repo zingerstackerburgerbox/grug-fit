@@ -26,7 +26,7 @@ await ctx.route('https://coach.test/**', async (r) => {
   if (mode === 'disabled') return r.fulfill({ status: 503, contentType: 'application/json', headers: cors, body: JSON.stringify({ error: 'disabled', message: 'off' }) });
   return r.fulfill({ status: 200, headers: { ...cors, 'content-type': 'text/event-stream', 'X-Coach-Remaining': String(30 - reqs.length), 'X-Coach-Cap': '30' }, body: sse(reply) });
 });
-await page.goto(BASE); await page.click('[data-testid=ob-skip]'); await page.waitForSelector("text=Today's nutrition");
+await page.goto(BASE); await page.fill('[data-testid=ob-username]', 'grug_tester').then(() => page.click('[data-testid=ob-next]')).then(() => page.click('[data-testid=ob-skip]')); await page.waitForSelector("text=Today's nutrition");
 // some data for the context
 const T = Date.now() - 864e5;
 await idb(`await p(tx('workouts','readwrite').put(arg.w)); await p(tx('bodyweight','readwrite').put(arg.bw));`, { w: { id: 'w1', name: 'Push Day', start: T, end: T + 3600e3, exercises: [{ id: 'e1', exerciseId: 'ex001', restSec: 90, sets: [{ id: 's1', type: 'N', kg: 100, reps: 5, done: true }] }] }, bw: { id: 'bw1', date: '2026-10-20', kg: 84.2 } });
@@ -53,6 +53,7 @@ const data = JSON.parse(sys.content.split('DATA (the user\'s own logs, JSON):\n'
 log('context keys:', Object.keys(data).join(','), '| workout', JSON.stringify(data.workouts?.recent?.[0]), '| bw', data.bodyWeight?.latestKg);
 if (!/not a doctor/.test(sys.content) || !data.targets || data.workouts?.recent?.[0]?.ex?.[0]?.[0] !== 'Bench Press (Barbell)' || data.bodyWeight?.latestKg !== 84.2) fail('context payload');
 log('steps in context:', JSON.stringify(data.steps14d)); if (data.steps14d?.days?.length !== 2 || data.steps14d.avgPerLoggedDay !== 8000 || data.steps14d.goal !== 8000) fail('steps in coach context');
+if (/grug_tester/.test(JSON.stringify(rq.body)) || /grug_tester/.test(JSON.stringify(rq.h))) fail('username sent to the coach'); else log('username not in the coach request');
 if (sys.content.length > 16000) fail('system prompt too big: ' + sys.content.length);
 const html = await page.innerHTML('[data-testid=coach-reply]');
 if (!/<strong>4-day PPL<\/strong>/.test(html) || !/<li>Push: chest/.test(html)) fail('markdown not rendered'); if (/grug-action/.test(await page.textContent('[data-testid=coach-reply]'))) fail('raw action block shown');

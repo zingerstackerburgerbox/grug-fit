@@ -28,7 +28,7 @@ const b = await chromium.launch();
 // ---- UI ----
 const ctx = await b.newContext({ ...devices['Pixel 7'], colorScheme: 'dark' }); const page = await ctx.newPage(); page.setDefaultTimeout(15000);
 page.on('pageerror', (e) => fail('pageerror ' + e.message));
-await page.goto(BASE); await page.click('[data-testid=ob-skip]'); await page.waitForSelector('[data-testid=fact-card]');
+await page.goto(BASE); await page.fill('[data-testid=ob-username]', 'grug_tester').then(() => page.click('[data-testid=ob-next]')).then(() => page.click('[data-testid=ob-skip]')); await page.waitForSelector('[data-testid=fact-card]');
 const t1 = await page.textContent('[data-testid=fact-text]'); const s1 = await page.textContent('[data-testid=fact-src]'); log('today:', t1, '|', s1);
 await page.screenshot({ path: 'screenshots/35-home-fact.png' });
 await page.click('[data-testid=fact-next]'); const t2 = await page.textContent('[data-testid=fact-text]'); log('another:', t2); if (t2 === t1) fail('Another did not change the fact');

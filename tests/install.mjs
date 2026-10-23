@@ -19,12 +19,13 @@ const open = async (ua, o = {}) => {
   if (o.time) await page.clock.install({ time: o.time });
   await page.goto(BASE); await page.waitForSelector('[data-testid=onboarding]'); return page;
 };
-const home = async (page) => { await page.click('[data-testid=ob-skip]'); await page.waitForSelector("text=Today's nutrition"); };
+const home = async (page) => { if (await page.locator('[data-testid=ob-username]').count()) { await page.fill('[data-testid=ob-username]', 'grug_tester'); await page.click('[data-testid=ob-next]'); } await page.click('[data-testid=ob-skip]'); await page.waitForSelector("text=Today's nutrition"); };
 const fakeBip = (page, outcome = 'accepted') => page.evaluate((outcome) => { const e = new Event('beforeinstallprompt', { cancelable: true }); e.prompt = async () => { window.__prompted = (window.__prompted || 0) + 1; }; e.userChoice = Promise.resolve({ outcome }); dispatchEvent(e); window.__bipDefaultPrevented = () => e.defaultPrevented; }, outcome);
 
 // 1. Android Chrome, no captured prompt: banner on onboarding + Home, manual steps
 {
   const page = await open(UA['android-chrome']);
+  await page.fill('[data-testid=ob-username]', 'grug_tester'); await page.click('[data-testid=ob-next]'); await page.waitForSelector('[data-testid=onboarding][data-step=welcome]');
   if (!(await page.locator('[data-testid=onboarding] [data-testid=install-banner]').count())) fail('install card missing on onboarding welcome'); else log('onboarding welcome shows the install card');
   await home(page); await page.waitForSelector('[data-testid=install-banner]'); await page.waitForTimeout(300);
   await page.screenshot({ path: 'screenshots/45-install-banner.png' });

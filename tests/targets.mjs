@@ -10,7 +10,7 @@ const idb = (src) => page.evaluate(async (src) => { const d = await new Promise(
   const res = await new Function('tx', 'p', `return (async () => { ${src} })()`)(tx, p); d.close(); return res; }, src);
 const vals = () => page.evaluate(() => Object.fromEntries(['kcal', 'protein', 'carbs', 'fat', 'fibre'].map((k) => [k, document.querySelector(`[data-testid=target-${k}]`).value])));
 const J = JSON.stringify;
-await page.goto(BASE); await page.click('[data-testid=ob-skip]'); await page.waitForSelector("text=Today's nutrition");
+await page.goto(BASE); await page.fill('[data-testid=ob-username]', 'grug_tester').then(() => page.click('[data-testid=ob-next]')).then(() => page.click('[data-testid=ob-skip]')); await page.waitForSelector("text=Today's nutrition");
 await idb(`const s = await p(tx('kv').get('settings')); s.targets = { ...s.targets, kcal: 2000, protein: 200, carbs: 150, fat: 60, fibre: 30 }; await p(tx('kv','readwrite').put(s));`);
 await page.goto(BASE + '#/settings'); await page.waitForSelector('[data-testid=target-kcal]'); await page.waitForFunction(() => document.querySelector('[data-testid=target-kcal]').value === '2000');
 // type 1000 key by key – values update live from the pre-edit base (no compounding rounding)

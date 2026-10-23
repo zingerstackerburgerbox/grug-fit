@@ -1,4 +1,5 @@
 import { BurnBar, useDayEnergy } from './Burn';
+import { greeting } from '../username';
 import { InstallBanner } from './Install';
 import { all } from '../db';
 import { useQuery, useSettings } from '../hooks';
@@ -27,7 +28,7 @@ export function Home() {
   const weekWorkouts = ws.filter((w) => weekStart(w.start) === weekStart(Date.now())).length;
   const now = new Date();
   return <><Top title="Grug Fit" right={<a class="btn ic" href="#/settings" aria-label="Settings">⚙️</a>} /><div class="page">
-    <div class="mut sm" style="margin:-2px 2px 10px">{WD[now.getDay()]} {now.getDate()} {MONTHS[now.getMonth()]}</div>
+    <div class="mut sm" style="margin:-2px 2px 10px" data-testid="home-date">{s.username ? <><b style="color:var(--fg)" data-testid="greeting">{greeting(now)}, {s.username}</b> · </> : null}{WD[now.getDay()]} {now.getDate()} {MONTHS[now.getMonth()]}</div>
     <InstallBanner />
     <BurnBar date={today} />
     <PackageFixNote />
@@ -38,7 +39,7 @@ export function Home() {
     <div class="kpi" style="margin-bottom:12px"><div><span class="mut xs">🏋️ Week streak</span><b>{wkStreak}</b><span class="mut xs">{weekWorkouts} this week</span></div><div><span class="mut xs">🍽 Logging streak</span><b>{foodStreak} d</b></div><div><span class="mut xs">💊 Dose streak</span><b>{doseStreak} d</b></div></div>
     <div class="card"><div class="row between"><b>Doses today</b><a class="btn g sm" href="#/calendar">Calendar →</a></div>
       <div class="list">{slots.map((sl) => <SlotRow sl={sl} />)}</div>
-      {!slots.length && <div class="mut sm" style="padding:8px 0">No doses scheduled today. <a href="#/supp/new" style="color:var(--acc)">Add a supplement</a></div>}
+      {!slots.length && <div class="mut sm" style="padding:8px 0">No doses scheduled today. <a href="#/supp/new" style="color:var(--acc-text)">Add a supplement</a></div>}
       {slots.length > 0 && <div class="mut xs">{slots.filter((x) => x.log).length}/{slots.length} taken</div>}</div>
     {active ? <a class="btn p full" href="#/workout/active" style="margin-bottom:12px">▶ Resume {active.name}</a> : <button class="btn p full" style="margin-bottom:12px" onClick={() => startWorkout()}>+ Start workout</button>}
     {ws[0] ? <><div class="row between"><h2>Last workout</h2><a class="btn g sm" href={WORKOUT_LIST} data-testid="home-all-workouts">All workouts →</a></div><WorkoutCard w={ws[0]} exs={exs} /></> : <div class="card empty">No workouts yet. Start one above or build a routine in the Workout tab.</div>}

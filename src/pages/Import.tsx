@@ -94,7 +94,7 @@ export function ImportSection() {
       </ol><div class="mut xs">Menus may vary by app version.</div></details>
     <input ref={inp} type="file" multiple accept={ACCEPT} style="display:none" data-testid="import-input" onChange={(e) => pick(e.currentTarget.files)} />
     <button class="btn p" data-testid="import-choose" disabled={busy} onClick={() => inp.current?.click()}>📂 Choose files (CSV)</button>
-    {done && <div class="col" data-testid="import-done-box"><div class="sm" data-testid="import-done" style="color:var(--acc)">✅ {done}</div>
+    {done && <div class="col" data-testid="import-done-box"><div class="sm" data-testid="import-done" style="color:var(--acc-text)">✅ {done}</div>
       {doneW > 0 && <a class="btn b2" href={WORKOUT_LIST} data-testid="import-view-history">View workouts →</a>}</div>}
     {plan && <div class="card col import-preview" data-testid="import-preview" data-editing="1" style="background:var(--bg);margin:0">
       <b>Preview</b>

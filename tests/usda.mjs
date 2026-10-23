@@ -12,7 +12,7 @@ const b = await chromium.launch();
 const ctx = await b.newContext({ ...devices['Pixel 7'], colorScheme: 'dark' }); const page = await ctx.newPage(); page.setDefaultTimeout(15000);
 page.on('pageerror', (e) => fail('pageerror ' + e.message));
 const idb = (store, id) => page.evaluate(([store, id]) => new Promise((res) => { const r = indexedDB.open('grugfit'); r.onsuccess = () => { const q = r.result.transaction(store).objectStore(store).get(id); q.onsuccess = () => { res(q.result); r.result.close(); }; }; }), [store, id]);
-await page.goto(BASE); await page.click('[data-testid=ob-skip]'); await page.waitForSelector("text=Today's nutrition");
+await page.goto(BASE); await page.fill('[data-testid=ob-username]', 'grug_tester').then(() => page.click('[data-testid=ob-next]')).then(() => page.click('[data-testid=ob-skip]')); await page.waitForSelector("text=Today's nutrition");
 const today = await page.evaluate(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; });
 const preview = async () => { const v = {}; for (const k of ['kcal', 'protein', 'carbs', 'fat']) v[k] = Number(await page.locator(`[data-testid=preview] [data-k=${k}]`).textContent()); v.grams = Number(((await page.textContent('[data-testid=grams]')).match(/= ([\d.]+)/) || [])[1]); return v; };
 const typeCode = async (code) => { await page.goto(BASE + '#/'); await page.waitForSelector("text=Today's nutrition"); await page.goto(BASE + `#/food/add/${today}/snacks`); await page.fill('input[type=search]', code); await page.click('button[aria-label=Search]'); };

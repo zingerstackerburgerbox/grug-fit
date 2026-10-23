@@ -12,5 +12,5 @@ try { console.log('manifest id:', JSON.stringify(await cdp.send('Page.getAppId')
 await p.reload(); await p.waitForTimeout(4000);
 console.log('beforeinstallprompt fired:', await p.evaluate(() => window.__bip), '| standalone:', await p.evaluate(() => matchMedia('(display-mode: standalone)').matches));
 // app wiring: our handler captured it → banner/Settings offer the native install
-if (await p.locator('[data-testid=ob-skip]').count()) await p.click('[data-testid=ob-skip]'); console.log('home banner:', (await p.textContent('[data-testid=install-go]')).trim()); await p.goto(B + '#/settings'); await p.waitForSelector('[data-testid=settings-install]'); console.log('settings item:', (await p.textContent('[data-testid=settings-install]')).trim());
+if (await p.locator('[data-testid=ob-skip]').count()) await p.fill('[data-testid=ob-username]', 'grug_tester').then(() => p.click('[data-testid=ob-next]')).then(() => p.click('[data-testid=ob-skip]')); console.log('home banner:', (await p.textContent('[data-testid=install-go]')).trim()); await p.goto(B + '#/settings'); await p.waitForSelector('[data-testid=settings-install]'); console.log('settings item:', (await p.textContent('[data-testid=settings-install]')).trim());
 await b.close();

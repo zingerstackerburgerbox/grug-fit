@@ -6,10 +6,12 @@ import { go, useQuery } from '../hooks';
 import { GOAL_LABEL, ageFromBirthYear, bmr, latestWeight, sedentaryBurn, suggestTargets, type Goal, type Sex } from '../energy';
 import type { Settings } from '../types';
 import { NumInput, Seg, toast } from '../ui';
+import { saveUsername, UsernameField, USERNAME_HINT } from './Username';
+import { usernameError } from '../username';
 import { DEFAULT_SETTINGS, LB, r0, r1, ymd } from '../util';
 
 const hp = () => new URLSearchParams(location.hash.split('?')[1] || '');
-const STEPS = ['welcome', 'body', 'about', 'goal', 'result'] as const;
+const STEPS = ['username', 'welcome', 'body', 'about', 'goal', 'result'] as const;
 type Step = (typeof STEPS)[number];
 
 /** Has this install got real user data / customised targets? Then never overwrite targets without asking. */
@@ -21,7 +23,7 @@ async function isExisting(s: Settings) {
 
 export function Onboarding({ onDone }: { onDone?: () => void }) {
   const q = hp(); const fromSettings = q.get('from') === 'settings';
-  const [step, setStep] = useState<Step>((q.get('step') as Step) || 'welcome');
+  const [step, setStep] = useState<Step>((q.get('step') as Step) || 'username'); const [uname, setUname] = useState('');
   const [s, setS] = useState<Settings | null>(null); const [existing, setExisting] = useState(false);
   const [hUnit, setHUnit] = useState<'cm' | 'ftin'>('cm'); const [cm, setCm] = useState<number | null>(null); const [ft, setFt] = useState<number | null>(null); const [inch, setInch] = useState<number | null>(null);
   const [wUnit, setWUnit] = useState<'kg' | 'lb'>('kg'); const [wv, setWv] = useState<number | null>(null); const [prevKg, setPrevKg] = useState<number | null>(null);
@@ -30,7 +32,7 @@ export function Onboarding({ onDone }: { onDone?: () => void }) {
   const [t, setT] = useState<{ kcal: number | null; protein: number | null; fat: number | null; carbs: number | null }>({ kcal: null, protein: null, fat: null, carbs: null });
   const [err, setErr] = useState('');
   useEffect(() => { (async () => {
-    const st = await getSettings(); setS(st); setExisting(await isExisting(st));
+    const st = await getSettings(); setS(st); setExisting(await isExisting(st)); if (st.username) { setUname(st.username); if (fromSettings) setStep((x) => (x === 'username' ? 'welcome' : x)); }
     const kg = await latestWeight(); setPrevKg(kg);
     const p = st.profile;
     if (p) { setCm(p.heightCm); setHUnit(p.heightUnit || 'cm'); const ti = p.heightCm / 2.54; setFt(Math.floor(ti / 12)); setInch(r0(ti % 12)); setSex(p.sex); setGoal(p.goal); setAge(ageFromBirthYear(p.birthYear)); setBy(p.birthYear); setWUnit(p.bwUnit || 'kg'); }
@@ -51,8 +53,9 @@ export function Onboarding({ onDone }: { onDone?: () => void }) {
   const setMacro = (k: 'protein' | 'fat' | 'carbs', v: number | null) => { obBase.current = null; setT({ ...t, [k]: v as any }); };
 
   const idx = STEPS.indexOf(step);
-  const next = () => {
+  const next = async () => {
     setErr('');
+    if (step === 'username') { const e = usernameError(uname); if (e) return setErr(e); setUname(await saveUsername(uname)); }
     if (step === 'body') { if (!heightCm || heightCm < 100 || heightCm > 250) return setErr('Enter your height (100–250 cm)'); if (!kg || kg < 30 || kg > 300) return setErr('Enter your weight'); }
     if (step === 'about') { if (ageN == null || ageN < 13 || ageN > 100) return setErr('Enter your age (13–100) or birth year'); if (!sex) return setErr('Pick male or female'); }
     if (step === 'goal' && !goal) return setErr('Pick a goal');
@@ -73,8 +76,14 @@ export function Onboarding({ onDone }: { onDone?: () => void }) {
 
   return <div class="onboard" data-testid="onboarding" data-step={step}>
     <div class="ob-top"><div class="ob-dots">{STEPS.map((x, i) => <i class={i <= idx ? 'on' : ''} />)}</div>
-      <button class="btn g sm" onClick={skip} data-testid="ob-skip">{fromSettings ? 'Cancel' : 'Skip'}</button></div>
+      {step !== 'username' || fromSettings ? <button class="btn g sm" onClick={skip} data-testid="ob-skip">{fromSettings ? 'Cancel' : 'Skip'}</button> : <span />}</div>
     <div class="ob-body col">
+      {step === 'username' && <>
+        <div class="ob-hero">💪</div><h1>Pick a username</h1>
+        <p class="mut">This is how Grug Fit greets you. It's only stored on this device.</p>
+        <UsernameField value={uname} onInput={(v) => { setUname(v); setErr(''); }} onEnter={next} autoFocus tid="ob-username" />
+        <div class="mut xs">{USERNAME_HINT}</div>
+      </>}
       {step === 'welcome' && <>
         <div class="ob-hero">💪🍗</div><h1>Welcome{existing ? ' back' : ''} to Grug Fit</h1>
         <p class="mut">{existing ? 'New: Grug Fit can now estimate how many calories you burn each day — including workouts — and suggest targets for your goal. Takes 30 seconds. Your existing data and targets stay untouched unless you choose otherwise.' : 'A few quick questions so Grug Fit can estimate your daily calorie burn and suggest calorie and protein targets. Takes about 30 seconds — you can change everything later in Settings.'}</p>

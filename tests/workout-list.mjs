@@ -18,7 +18,7 @@ const idb = (src, arg) => page.evaluate(async ([src, arg]) => {
 }, [src, arg]);
 const cards = () => page.locator('[data-testid=workout-list] a.card');
 const hideToast = () => page.addStyleTag({ content: '.toast{display:none!important}' });
-await page.goto(BASE); await page.click('[data-testid=ob-skip]'); await page.waitForSelector("text=Today's nutrition");
+await page.goto(BASE); await page.fill('[data-testid=ob-username]', 'grug_tester').then(() => page.click('[data-testid=ob-next]')).then(() => page.click('[data-testid=ob-skip]')); await page.waitForSelector("text=Today's nutrition");
 await idb(`await p(tx('kv','readwrite').put({ id: 'bodyweight-seeded', v: 1 })); await p(tx('bodyweight','readwrite').put({ id: 'bw1', date: '2026-01-01', kg: 82 }));`).catch(() => {});
 // empty state
 await page.goto(BASE + '#/workouts?list=1'); await page.waitForSelector('[data-testid=workout-list]');

@@ -39,7 +39,7 @@ export function Micros({ n, s }: { n: Nutrients; s: Settings }) {
   const rows = [{ key: 'fibre', label: 'Fibre', unit: 'g' } as const, ...MICROS];
   return <div class="col" style="gap:10px">{rows.map((m) => { const v = (n as any)[m.key] || 0; const t = (s.targets as any)[m.key] || 0; const lim = m.key === 'sodium';
     return <div><div class="row between sm"><span>{m.label}{lim ? ' (limit)' : ''}</span><span class="mut">{v >= 100 ? r0(v) : r1(v)} / {t} {m.unit} · {t ? r0((v / t) * 100) : 0}%</span></div>
-      <Bar value={v} target={t} color={lim ? (v > t ? '#ef4444' : '#22c55e') : undefined} /></div>; })}
+      <Bar value={v} target={t} color={lim ? (v > t ? 'var(--bad)' : 'var(--acc)') : undefined} /></div>; })}
     <div class="mut xs">Micronutrients only count where Open Food Facts / your custom food has data, so totals may be under-estimates.</div></div>;
 }
 

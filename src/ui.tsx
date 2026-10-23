@@ -32,19 +32,19 @@ export function Toaster() {
 export function Ring({ value, target, color, label, sub, size = 78 }: { value: number; target: number; color: string; label: string; sub?: string; size?: number }) {
   const r = size / 2 - 7, c = 2 * Math.PI * r; const p = target > 0 ? Math.min(1, value / target) : 0; const over = target > 0 && value > target * 1.05;
   return <div class="ring">
-    <svg width={size} height={size}><circle cx={size / 2} cy={size / 2} r={r} stroke="#2b303b" stroke-width="8" fill="none" />
-      <circle cx={size / 2} cy={size / 2} r={r} stroke={over ? '#f59e0b' : color} stroke-width="8" fill="none" stroke-linecap="round" stroke-dasharray={`${c * p} ${c}`} transform={`rotate(-90 ${size / 2} ${size / 2})`} />
-      <text x="50%" y="48%" text-anchor="middle" fill="#e8eaed" font-size={size / 5} font-weight="700">{Math.round(value)}</text>
-      <text x="50%" y="66%" text-anchor="middle" fill="#9aa1ad" font-size={size / 8.5}>/ {Math.round(target)}</text></svg>
+    <svg width={size} height={size}><circle cx={size / 2} cy={size / 2} r={r} stroke="var(--line)" stroke-width="8" fill="none" />
+      <circle cx={size / 2} cy={size / 2} r={r} stroke={over ? 'var(--warn)' : color} stroke-width="8" fill="none" stroke-linecap="round" stroke-dasharray={`${c * p} ${c}`} transform={`rotate(-90 ${size / 2} ${size / 2})`} />
+      <text x="50%" y="48%" text-anchor="middle" fill="var(--fg)" font-size={size / 5} font-weight="700">{Math.round(value)}</text>
+      <text x="50%" y="66%" text-anchor="middle" fill="var(--mut)" font-size={size / 8.5}>/ {Math.round(target)}</text></svg>
     <span class="b">{label}</span>{sub && <span class="mut xs">{sub}</span>}
   </div>;
 }
 export function Bar({ value, target, color }: { value: number; target: number; color?: string }) {
   const p = target > 0 ? Math.min(100, (value / target) * 100) : 0;
-  return <div class="bar"><i style={{ width: p + '%', background: color || (p >= 100 ? '#22c55e' : p >= 50 ? '#0ea5e9' : '#64748b') }} /></div>;
+  return <div class="bar"><i style={{ width: p + '%', background: color || (p >= 100 ? 'var(--acc)' : p >= 50 ? 'var(--acc2)' : 'var(--mut)') }} /></div>;
 }
 /** Simple responsive SVG line chart */
-export function LineChart({ points, color = '#22c55e', height = 160, fmtX, fmtY, target }: { points: { x: number; y: number }[]; color?: string; height?: number; fmtX?: (x: number) => string; fmtY?: (y: number) => string; target?: number }) {
+export function LineChart({ points, color = 'var(--acc)', height = 160, fmtX, fmtY, target }: { points: { x: number; y: number }[]; color?: string; height?: number; fmtX?: (x: number) => string; fmtY?: (y: number) => string; target?: number }) {
   if (!points.length) return <div class="empty sm">No data yet</div>;
   const W = 340, H = height, pl = 38, pr = 10, pt = 10, pb = 22;
   const xs = points.map((p) => p.x), ys = points.map((p) => p.y).concat(target != null ? [target] : []);
@@ -54,25 +54,25 @@ export function LineChart({ points, color = '#22c55e', height = 160, fmtX, fmtY,
   const d = points.map((p, i) => `${i ? 'L' : 'M'}${X(p.x).toFixed(1)},${Y(p.y).toFixed(1)}`).join('');
   const ticks = [y0, (y0 + y1) / 2, y1];
   return <svg viewBox={`0 0 ${W} ${H}`} width="100%" style="display:block">
-    {ticks.map((t) => <g><line x1={pl} x2={W - pr} y1={Y(t)} y2={Y(t)} stroke="#2b303b" /><text x={pl - 4} y={Y(t) + 4} fill="#9aa1ad" font-size="10" text-anchor="end">{fmtY ? fmtY(t) : Math.round(t)}</text></g>)}
-    {target != null && <line x1={pl} x2={W - pr} y1={Y(target)} y2={Y(target)} stroke="#f59e0b" stroke-dasharray="4 4" />}
+    {ticks.map((t) => <g><line x1={pl} x2={W - pr} y1={Y(t)} y2={Y(t)} stroke="var(--line)" /><text x={pl - 4} y={Y(t) + 4} fill="var(--mut)" font-size="10" text-anchor="end">{fmtY ? fmtY(t) : Math.round(t)}</text></g>)}
+    {target != null && <line x1={pl} x2={W - pr} y1={Y(target)} y2={Y(target)} stroke="var(--warn)" stroke-dasharray="4 4" />}
     <path d={d} fill="none" stroke={color} stroke-width="2.5" stroke-linejoin="round" />
     {points.map((p) => <circle cx={X(p.x)} cy={Y(p.y)} r="3.2" fill={color} />)}
-    <text x={pl} y={H - 5} fill="#9aa1ad" font-size="10">{fmtX ? fmtX(points[0].x) : ''}</text>
-    <text x={W - pr} y={H - 5} fill="#9aa1ad" font-size="10" text-anchor="end">{fmtX ? fmtX(points[points.length - 1].x) : ''}</text>
+    <text x={pl} y={H - 5} fill="var(--mut)" font-size="10">{fmtX ? fmtX(points[0].x) : ''}</text>
+    <text x={W - pr} y={H - 5} fill="var(--mut)" font-size="10" text-anchor="end">{fmtX ? fmtX(points[points.length - 1].x) : ''}</text>
   </svg>;
 }
-export function BarChart({ bars, color = '#22c55e', height = 150, target }: { bars: { label: string; value: number; stack?: { v: number; c: string }[] }[]; color?: string; height?: number; target?: number }) {
+export function BarChart({ bars, color = 'var(--acc)', height = 150, target }: { bars: { label: string; value: number; stack?: { v: number; c: string }[] }[]; color?: string; height?: number; target?: number }) {
   const W = 340, H = height, pb = 20, pt = 8; const max = Math.max(1, target || 0, ...bars.map((b) => b.value)) * 1.08;
   const bw = (W - 10) / bars.length;
   const Y = (v: number) => (v / max) * (H - pb - pt);
   return <svg viewBox={`0 0 ${W} ${H}`} width="100%" style="display:block">
     {bars.map((b, i) => {
       const x = 5 + i * bw + bw * 0.15, w = bw * 0.7;
-      if (b.stack) { let acc = 0; return <g>{b.stack.map((s) => { const h = Y(s.v); const y = H - pb - acc - h; acc += h; return <rect x={x} y={y} width={w} height={Math.max(0, h)} fill={s.c} />; })}<text x={x + w / 2} y={H - 6} fill="#9aa1ad" font-size="10" text-anchor="middle">{b.label}</text></g>; }
-      return <g><rect x={x} y={H - pb - Y(b.value)} width={w} height={Y(b.value)} rx="3" fill={color} /><text x={x + w / 2} y={H - 6} fill="#9aa1ad" font-size="10" text-anchor="middle">{b.label}</text></g>;
+      if (b.stack) { let acc = 0; return <g>{b.stack.map((s) => { const h = Y(s.v); const y = H - pb - acc - h; acc += h; return <rect x={x} y={y} width={w} height={Math.max(0, h)} fill={s.c} />; })}<text x={x + w / 2} y={H - 6} fill="var(--mut)" font-size="10" text-anchor="middle">{b.label}</text></g>; }
+      return <g><rect x={x} y={H - pb - Y(b.value)} width={w} height={Y(b.value)} rx="3" fill={color} /><text x={x + w / 2} y={H - 6} fill="var(--mut)" font-size="10" text-anchor="middle">{b.label}</text></g>;
     })}
-    {target != null && <line x1="0" x2={W} y1={H - pb - Y(target)} y2={H - pb - Y(target)} stroke="#f59e0b" stroke-dasharray="4 4" />}
+    {target != null && <line x1="0" x2={W} y1={H - pb - Y(target)} y2={H - pb - Y(target)} stroke="var(--warn)" stroke-dasharray="4 4" />}
   </svg>;
 }
 export function Seg<T extends string>({ value, options, onChange }: { value: T; options: [T, string][]; onChange: (v: T) => void }) {

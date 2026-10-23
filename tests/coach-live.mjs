@@ -4,7 +4,7 @@ const BASE = process.env.BASE || 'https://zingerstackerburgerbox.github.io/grug-
 const b = await chromium.launch(); const ctx = await b.newContext({ ...devices['Pixel 7'], colorScheme: 'dark', timezoneId: 'Australia/Sydney' });
 const page = await ctx.newPage(); page.setDefaultTimeout(90000); let bad = 0; page.on('pageerror', (e) => { console.error('pageerror', e.message); bad++; });
 const calls = []; page.on('response', (r) => { if (/workers\.dev/.test(r.url())) calls.push(`${r.request().method()} ${new URL(r.url()).pathname} ${r.status()}`); });
-await page.goto(BASE); await page.click('[data-testid=ob-skip]'); await page.waitForSelector("text=Today's nutrition");
+await page.goto(BASE); await page.fill('[data-testid=ob-username]', 'grug_tester').then(() => page.click('[data-testid=ob-next]')).then(() => page.click('[data-testid=ob-skip]')); await page.waitForSelector("text=Today's nutrition");
 await page.click('nav.tabs a:has-text("Coach")');
 await page.waitForSelector('[data-testid=coach-consent], .composer');
 if (await page.locator('[data-testid=coach-setup]').count()) { console.error('FAIL: live app still shows setup'); process.exit(1); }

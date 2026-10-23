@@ -10,7 +10,7 @@ const browser = await chromium.launch(); const ctx = await browser.newContext({ 
 const page = await ctx.newPage(); page.setDefaultTimeout(20000);
 page.on('pageerror', (e) => console.log('PAGEERROR', e.message)); page.on('dialog', (d) => d.accept());
 const today = new Date(); const ymd = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
-await page.goto(BASE); await page.click('[data-testid=ob-skip]'); await page.waitForSelector('text=Today\'s nutrition');
+await page.goto(BASE); await page.fill('[data-testid=ob-username]', 'grug_tester').then(() => page.click('[data-testid=ob-next]')).then(() => page.click('[data-testid=ob-skip]')); await page.waitForSelector('text=Today\'s nutrition');
 const close = (a, b) => a != null && Math.abs(a - b) <= (b >= 100 ? 1 : 0.051); // exact to the label's precision (±1 for derived kcal/mg)
 let total = 0, ok = 0; const rows = []; let fails = 0;
 for (const [name, t] of Object.entries(truth)) {

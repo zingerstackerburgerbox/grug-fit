@@ -172,7 +172,7 @@ export function RestBar() {
   const now = useNow(250); const st = rest.get();
   if (!st) return null; const left = Math.max(0, (st.end - now) / 1000);
   return <div class="rest" role="timer"><span class="mut sm">Rest</span><span class="t">{Math.floor(left / 60)}:{String(Math.ceil(left % 60) === 60 ? 0 : Math.floor(left % 60)).padStart(2, '0')}</span>
-    <div style="width:80px"><Bar value={st.total - left} target={st.total} color="#0ea5e9" /></div>
+    <div style="width:80px"><Bar value={st.total - left} target={st.total} color="var(--acc2)" /></div>
     <button class="btn sm" onClick={() => rest.add(-15)}>−15</button><button class="btn sm" onClick={() => rest.add(15)}>+15</button><button class="btn sm b2" onClick={() => rest.stop()}>Skip</button></div>;
 }
 
@@ -373,7 +373,7 @@ export function ExerciseDetail({ id }: { id: string }) {
     {ex.how && <div class="card sm" data-testid="ex-how" style="margin-top:10px;line-height:1.45"><b>How to</b><div style="margin-top:4px">{ex.how}</div></div>}
     {best && <div class="kpi" style="margin-top:10px"><div><span class="mut xs">Best est. 1RM</span><b>{r1(Number(wDisp(best.r, s)))}</b></div><div><span class="mut xs">Heaviest</span><b>{wDisp(best.k, s)}</b></div><div><span class="mut xs">Best volume</span><b>{Math.round(Number(wDisp(best.v, s)))}</b></div></div>}
     <div class="card" style="margin-top:12px"><Seg value={metric} onChange={setMetric} options={[['1rm', 'Est. 1RM'], ['kg', 'Best weight'], ['vol', 'Volume']]} />
-      <div style="margin-top:10px"><LineChart points={pts} fmtX={(x) => fmtDM(x)} color={metric === 'vol' ? '#a78bfa' : '#22c55e'} /></div>
+      <div style="margin-top:10px"><LineChart points={pts} fmtX={(x) => fmtDM(x)} color={metric === 'vol' ? 'var(--carb)' : 'var(--acc)'} /></div>
       <div class="mut xs center">{s.weightUnit} · est. 1RM uses the Epley formula; warm-up sets excluded</div></div>
     <h2>History</h2>
     {!h.length && <div class="empty">No completed sets yet for this exercise.</div>}

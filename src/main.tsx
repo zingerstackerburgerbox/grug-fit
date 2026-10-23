@@ -1,4 +1,5 @@
 import { render } from 'preact';
+import { UsernameGate } from './pages/Username';
 import { StepsPage } from './pages/Steps';
 import { useEffect, useState } from 'preact/hooks';
 import './style.css';
@@ -16,6 +17,8 @@ import { Onboarding } from './pages/Onboarding';
 import { getSettings } from './db';
 import { scheduleReminders } from './doses';
 import { registerSW, showUpdatedToast } from './update';
+import { initTheme } from './theme';
+import { ThemeSync } from './pages/Appearance';
 import type { Meal } from './types';
 import { checkStale } from './autoend';
 import { AutoEndReview, WorkoutMiniBar } from './pages/AutoEndReview';
@@ -102,10 +105,12 @@ function App() {
     <div class="dock"><RestBar /><WorkoutMiniBar hidden={seg === 'workout'} /></div>
     <nav class="tabs">{TABS.map(([href, label, ic, segs]) => <a href={'#' + href} class={segs.includes(seg) ? 'on' : ''}>{I[ic]}<span>{label}</span></a>)}</nav>
     <AutoEndReview />
+    <UsernameGate />
     <UpdateBanner />
     <Toaster />
   </>;
 }
-render(<App />, document.getElementById('app')!);
+initTheme();
+render(<><ThemeSync /><App /></>, document.getElementById('app')!);
 
 registerSW();

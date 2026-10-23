@@ -1,7 +1,7 @@
 import { chromium, devices } from 'playwright';
 const BASE = process.env.BASE || 'http://127.0.0.1:4173/';
 const b = await chromium.launch(); const ctx = await b.newContext({ ...devices['Pixel 7'] }); const p = await ctx.newPage(); p.setDefaultTimeout(60000);
-await p.goto(BASE); await p.click('[data-testid=ob-skip]'); await p.waitForSelector("text=Today's nutrition"); await p.evaluate(() => navigator.serviceWorker.ready);
+await p.goto(BASE); await p.fill('[data-testid=ob-username]', 'grug_tester').then(() => p.click('[data-testid=ob-next]')).then(() => p.click('[data-testid=ob-skip]')); await p.waitForSelector("text=Today's nutrition"); await p.evaluate(() => navigator.serviceWorker.ready);
 await p.goto(BASE + '#/settings'); console.log('version', await p.textContent('[data-testid=app-version]'));
 await p.click('[data-testid=ocr-offline]'); await p.waitForSelector('text=Label scanning is ready offline');
 await ctx.setOffline(true); await p.goto(BASE); await p.reload(); await p.waitForSelector("text=Today's nutrition");

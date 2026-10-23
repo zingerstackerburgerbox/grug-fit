@@ -60,8 +60,12 @@ export type Settings = {
   coachKey?: string; coachOwnerToken?: string; coachConsent?: number;
   /** v1.9.1 manual steps: daily goal (undefined = 8,000, 0 = no goal) */
   stepGoal?: number;
+  /** v1.9.2 on-device display name (never sent anywhere; a future account id would be separate) */
+  username?: string;
   /** Home 'Fitness fact of the day' card: open (default), collapsed, or off */
   factCard?: 'open' | 'collapsed' | 'off';
+  /** v1.9.2 Settings › Appearance (also mirrored to localStorage for a flash-free start) */
+  theme?: { mode: 'dark' | 'light' | 'amoled' | 'system'; accent: string };
   /** onboarding finished/skipped (timestamp) */
   onboarded?: number;
 };

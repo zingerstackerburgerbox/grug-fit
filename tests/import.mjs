@@ -7,7 +7,7 @@ const b = await chromium.launch();
 const ctx = await b.newContext({ ...devices['Pixel 7'], colorScheme: 'dark', timezoneId: 'Australia/Sydney' }); const page = await ctx.newPage(); page.setDefaultTimeout(15000);
 page.on('pageerror', (e) => fail('pageerror ' + e.message)); page.on('dialog', (d) => d.accept());
 const uploads = []; page.on('request', (r) => { if (r.method() !== 'GET') uploads.push(r.url()); });
-await page.goto(BASE); await page.click('[data-testid=ob-skip]'); await page.waitForSelector("text=Today's nutrition");
+await page.goto(BASE); await page.fill('[data-testid=ob-username]', 'grug_tester').then(() => page.click('[data-testid=ob-next]')).then(() => page.click('[data-testid=ob-skip]')); await page.waitForSelector("text=Today's nutrition");
 const idb = (src, arg) => page.evaluate(async ([src, arg]) => {
   const d = await new Promise((r) => { const q = indexedDB.open('grugfit'); q.onsuccess = () => r(q.result); });
   const tx = (store, mode = 'readonly') => d.transaction(store, mode).objectStore(store);

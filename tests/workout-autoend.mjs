@@ -8,7 +8,7 @@ const newPage = async (time) => {
   const ctx = await b.newContext({ ...devices['Pixel 7'], colorScheme: 'dark', timezoneId: 'Australia/Melbourne' }); const page = await ctx.newPage(); page.setDefaultTimeout(12000);
   page.on('pageerror', (e) => fail('pageerror ' + e.message)); page.on('dialog', (d) => d.accept());
   if (time) await page.clock.install({ time });
-  await page.goto(BASE); await page.click('[data-testid=ob-skip]'); await page.waitForSelector("text=Today's nutrition"); return page;
+  await page.goto(BASE); await page.fill('[data-testid=ob-username]', 'grug_tester').then(() => page.click('[data-testid=ob-next]')).then(() => page.click('[data-testid=ob-skip]')); await page.waitForSelector("text=Today's nutrition"); return page;
 };
 const idb = (page, src, arg) => page.evaluate(async ([src, arg]) => {
   const d = await new Promise((r) => { const q = indexedDB.open('grugfit'); q.onsuccess = () => r(q.result); });

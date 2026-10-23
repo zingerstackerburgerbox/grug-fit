@@ -5,7 +5,7 @@ const log = (...a) => console.log('•', ...a); let failed = 0; const fail = (m)
 const b = await chromium.launch();
 const ctx = await b.newContext({ ...devices['Pixel 7'], colorScheme: 'dark' }); const page = await ctx.newPage(); page.setDefaultTimeout(10000);
 page.on('pageerror', (e) => fail('pageerror ' + e.message));
-await page.goto(BASE); await page.click('[data-testid=ob-skip]'); await page.waitForSelector("text=Today's nutrition");
+await page.goto(BASE); await page.fill('[data-testid=ob-username]', 'grug_tester').then(() => page.click('[data-testid=ob-next]')).then(() => page.click('[data-testid=ob-skip]')); await page.waitForSelector("text=Today's nutrition");
 await page.goto(BASE + '#/workouts'); await page.click('text=+ Start empty workout'); await page.click('text=+ Add exercise');
 await page.waitForSelector('.sheet .list .exthumb svg');
 const n = await page.locator('.sheet .list .exthumb svg').count(); log('picker thumbnails:', n); if (n < 80) fail('expected a thumbnail for every exercise');
@@ -35,7 +35,7 @@ const saved = await page.evaluate(async () => { const d = await new Promise((r) 
 log('custom exercise icon:', saved?.icon); if (saved?.icon !== 'g:Back') fail('custom icon not saved');
 // reduced motion
 const c2 = await b.newContext({ ...devices['Pixel 7'], colorScheme: 'dark', reducedMotion: 'reduce' }); const p2 = await c2.newPage();
-await p2.goto(BASE); await p2.click('[data-testid=ob-skip]'); await p2.waitForSelector("text=Today's nutrition"); await p2.goto(BASE + '#/exercise/ex001');
+await p2.goto(BASE); await p2.fill('[data-testid=ob-username]', 'grug_tester').then(() => p2.click('[data-testid=ob-next]')).then(() => p2.click('[data-testid=ob-skip]')); await p2.waitForSelector("text=Today's nutrition"); await p2.goto(BASE + '#/exercise/ex001');
 await p2.waitForSelector('.exanim'); const rm = await p2.locator('.exanim.rm svg').count(); log('reduced motion shows static start/end frames:', rm); if (rm !== 2) fail('reduced motion not respected');
 await b.close();
 if (failed) { console.log(`EXVIZ TEST FAILED (${failed})`); process.exit(1); } else console.log('EXVIZ TEST PASSED');

@@ -13,7 +13,7 @@ const f = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')
 const TODAY = f(new Date()); const Y = new Date(); Y.setDate(Y.getDate() - 1); const YEST = f(Y);
 const BANNED = /android app|android version|grug fit android|get the android|\bapk\b|step counter|step sensor|counted automatically|physical activity permission|health connect|google fit/i;
 
-await page.goto(BASE); await page.click('[data-testid=ob-skip]'); await page.waitForSelector("text=Today's nutrition");
+await page.goto(BASE); await page.fill('[data-testid=ob-username]', 'grug_tester').then(() => page.click('[data-testid=ob-next]')).then(() => page.click('[data-testid=ob-skip]')); await page.waitForSelector("text=Today's nutrition");
 // profile (male, 180 cm, 80 kg) + leftovers from the removed automatic counter (device cache + Home-card toggle), schema back to 5
 await idb(`const s = await p(tx('kv').get('settings')); await p(tx('kv','readwrite').put({ ...s, stepsCard: 'off', profile: { heightCm: 180, sex: 'male', birthYear: 1990, goal: 'maintain' } }));
   await p(tx('bodyweight','readwrite').put({ id: 'bw1', date: '${TODAY}', kg: 80 })); await p(tx('kv','readwrite').put({ id: 'steps', v: { days: { '${TODAY}': 15000 }, segs: [], synced: Date.now() } }));
@@ -50,9 +50,9 @@ if ((await idb(`return (await p(tx('kv').get('stepLog'))).days`))[YEST] !== unde
 await page.fill('[data-testid=steps-input]', '6500'); await page.click('[data-testid=steps-save]'); await page.waitForTimeout(200);
 // Settings goal: 10,000 then none
 await page.goto(BASE + '#/settings'); await page.waitForSelector('[data-testid=step-goal]'); await page.fill('[data-testid=step-goal]', '10000'); await page.click('[data-testid=step-goal-save]'); await page.waitForTimeout(200);
-await page.goto(BASE + '#/workouts'); await page.waitForSelector('[data-testid=steps-card]'); if (!/\/ 10,000/.test(await page.textContent('[data-testid=steps-card]'))) fail('goal 10,000');
+await page.goto(BASE + '#/workouts'); await page.waitForSelector('[data-testid=steps-card]'); await page.waitForFunction(() => /\/ 10,000/.test(document.querySelector('[data-testid=steps-card]').textContent), null, { timeout: 5000 }).catch(() => {}); if (!/\/ 10,000/.test(await page.textContent('[data-testid=steps-card]'))) fail('goal 10,000');
 await page.goto(BASE + '#/settings'); await page.waitForFunction(() => document.querySelector('[data-testid=step-goal]')?.value === '10000'); await page.fill('[data-testid=step-goal]', ''); await page.click('[data-testid=step-goal-save]'); await page.waitForTimeout(200);
-await page.goto(BASE + '#/workouts'); await page.waitForSelector('[data-testid=steps-card]'); if (/\//.test(await page.textContent('[data-testid=steps-card]')) || await page.locator('[data-testid=steps-card] .bar').count()) fail('no goal'); else log('goal 10,000 shown, then "no goal" hides the bar');
+await page.goto(BASE + '#/workouts'); await page.waitForSelector('[data-testid=steps-card]'); await page.waitForFunction(() => !/\//.test(document.querySelector('[data-testid=steps-card]').textContent), null, { timeout: 5000 }).catch(() => {}); if (/\//.test(await page.textContent('[data-testid=steps-card]')) || await page.locator('[data-testid=steps-card] .bar').count()) fail('no goal'); else log('goal 10,000 shown, then "no goal" hides the bar');
 // Trends
 await page.goto(BASE + '#/food/trends'); const tr = await page.waitForSelector('[data-testid=trends-steps]').then(() => page.textContent('[data-testid=trends-steps]')).catch(() => '');
 log('Trends:', tr.replace(/\s+/g, ' ').slice(0, 90)); if (!/Average 9,250 steps on 2 logged days/.test(tr)) fail('trends steps');
@@ -64,8 +64,8 @@ log('no automatic-step / Android wording on any page');
 await page.goto(BASE + '#/settings'); const [dl] = await Promise.all([page.waitForEvent('download'), page.click('text=Export all data')]); const file = await dl.path();
 const bj = JSON.parse(readFileSync(file, 'utf8')); const bl = bj.data.kv.find((r) => r.id === 'stepLog'); log('backup stepLog:', JSON.stringify(bl?.days)); if (bl?.days?.[TODAY] !== 12000) fail('backup has steps');
 const ctx2 = await b.newContext(opts); const p2 = await ctx2.newPage(); p2.on('dialog', (d) => d.accept());
-await p2.goto(BASE); await p2.click('[data-testid=ob-skip]'); await p2.waitForSelector("text=Today's nutrition"); await p2.goto(BASE + '#/settings'); await p2.waitForSelector('text=Import (replace)');
+await p2.goto(BASE); await p2.fill('[data-testid=ob-username]', 'grug_tester').then(() => p2.click('[data-testid=ob-next]')).then(() => p2.click('[data-testid=ob-skip]')); await p2.waitForSelector("text=Today's nutrition"); await p2.goto(BASE + '#/settings'); await p2.waitForSelector('text=Import (replace)');
 const [fc] = await Promise.all([p2.waitForEvent('filechooser'), p2.click('text=Import (replace)')]); await fc.setFiles(file); await p2.waitForSelector('text=Backup restored'); await p2.waitForTimeout(300);
-await p2.goto(BASE + '#/workouts'); await p2.waitForSelector('[data-testid=steps-today]'); const r2 = await p2.textContent('[data-testid=steps-today]'); log('restored on a fresh device:', r2); if (r2 !== '12,000') fail('restore');
+await p2.goto(BASE + '#/workouts'); await p2.waitForSelector('[data-testid=steps-today]'); await p2.waitForFunction(() => document.querySelector('[data-testid=steps-today]').textContent !== '–', null, { timeout: 5000 }).catch(() => {}); const r2 = await p2.textContent('[data-testid=steps-today]'); log('restored on a fresh device:', r2); if (r2 !== '12,000') fail('restore');
 await ctx2.close();
 await b.close(); if (failed) { console.error(failed + ' FAILURES'); process.exit(1); } console.log('STEPS TESTS PASSED');

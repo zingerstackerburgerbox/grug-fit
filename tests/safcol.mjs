@@ -29,7 +29,7 @@ await ctx.route(/openfoodfacts\.org\/api\/v\d\/product\/9310768114941/, async (r
 });
 const idbPut = (store, v) => page.evaluate(([store, v]) => new Promise((res) => { const r = indexedDB.open('grugfit'); r.onsuccess = () => { const tx = r.result.transaction(store, 'readwrite'); tx.objectStore(store).put(v); tx.oncomplete = () => { r.result.close(); res(); }; }; }), [store, v]);
 const idbDel = (store, id) => page.evaluate(([store, id]) => new Promise((res) => { const r = indexedDB.open('grugfit'); r.onsuccess = () => { const tx = r.result.transaction(store, 'readwrite'); tx.objectStore(store).delete(id); tx.oncomplete = () => { r.result.close(); res(); }; }; }), [store, id]);
-await page.goto(BASE); await page.click('[data-testid=ob-skip]'); await page.waitForSelector("text=Today's nutrition");
+await page.goto(BASE); await page.fill('[data-testid=ob-username]', 'grug_tester').then(() => page.click('[data-testid=ob-next]')).then(() => page.click('[data-testid=ob-skip]')); await page.waitForSelector("text=Today's nutrition");
 const today = await page.evaluate(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; });
 const typeCode = async () => { await idbDel('foods', 'off_' + CODE); await page.goto(BASE + '#/'); await page.waitForSelector("text=Today's nutrition"); await page.goto(BASE + `#/food/add/${today}/lunch`); await page.fill('input[type=search]', CODE); await page.click('button[aria-label=Search]'); };
 const outcome = (ms = 30000) => Promise.race([page.waitForSelector('.amount-sheet', { timeout: ms }).then(() => 'found'), page.waitForSelector('[data-testid=notfound]', { timeout: ms }).then(() => 'notfound')]).catch(() => 'timeout');

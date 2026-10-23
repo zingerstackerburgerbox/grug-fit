@@ -1,4 +1,5 @@
 import { useQuota, quotaText } from './Coach';
+import { UsernameSetting } from './Username';
 import { StepGoalSetting } from './Steps';
 import { coachMode, fetchStatus } from '../coach';
 import { useEffect, useRef, useState } from 'preact/hooks';
@@ -14,6 +15,7 @@ import { KCAL_EXPLAIN } from '../setKcal';
 import { ImportSection } from './Import';
 import { InstallSetting } from './Install';
 import { StorageCard } from './Private';
+import { AppearanceSettings } from './Appearance';
 import { GOAL_LABEL, ageFromBirthYear, bmr, eatBackOn, latestWeight, sedentaryBurn, type Goal } from '../energy';
 import { go, useQuery } from '../hooks';
 import { LB } from '../util';
@@ -87,7 +89,10 @@ export function SettingsPage() {
   const field = (k: string, label: string) => <label class="f">{label}<input inputMode="decimal" value={t[k] ?? ''} data-testid={'target-' + k} onInput={(e) => onField(k, e.currentTarget.value)} /></label>;
   return <><Top title="Settings" /><div class="page col">
     <InstallSetting />
+    <h2>Appearance</h2>
+    <AppearanceSettings />
     <h2>Profile & calorie burn</h2>
+    <UsernameSetting />
     <ProfileCard s={s} />
     <h2>Daily targets</h2>
     <div class="card col"><div class="grid2">{field('kcal', 'Energy (kcal)')}{field('protein', 'Protein (g)')}{field('carbs', 'Net carbs (g)')}{field('fat', 'Fat (g)')}{field('fibre', 'Fibre (g)')}</div>
