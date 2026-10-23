@@ -1,0 +1,146 @@
+{
+ "au-muesli": {
+  "style": "AU",
+  "servingSize": 45,
+  "servingsPerPack": 15,
+  "per100": {
+   "kcal": 373,
+   "protein": 10.6,
+   "fat": 6.9,
+   "satfat": 1.3,
+   "carbs": 62,
+   "sugar": 16,
+   "fibre": 9.1,
+   "sodium": 31
+  }
+ },
+ "au-muesli-photo": {
+  "style": "AU",
+  "servingSize": 45,
+  "servingsPerPack": 15,
+  "per100": {
+   "kcal": 373,
+   "protein": 10.6,
+   "fat": 6.9,
+   "satfat": 1.3,
+   "carbs": 62,
+   "sugar": 16,
+   "fibre": 9.1,
+   "sodium": 31
+  }
+ },
+ "au-muesli-small": {
+  "style": "AU",
+  "servingSize": 45,
+  "servingsPerPack": 15,
+  "per100": {
+   "kcal": 373,
+   "protein": 10.6,
+   "fat": 6.9,
+   "satfat": 1.3,
+   "carbs": 62,
+   "sugar": 16,
+   "fibre": 9.1,
+   "sodium": 31
+  }
+ },
+ "au-yoghurt": {
+  "style": "AU",
+  "servingSize": 170,
+  "servingsPerPack": 5,
+  "per100": {
+   "kcal": 76,
+   "protein": 9,
+   "fat": 0.2,
+   "satfat": 0.1,
+   "carbs": 9.7,
+   "sugar": 6.9,
+   "sodium": 55,
+   "calcium": 175
+  }
+ },
+ "au-yoghurt-photo": {
+  "style": "AU",
+  "servingSize": 170,
+  "servingsPerPack": 5,
+  "per100": {
+   "kcal": 76,
+   "protein": 9,
+   "fat": 0.2,
+   "satfat": 0.1,
+   "carbs": 9.7,
+   "sugar": 6.9,
+   "sodium": 55,
+   "calcium": 175
+  }
+ },
+ "au-yoghurt-small": {
+  "style": "AU",
+  "servingSize": 170,
+  "servingsPerPack": 5,
+  "per100": {
+   "kcal": 76,
+   "protein": 9,
+   "fat": 0.2,
+   "satfat": 0.1,
+   "carbs": 9.7,
+   "sugar": 6.9,
+   "sodium": 55,
+   "calcium": 175
+  }
+ },
+ "us-granola": {
+  "style": "US",
+  "servingSize": 55,
+  "servingsPerPack": 8,
+  "per100": {
+   "kcal": 418,
+   "fat": 14.5,
+   "satfat": 1.8,
+   "sodium": 291,
+   "carbs": 67.3,
+   "fibre": 7.3,
+   "sugar": 21.8,
+   "protein": 5.5,
+   "calcium": 473,
+   "iron": 14.5,
+   "potassium": 436
+  }
+ },
+ "us-granola-photo": {
+  "style": "US",
+  "servingSize": 55,
+  "servingsPerPack": 8,
+  "per100": {
+   "kcal": 418,
+   "fat": 14.5,
+   "satfat": 1.8,
+   "sodium": 291,
+   "carbs": 67.3,
+   "fibre": 7.3,
+   "sugar": 21.8,
+   "protein": 5.5,
+   "calcium": 473,
+   "iron": 14.5,
+   "potassium": 436
+  }
+ },
+ "us-granola-small": {
+  "style": "US",
+  "servingSize": 55,
+  "servingsPerPack": 8,
+  "per100": {
+   "kcal": 418,
+   "fat": 14.5,
+   "satfat": 1.8,
+   "sodium": 291,
+   "carbs": 67.3,
+   "fibre": 7.3,
+   "sugar": 21.8,
+   "protein": 5.5,
+   "calcium": 473,
+   "iron": 14.5,
+   "potassium": 436
+  }
+ }
+}

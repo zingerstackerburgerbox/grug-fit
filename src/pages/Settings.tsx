@@ -57,6 +57,7 @@ export function SettingsPage() {
     <div class="card col" data-testid="about"><div class="row between"><b>Grug Fit v<span data-testid="app-version">{APP_VERSION}</span></b><span class="mut sm">built {fmtDate(BUILD_TIME)} {fmtTime(+new Date(BUILD_TIME))}</span></div>
       <div class="mut xs">Build <span data-testid="build-id">{BUILD_ID}</span> · updates install automatically (checked on launch, when you return to the app, and every 30 min). Your data stays on the device across updates.</div>
       <button class="btn sm" onClick={async () => { const r = await navigator.serviceWorker?.getRegistration(); if (!r) { toast('Updates unavailable (no service worker)'); return; } await r.update().catch(() => {}); toast(r.installing || r.waiting ? 'Update found – installing…' : 'You have the latest version'); }}>Check for updates</button></div>
+      <button class="btn sm" data-testid="ocr-offline" onClick={async () => { toast('Downloading label scanner (~6 MB)…'); try { const m = await import('../ocr/ocr'); await m.prefetchOcr(); toast('Label scanning is ready offline'); } catch (e: any) { toast('Download failed: ' + (e?.message || e)); } }}>📷 Make label scanning available offline</button>
     <div class="mut xs center" style="margin-top:10px">Food data from Open Food Facts (ODbL)</div>
   </div></>;
 }

@@ -17,6 +17,9 @@ registerRoute(new NavigationRoute(createHandlerBoundToURL('index.html')));
 // Old pages still open during an update may lazy-load chunks of the previous build: serve them from ANY cache we still hold.
 registerRoute(({ url, request }) => url.origin === self.location.origin && url.pathname.includes('/assets/') && request.method === 'GET',
   async ({ request }) => (await caches.match(request, { ignoreSearch: true })) || fetch(request));
+// On-device OCR engine (Tesseract worker, WASM core, traineddata ~9 MB): not precached so installs stay small;
+// cached on first use (or via Settings → "Make label scanning available offline") and served offline thereafter.
+registerRoute(({ url }) => url.origin === self.location.origin && url.pathname.includes('/tesseract/'), new CacheFirst({ cacheName: 'grugfit-ocr-v7' }));
 // Open Food Facts API: network first, fall back to cache when offline
 registerRoute(({ url }) => url.hostname.endsWith('openfoodfacts.org') && (url.pathname.startsWith('/api') || url.pathname.startsWith('/search') || url.pathname.startsWith('/cgi')),
   new NetworkFirst({ cacheName: 'off-api', plugins: [new ExpirationPlugin({ maxEntries: 300, maxAgeSeconds: 60 * 60 * 24 * 30 })] }));

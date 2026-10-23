@@ -1,13 +1,13 @@
 {
   "name": "grug-fit",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "",
   "main": "index.js",
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
+    "dev": "node scripts/copy-ocr.mjs && vite",
+    "build": "node scripts/copy-ocr.mjs && vite build",
     "preview": "node tests/serve.mjs dist 4173",
-    "test": "node tests/smoke.mjs && node tests/update.mjs"
+    "test": "node tests/smoke.mjs && node tests/ocr.mjs && node tests/update.mjs"
   },
   "keywords": [],
   "author": "",
@@ -17,11 +17,14 @@
     "@zxing/browser": "^0.2.1",
     "@zxing/library": "^0.23.0",
     "idb": "^8.0.4",
-    "preact": "^11.0.1"
+    "preact": "^11.0.1",
+    "tesseract.js": "^7.0.0"
   },
   "devDependencies": {
     "@preact/preset-vite": "^2.10.6",
+    "@tesseract.js-data/eng": "^1.0.0",
     "bwip-js": "^4.11.4",
+    "esbuild": "^0.28.2",
     "playwright": "^1.64.1",
     "sharp": "^0.35.5",
     "typescript": "^7.0.2",

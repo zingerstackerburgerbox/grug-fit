@@ -7,6 +7,7 @@ import { Toaster } from './ui';
 import { ymd } from './util';
 import { Home } from './pages/Home';
 import { ActiveWorkout, BodyWeightPage, ExerciseDetail, ExercisesPage, HistoryPage, RestBar, RoutineEdit, WorkoutDetail, WorkoutsHome } from './pages/Workouts';
+import { LabelScan } from './pages/LabelScan';
 import { AddFood, Diary, FoodEdit, MyFoods, RecipeEdit, Trends } from './pages/Nutrition';
 import { CalendarPage, SuppEdit, SuppsPage } from './pages/Supps';
 import { SettingsPage } from './pages/Settings';
@@ -39,6 +40,7 @@ function route(h: string) {
       if (p[1] === 'add') return <AddFood date={p[2]} meal={p[3] as Meal} />;
       if (p[1] === 'edit') return <FoodEdit id={p[2]} key={p[2]} />;
       if (p[1] === 'trends') return <Trends />;
+      if (p[1] === 'label') return <LabelScan />;
       return <Diary date={p[1] || ymd()} />;
     case 'foods': return <MyFoods />;
     case 'recipe': return <RecipeEdit id={p[1]} key={p[1]} />;

@@ -197,10 +197,11 @@ export function AddFood({ date, meal }: { date: string; meal: Meal }) {
     {lookup && !scan && <div class="card sm" style="margin-top:10px">⏳ {lookup}</div>}
     {notFound && <div class="card col" style="border-color:var(--warn);margin-top:10px" data-testid="notfound">
       <div class="sm">{partialName ? <>Open Food Facts knows <b>{partialName}</b> ({notFound}) but has no nutrition data for it.</> : <><b>Barcode {notFound}</b> isn't in Open Food Facts{err ? ' (or lookup failed)' : ''}.</>} Create it as a custom food from the label — next time you scan it, Grug Fit will find it instantly.</div>
-      <a class="btn p" href={`#/food/edit/new?barcode=${notFound}&ret=${date}/${meal}${partialName ? `&name=${encodeURIComponent(partialName)}` : ''}`}>Create custom food with this barcode</a>
+      <a class="btn p" data-testid="scan-label-notfound" href={`#/food/label?barcode=${notFound}&ret=${date}/${meal}${partialName ? `&name=${encodeURIComponent(partialName)}` : ''}`}>📷 Scan nutrition label</a>
+      <a class="btn" href={`#/food/edit/new?barcode=${notFound}&ret=${date}/${meal}${partialName ? `&name=${encodeURIComponent(partialName)}` : ''}`}>Type it in manually</a>
       <button class="btn sm" onClick={() => setScan(true)}>Scan again</button></div>}
     <div class="chips" style="margin:10px 0">{([['search', 'Search'], ['recent', 'Recent'], ['frequent', 'Frequent'], ['mine', 'My foods & recipes']] as const).map(([k, l]) => <button class={'chip ' + (tab === k ? 'on' : '')} onClick={() => setTab(k)}>{l}</button>)}</div>
-    <div class="grid2"><a class="btn sm" href={`#/food/edit/new?ret=${date}/${meal}`}>+ Custom food</a><a class="btn sm" href="#/recipe/new">+ Recipe</a></div>
+    <div class="grid3"><a class="btn sm" href={`#/food/label?ret=${date}/${meal}`} data-testid="scan-label">📷 Scan label</a><a class="btn sm" href={`#/food/edit/new?ret=${date}/${meal}`}>+ Custom food</a><a class="btn sm" href="#/recipe/new">+ Recipe</a></div>
     {busy && <div class="empty">Searching Open Food Facts…</div>}
     {err && !notFound && <div class="card sm" style="border-color:var(--warn);margin-top:10px">{err}</div>}
     <div class="list" style="margin-top:6px">{list.map((f) => <FoodRow f={f} s={s} onPick={() => setPick(f)} />)}</div>
@@ -212,7 +213,7 @@ export function AddFood({ date, meal }: { date: string; meal: Meal }) {
 }
 
 const NFIELDS: { key: keyof Nutrients; label: string }[] = [
-  { key: 'kcal', label: 'Energy (kcal)' }, { key: 'protein', label: 'Protein (g)' }, { key: 'carbs', label: 'Total carbs (g, incl. fibre)' }, { key: 'fibre', label: 'Fibre (g)' }, { key: 'fat', label: 'Fat (g)' }, { key: 'sugar', label: 'Sugars (g)' },
+  { key: 'kcal', label: 'Energy (kcal)' }, { key: 'protein', label: 'Protein (g)' }, { key: 'carbs', label: 'Total carbs (g, incl. fibre)' }, { key: 'fibre', label: 'Fibre (g)' }, { key: 'fat', label: 'Fat (g)' }, { key: 'satfat', label: 'Saturated fat (g)' }, { key: 'sugar', label: 'Sugars (g)' },
   ...MICROS.map((m) => ({ key: m.key, label: `${m.label} (${m.unit})` }))
 ];
 export function NutrientInputs({ vals, set, energyUnit }: { vals: Record<string, string>; set: (k: string, v: string) => void; energyUnit?: 'kcal' | 'kJ' }) {

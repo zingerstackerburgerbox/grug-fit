@@ -159,7 +159,8 @@ const fake = '2913579246800'; // valid EAN-13 checksum, in-store range, not in O
 await page.goto(BASE + `#/food/add/${today}/dinner`); await page.fill('input[type=search]', fake); await page.click('button[aria-label=Search]');
 try {
   await page.waitForSelector('[data-testid=notfound]', { timeout: 25000 }); log('not-found offered custom food');
-  await page.click('text=Create custom food with this barcode');
+  const lbl = await page.getAttribute('[data-testid=scan-label-notfound]', 'href'); if (!lbl?.includes('#/food/label?barcode=')) fail('not-found card lacks label-scan link: ' + lbl); else log('not-found offers label scan', lbl);
+  await page.click('text=Type it in manually');
   await page.waitForSelector('text=New custom food');
   const bcVal = await page.inputValue('label:has-text("Barcode") input'); log('barcode prefilled:', bcVal); if (bcVal !== fake) fail('barcode not prefilled');
   await page.fill('input[placeholder="e.g. Homemade protein oats"]', 'Butcher snags');

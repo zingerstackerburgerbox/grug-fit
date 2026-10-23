@@ -36,7 +36,7 @@ export default defineConfig({
           { src: 'icon-maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' }
         ]
       },
-      injectManifest: { rollupFormat: 'iife', globPatterns: ['**/*.{js,css,html,png,svg,webmanifest}'] }
+      injectManifest: { rollupFormat: 'iife', globPatterns: ['**/*.{js,css,html,png,svg,webmanifest}'], globIgnores: ['tesseract/**'] }
     })
   ]
 });

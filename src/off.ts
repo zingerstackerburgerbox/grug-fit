@@ -18,7 +18,7 @@ export function offToFood(p: any): Food | null {
   const usStyle = countries.length > 0 && countries.every((c) => c === 'en:united-states' || c === 'en:canada');
   if (!usStyle) carbs += fibre; // store as total carbs so net = total - fibre
   const per100: Nutrients = {
-    kcal: kcal ?? 0, protein: g2(nm['proteins_100g'], 1) ?? 0, carbs, fibre, fat: g2(nm['fat_100g'], 1) ?? 0, sugar: g2(nm['sugars_100g'], 1),
+    kcal: kcal ?? 0, protein: g2(nm['proteins_100g'], 1) ?? 0, carbs, fibre, fat: g2(nm['fat_100g'], 1) ?? 0, satfat: g2(nm['saturated-fat_100g'], 1), sugar: g2(nm['sugars_100g'], 1),
     calcium: g2(nm['calcium_100g'], 1000), iron: g2(nm['iron_100g'], 1000), vitC: g2(nm['vitamin-c_100g'], 1000), vitA: g2(nm['vitamin-a_100g'], 1e6),
     vitD: g2(nm['vitamin-d_100g'], 1e6), b12: g2(nm['vitamin-b12_100g'], 1e6), folate: g2(nm['vitamin-b9_100g'] ?? nm['folates_100g'], 1e6),
     magnesium: g2(nm['magnesium_100g'], 1000), potassium: g2(nm['potassium_100g'], 1000), sodium: g2(nm['sodium_100g'], 1000)

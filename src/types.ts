@@ -1,5 +1,5 @@
 export type Nutrients = {
-  kcal: number; protein: number; carbs: number; fibre: number; fat: number; sugar?: number;
+  kcal: number; protein: number; carbs: number; fibre: number; fat: number; satfat?: number; sugar?: number;
   calcium?: number; iron?: number; vitC?: number; vitA?: number; vitD?: number; b12?: number;
   folate?: number; magnesium?: number; potassium?: number; sodium?: number;
 };

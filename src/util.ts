@@ -27,7 +27,7 @@ export const MICROS: { key: keyof Nutrients; label: string; unit: string }[] = [
   { key: 'folate', label: 'Folate', unit: 'µg' }, { key: 'magnesium', label: 'Magnesium', unit: 'mg' },
   { key: 'potassium', label: 'Potassium', unit: 'mg' }, { key: 'sodium', label: 'Sodium', unit: 'mg' }
 ];
-export const NKEYS: (keyof Nutrients)[] = ['kcal', 'protein', 'carbs', 'fibre', 'fat', 'sugar', ...MICROS.map((m) => m.key)];
+export const NKEYS: (keyof Nutrients)[] = ['kcal', 'protein', 'carbs', 'fibre', 'fat', 'satfat', 'sugar', ...MICROS.map((m) => m.key)];
 export const scaleN = (n: Partial<Nutrients>, f: number): Nutrients => { const o: any = { ...EMPTY }; for (const k of NKEYS) if (n[k] != null) o[k] = (n[k] as number) * f; return o; };
 export const addN = (a: Nutrients, b: Partial<Nutrients>): Nutrients => { const o: any = { ...a }; for (const k of NKEYS) if (b[k] != null) o[k] = (o[k] || 0) + (b[k] as number); return o; };
 export const sumN = (list: Partial<Nutrients>[]) => list.reduce<Nutrients>((a, b) => addN(a, b), { ...EMPTY });
