@@ -51,7 +51,9 @@ jobs:
       - name: Verify signature
         run: |
           BT=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
-          "$BT/apksigner" verify --print-certs android/app/build/outputs/apk/release/app-release.apk | grep -E "Signer #1 certificate (DN|SHA-256)"
+          echo "apksigner from $BT"
+          "$BT/apksigner" verify --verbose --print-certs android/app/build/outputs/apk/release/app-release.apk > verify.txt 2>&1 || { cat verify.txt; exit 1; }
+          grep -iE "verified using|signer #1 certificate (dn|sha-256)" verify.txt || cat verify.txt
           cp android/app/build/outputs/apk/release/app-release.apk grug-fit.apk
           sha256sum grug-fit.apk | tee grug-fit.apk.sha256
           rm -f "$RUNNER_TEMP/release.jks"
