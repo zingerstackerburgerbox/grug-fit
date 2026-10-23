@@ -9,6 +9,7 @@ import { DEFAULT_SETTINGS, MICROS, fmtDate, fmtTime, r1, ymd } from '../util';
 import { APP_VERSION, BUILD_ID, BUILD_TIME } from '../update';
 import { scheduleReminders } from '../doses';
 import { KCAL_EXPLAIN } from '../setKcal';
+import { ImportSection } from './Import';
 import { GOAL_LABEL, ageFromBirthYear, bmr, eatBackOn, latestWeight, sedentaryBurn, type Goal } from '../energy';
 import { go, useQuery } from '../hooks';
 import { LB } from '../util';
@@ -97,6 +98,8 @@ export function SettingsPage() {
       <div class="mut xs">Permission: {perm}. {'TimestampTrigger' in window ? 'This browser supports Notification Triggers, so reminders are scheduled with the system.' : ''}</div>
       <div class="sm mut">⚠️ Honest limitation: web apps can't yet schedule reliable alarms on Android. Reminders fire while Grug Fit (or Chrome) is open or recently used in the background; if Android has closed the app, a reminder may be late or not appear. Notification Triggers would fix this but aren't broadly available in Chrome. For critical medications, also set a phone alarm. Opening the app always shows what's due.</div>
       <button class="btn sm" disabled={perm !== 'granted'} onClick={async () => { const r = await navigator.serviceWorker.ready; r.showNotification('Grug Fit test', { body: 'Notifications are working ✅', icon: 'icon-192.png' }); }}>Send test notification</button></div>
+    <h2>Import data</h2>
+    <ImportSection />
     <h2>Backup (important!)</h2>
     <div class="card col"><div class="sm mut">All data lives only on this device in the browser's storage. Uninstalling the app or clearing Chrome site data deletes it. Export a backup regularly.</div>
       <button class="btn p" onClick={doExport}>⬇ Export all data (JSON)</button>

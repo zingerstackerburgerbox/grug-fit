@@ -1,0 +1,7 @@
+title,start_time,end_time,description,exercise_title,superset_id,exercise_notes,set_index,set_type,weight_lbs,reps,distance_miles,duration_seconds,rpe
+Leg Day,"10 Oct 2026, 17:30","10 Oct 2026, 18:45",,Squat (Barbell),,,0,warmup,135,8,,,
+Leg Day,"10 Oct 2026, 17:30","10 Oct 2026, 18:45",,Squat (Barbell),,,1,normal,225,5,,,8
+Leg Day,"10 Oct 2026, 17:30","10 Oct 2026, 18:45",,Squat (Barbell),,,2,normal,225,5,,,8.5
+Leg Day,"10 Oct 2026, 17:30","10 Oct 2026, 18:45",,Leg Press (Machine),,,0,normal,360,10,,,
+Leg Day,"10 Oct 2026, 17:30","10 Oct 2026, 18:45",,Goblet Squat,,,0,normal,50,12,,,
+Leg Day,"10 Oct 2026, 17:30","10 Oct 2026, 18:45",,Walking (Treadmill),,,0,normal,,,1.5,1500,

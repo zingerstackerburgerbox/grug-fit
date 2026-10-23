@@ -3,11 +3,12 @@ export type Nutrients = {
   calcium?: number; iron?: number; vitC?: number; vitA?: number; vitD?: number; b12?: number;
   folate?: number; magnesium?: number; potassium?: number; sodium?: number;
 };
-export type Exercise = { id: string; name: string; muscle: string; equipment: string; custom?: boolean; /** built-ins: short how-to text */ how?: string; /** custom exercises: generic visual 'g:<Muscle>' (default: from muscle group) */ icon?: string };
+export type ImportTag = { /** set on items created by a Hevy/Cronometer import (for 'Remove imported data') */ importSource?: 'hevy' | 'cronometer' };
+export type Exercise = ImportTag & { id: string; name: string; muscle: string; equipment: string; custom?: boolean; /** built-ins: short how-to text */ how?: string; /** custom exercises: generic visual 'g:<Muscle>' (default: from muscle group) */ icon?: string };
 export type SetType = 'W' | 'N' | 'D' | 'F';
 export type WSet = { id: string; type: SetType; kg: number | null; reps: number | null; rpe?: number | null; done: boolean; /** when it was ticked complete */ doneAt?: number; /** cardio: distance in km (reps then holds minutes) */ km?: number | null };
 export type WExercise = { id: string; exerciseId: string; sets: WSet[]; restSec: number; notes?: string };
-export type Workout = { id: string; name: string; start: number; end?: number; routineId?: string; exercises: WExercise[]; prs?: PR[]; notes?: string;
+export type Workout = ImportTag & { id: string; name: string; start: number; end?: number; routineId?: string; exercises: WExercise[]; prs?: PR[]; notes?: string;
   /** optional manual kcal override (intensity is legacy, unused since v1.6.1: calories come from completed sets) */
   intensity?: 'light' | 'moderate' | 'vigorous'; kcalOverride?: number | null;
   /** last edit while in progress (auto-end after 2 h idle) */ lastActivityAt?: number;
@@ -15,7 +16,7 @@ export type Workout = { id: string; name: string; start: number; end?: number; r
 export type PR = { exerciseId: string; kind: '1rm' | 'weight' | 'volume' | 'reps'; value: number };
 export type RoutineEx = { exerciseId: string; sets: number; reps?: number; kg?: number; restSec: number };
 export type Routine = { id: string; name: string; exercises: RoutineEx[]; notes?: string; updated: number };
-export type BodyWeight = { id: string; date: string; kg: number };
+export type BodyWeight = ImportTag & { id: string; date: string; kg: number };
 /** A unit of a food. `grams` = grams (or ml for liquids) in ONE of this unit. Base units 'g'/'ml' are implicit and not stored. */
 export type Serving = { label: string; grams: number; note?: string; kind?: 'serving' | 'package' | 'custom' };
 export type Food = {
@@ -32,7 +33,7 @@ export type Food = {
   defaultServing?: string;
 };
 export type Meal = 'breakfast' | 'lunch' | 'dinner' | 'snacks';
-export type DiaryEntry = { id: string; date: string; meal: Meal; foodId: string; name: string; grams: number; qty: number; serving: string; n: Nutrients; created: number };
+export type DiaryEntry = ImportTag & { id: string; date: string; meal: Meal; foodId: string; name: string; grams: number; qty: number; serving: string; n: Nutrients; created: number; /** imported entries whose grams are unknown: amount as logged in the other app, e.g. '1 cup' */ amountLabel?: string };
 export type Supplement = {
   id: string; name: string; kind: 'supplement' | 'medication'; doseAmount: number; unit: string; form: string; notes?: string;
   nutrients?: Partial<Nutrients>; stock?: number | null; unitsPerDose: number; lowStock: number; color: string; archived?: boolean;

@@ -1,0 +1,18 @@
+﻿title,start_time,end_time,description,exercise_title,superset_id,exercise_notes,set_index,set_type,weight_kg,reps,distance_km,duration_seconds,rpe
+"Push, Heavy","14 Oct 2026, 07:15","14 Oct 2026, 08:32","Felt strong, slept 8h",Bench Press (Barbell),,"Pause reps, 1s",0,warmup,60,10,,,
+"Push, Heavy","14 Oct 2026, 07:15","14 Oct 2026, 08:32","Felt strong, slept 8h",Bench Press (Barbell),,"Pause reps, 1s",1,normal,80,8,,,7.5
+"Push, Heavy","14 Oct 2026, 07:15","14 Oct 2026, 08:32","Felt strong, slept 8h",Bench Press (Barbell),,"Pause reps, 1s",2,normal,80,8,,,8
+"Push, Heavy","14 Oct 2026, 07:15","14 Oct 2026, 08:32","Felt strong, slept 8h",Bench Press (Barbell),,"Pause reps, 1s",3,failure,80,6,,,10
+"Push, Heavy","14 Oct 2026, 07:15","14 Oct 2026, 08:32","Felt strong, slept 8h",Iso-Lateral Chest Press (Machine),0,,0,normal,50,12,,,
+"Push, Heavy","14 Oct 2026, 07:15","14 Oct 2026, 08:32","Felt strong, slept 8h",Iso-Lateral Chest Press (Machine),0,,1,dropset,35,10,,,
+"Push, Heavy","14 Oct 2026, 07:15","14 Oct 2026, 08:32","Felt strong, slept 8h",Triceps Pushdown,0,,0,normal,30,12,,,
+"Push, Heavy","14 Oct 2026, 07:15","14 Oct 2026, 08:32","Felt strong, slept 8h",Triceps Pushdown,0,,1,normal,30,11,,,
+"Push, Heavy","14 Oct 2026, 07:15","14 Oct 2026, 08:32","Felt strong, slept 8h",Plank,,,0,normal,,,,60,
+Pull Day,"16 Oct 2026, 18:05","16 Oct 2026, 19:10",,Deadlift (Barbell),,,0,warmup,100,5,,,
+Pull Day,"16 Oct 2026, 18:05","16 Oct 2026, 19:10",,Deadlift (Barbell),,,1,normal,140,5,,,8
+Pull Day,"16 Oct 2026, 18:05","16 Oct 2026, 19:10",,Pull Up,,,0,normal,,10,,,
+Pull Day,"16 Oct 2026, 18:05","16 Oct 2026, 19:10",,Pull Up,,,1,normal,10,6,,,
+Pull Day,"16 Oct 2026, 18:05","16 Oct 2026, 19:10",,Seated Cable Row - V Grip (Cable),,,0,normal,60,12,,,
+Pull Day,"16 Oct 2026, 18:05","16 Oct 2026, 19:10",,Hammer Curl (Dumbbell),,,0,normal,16,12,,,
+Cardio,"18 Oct 2026, 06:30","18 Oct 2026, 07:02",,Running,,,0,normal,,,5.2,1800,
+Push Again,"21 Oct 2026, 07:00","21 Oct 2026, 08:00",,Bench Press (Barbell),,,0,normal,85,8,,,

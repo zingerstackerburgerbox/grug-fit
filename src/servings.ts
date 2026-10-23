@@ -38,7 +38,8 @@ export function normaliseServings(list: Serving[]): Serving[] {
 }
 /** Convert a quantity from one unit to another keeping the same grams. */
 export const convertQty = (qty: number, from: Serving, to: Serving) => (to.grams > 0 ? Math.round(((qty * from.grams) / to.grams) * 1000) / 1000 : qty);
-export function amountText(e: Pick<DiaryEntry, 'serving' | 'grams' | 'qty'>) {
+export function amountText(e: Pick<DiaryEntry, 'serving' | 'grams' | 'qty' | 'amountLabel' | 'importSource'>) {
+  if (e.amountLabel) return `${e.amountLabel}${e.importSource === 'cronometer' ? ' · from Cronometer' : ''}`;
   if (isBase(e.serving)) return `${r1(e.grams)} ${e.serving.includes('ml') ? 'ml' : 'g'}`;
   return `${r1(e.qty)} × ${e.serving} · ${Math.round(e.grams)} g`;
 }
