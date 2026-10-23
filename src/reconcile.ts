@@ -21,7 +21,7 @@ const numOrNull = (v: any) => (v == null || v === '' || !Number.isFinite(Number(
 const same = (a: any, b: any) => JSON.stringify(a) === JSON.stringify(b);
 
 export function normaliseWorkout(w: Workout, remap: Record<string, string>, defaultRest = 90): Workout {
-  const start = Number(w.start); const end = Number(w.end) > start ? Number(w.end) : start + 3600e3;
+  const start = Number(w.start); const end = Number(w.end) > start ? Number(w.end) : Number.isFinite(start) && start > 0 ? start + 3600e3 : Number(w.end) > 0 ? Number(w.end) : 1; // never NaN/0: lists filter on end
   const exercises = (w.exercises || []).map((e, ei) => ({
     ...e, id: e.id || `${w.id}-e${ei}`, exerciseId: remap[e.exerciseId] || e.exerciseId, restSec: Number.isFinite(e.restSec) ? e.restSec : defaultRest,
     sets: (e.sets || []).map((s, si): WSet => ({ ...s, id: s.id || `${w.id}-e${ei}-s${si}`, type: TYPES.includes(s.type) ? s.type : 'N', kg: numOrNull(s.kg), reps: numOrNull(s.reps), done: s.done !== false, ...(s.km !== undefined ? { km: numOrNull(s.km) } : {}) }))

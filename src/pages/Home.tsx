@@ -8,7 +8,7 @@ import { addDays, energy, fmtDate, MONTHS, WD, ymd } from '../util';
 import { dayTotals, MacroSummary, PackageFixNote } from './Nutrition';
 import { slotsFor } from '../doses';
 import { SlotRow, useDoseData } from './Supps';
-import { startWorkout, useActive, useWorkouts, WorkoutCard } from './Workouts';
+import { startWorkout, useActive, useWorkouts, WorkoutCard, WORKOUT_LIST } from './Workouts';
 import { sumN } from '../util';
 import { useExercises } from './ExercisePicker';
 import { FactCard } from './Fact';
@@ -41,7 +41,7 @@ export function Home() {
       {!slots.length && <div class="mut sm" style="padding:8px 0">No doses scheduled today. <a href="#/supp/new" style="color:var(--acc)">Add a supplement</a></div>}
       {slots.length > 0 && <div class="mut xs">{slots.filter((x) => x.log).length}/{slots.length} taken</div>}</div>
     {active ? <a class="btn p full" href="#/workout/active" style="margin-bottom:12px">▶ Resume {active.name}</a> : <button class="btn p full" style="margin-bottom:12px" onClick={() => startWorkout()}>+ Start workout</button>}
-    {ws[0] ? <><div class="row between"><h2>Last workout</h2><a class="btn g sm" href="#/history">History →</a></div><WorkoutCard w={ws[0]} exs={exs} /></> : <div class="card empty">No workouts yet. Start one above or build a routine in the Workout tab.</div>}
+    {ws[0] ? <><div class="row between"><h2>Last workout</h2><a class="btn g sm" href={WORKOUT_LIST} data-testid="home-all-workouts">All workouts →</a></div><WorkoutCard w={ws[0]} exs={exs} /></> : <div class="card empty">No workouts yet. Start one above or build a routine in the Workout tab.</div>}
     <div class="mut xs center" style="margin-top:10px">All data stays on this device — back up regularly in Settings. Last: {localStorage.getItem('lastBackup') ? fmtDate(+localStorage.getItem('lastBackup')!) : 'never'}</div>
   </div></>;
 }

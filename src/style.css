@@ -189,3 +189,6 @@ details.tut ol { margin: 6px 0 6px; padding-left: 22px; line-height: 1.5; } deta
 .private-banner { position: sticky; top: 0; z-index: 120; background: #3a2a0c; color: #fde68a; border-bottom: 1px solid var(--warn); padding: 8px 12px; font-size: 13px; font-weight: 600; }
 .private-banner a { color: #fff; text-decoration: underline; }
 .linklike { background: none; border: 0; padding: 6px; text-decoration: underline; cursor: pointer; font: inherit; color: var(--mut, #999); align-self: center; }
+/* v1.8.4 workout list on the Workout tab: month headers + off-screen cards skip layout/paint */
+.wlist h3.month { font-size: 15px; margin: 18px 2px 8px; color: var(--fg); }
+.wlist .card { content-visibility: auto; contain-intrinsic-size: auto 170px; }

@@ -35,7 +35,9 @@ const fmtSet = (st: WSet, ex: Exercise | undefined, s: Settings) => { const m = 
   if (m === 'cardio') return `${st.km != null ? `${st.km} km · ` : ''}${st.reps ?? '—'} min`;
   return `${wDisp(st.kg, s) || 0} ${s.weightUnit} × ${st.reps ?? '—'}`; };
 const exMap = (l: Exercise[]) => new Map(l.map((e) => [e.id, e]));
-export const useWorkouts = () => useQuery(() => all<Workout>('workouts').then((l) => l.filter((w) => w.end).sort((a, b) => b.start - a.start)), [], []) as Workout[];
+/** newest first (a workout with an unreadable date sorts last instead of breaking the order) */
+const sortKey = (w: Workout) => (Number.isFinite(w.start) ? w.start : -Infinity);
+export const useWorkouts = () => useQuery(() => all<Workout>('workouts').then((l) => l.filter((w) => w.end).sort((a, b) => sortKey(b) - sortKey(a) || 0)), [], []) as Workout[];
 export const useActive = () => useQuery(() => get<{ id: string; w: Workout }>('kv', 'active').then((x) => x?.w || null), [], null);
 const newSet = (p?: Partial<WSet>): WSet => ({ id: uid(), type: 'N', kg: null, reps: null, rpe: null, done: false, ...p });
 const SRC_LABEL: Record<string, string> = { hevy: 'from Hevy', cronometer: 'from Cronometer' };
@@ -75,8 +77,8 @@ export function WorkoutsHome() {
     <div class="page">
       {active && <div class="card" style="border-color:var(--acc)"><div class="row between"><div><div class="b">{active.name} in progress</div><div class="mut sm">Started {fmtTime(active.start)}</div></div><a class="btn p" href="#/workout/active" data-testid="resume-active">Resume</a></div></div>}
       <button class="btn p full" onClick={() => startWorkout()}>+ Start empty workout</button>
-      <div class="grid3" style="margin-top:10px">
-        <a class="btn sm" href="#/history">History</a><a class="btn sm" href="#/exercises">Exercises</a><a class="btn sm" href="#/body">Body weight</a>
+      <div class="grid2" style="margin-top:10px">
+        <a class="btn sm" href="#/exercises">Exercises</a><a class="btn sm" href="#/body">Body weight</a>
       </div>
       <div class="row between"><h2>Routines</h2><a class="btn g sm" href="#/routine/new">+ New routine</a></div>
       {!routines.length && <div class="card empty">No routines yet. Create one (e.g. "Push Day") to start workouts quickly.</div>}
@@ -86,13 +88,50 @@ export function WorkoutsHome() {
           <a class="btn sm" href={`#/routine/${r.id}`}>Edit</a></div>
         <button class="btn b2 full" style="margin-top:10px" onClick={() => startWorkout(r)}>Start routine</button>
       </div>)}
-      {ws[0] && <><h2>Last workout</h2><WorkoutCard w={ws[0]} exs={exs} /></>}
+      <WorkoutList ws={ws} exs={exs} />
     </div></>;
 }
 
+/** Link target for "see your workouts" (import summary, Home, old #/history links): the list on the Workout tab. */
+export const WORKOUT_LIST = '#/workouts?list=1&at=all';
+const PAGE = 20;
+/** survives the trip to a workout's detail page and back: how many cards were rendered and where the list was scrolled to */
+const listMem = { n: PAGE, y: 0, restore: false, anchor: '', off: 0 };
+
+/** Every finished workout (native + imported), newest first, grouped by month. Cards are rendered in batches of 20 as you
+ *  scroll (IntersectionObserver), and off-screen cards skip layout/paint (content-visibility), so hundreds stay smooth. */
+export function WorkoutList({ ws, exs }: { ws: Workout[]; exs: Map<string, Exercise> }) {
+  const [n, setN] = useState(listMem.restore ? Math.max(PAGE, listMem.n) : PAGE);
+  const sentinel = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = sentinel.current; if (!el || n >= ws.length) return;
+    const io = new IntersectionObserver((e) => { if (e[0].isIntersecting) setN((x) => Math.min(ws.length, x + PAGE)); }, { rootMargin: '1500px 0px' });
+    io.observe(el); return () => io.disconnect();
+  }, [n, ws.length]);
+  useEffect(() => { listMem.n = n; }, [n]);
+  useEffect(() => { const f = () => { listMem.y = scrollY; }; addEventListener('scroll', f, { passive: true }); return () => removeEventListener('scroll', f); }, []);
+  useEffect(() => {
+    if (!ws.length) return;
+    if (listMem.restore) { // back from a workout: put the tapped card where it was on screen (card heights off-screen are estimates)
+      listMem.restore = false; const y = listMem.y;
+      const fix = () => { const el = document.querySelector(`a.card[href="#/history/${listMem.anchor}"]`); if (el) scrollTo(0, scrollY + el.getBoundingClientRect().top - listMem.off); else scrollTo(0, y); };
+      setTimeout(() => { scrollTo(0, y); fix(); requestAnimationFrame(() => requestAnimationFrame(fix)); }, 30);
+    }
+    else if (/[?&]at=all/.test(location.hash)) setTimeout(() => document.getElementById('workout-list')?.scrollIntoView({ block: 'start' }), 30);
+  }, [ws.length > 0]);
+  const counts = useMemo(() => { const c = new Map<string, number>(); for (const w of ws) { const k = monthKey(w); c.set(k, (c.get(k) || 0) + 1); } return c; }, [ws]);
+  if (!ws.length) return <><h2 id="workout-list">Workouts</h2><div class="card empty" data-testid="workout-list">No workouts yet. Start one above – finished workouts (and anything you import from Hevy) show up here.</div></>;
+  const shown = ws.slice(0, n); const out: any[] = []; let cur = '';
+  for (const w of shown) { const k = monthKey(w); if (k !== cur) { cur = k; out.push(<h3 class="month" data-testid="month">{k} <span class="mut sm">· {counts.get(k)} workout{counts.get(k) === 1 ? '' : 's'}</span></h3>); } out.push(<WorkoutCard w={w} exs={exs} />); }
+  return <><h2 id="workout-list" style="scroll-margin-top:64px">Workouts <span class="mut sm">· {ws.length}</span></h2>
+    <div class="wlist" data-testid="workout-list">{out}</div>
+    {n < ws.length && <div ref={sentinel} class="mut sm" style="text-align:center;padding:16px" data-testid="list-more"><button class="btn sm" onClick={() => setN((x) => x + PAGE)}>Show more ({ws.length - n} older)</button></div>}</>;
+}
+const monthKey = (w: Workout) => (Number.isFinite(w.start) ? new Date(w.start).toLocaleString('en-AU', { month: 'long', year: 'numeric' }) : 'Unknown date');
+
 export function WorkoutCard({ w, exs }: { w: Workout; exs: Map<string, Exercise> }) {
   const s = useSettings(); const bws = useBW();
-  return <a class="card" style="display:block;color:inherit;text-decoration:none" href={`#/history/${w.id}`}>
+  return <a class="card" style="display:block;color:inherit;text-decoration:none" href={`#/history/${w.id}`} onClick={(e) => { listMem.restore = true; listMem.anchor = w.id; listMem.off = (e.currentTarget as HTMLElement).getBoundingClientRect().top; }}>
     <div class="row between"><div class="b">{w.name}</div><div class="mut sm">{fmtDate(w.start)}</div></div>{w.importSource && <div style="margin-top:-2px"><SrcTag w={w} /></div>}
     <div class="row mut sm wrap" style="gap:14px;margin:6px 0"><span>⏱ {fmtDur((w.end || w.start) - w.start)}</span><span>🏋️ {Math.round(Number(wDisp(workoutVolume(w), s)))} {s.weightUnit}</span><span>{workoutSetCount(w)} set{workoutSetCount(w) === 1 ? '' : 's'}</span><span data-testid="card-kcal">🔥 {workoutKcal(w, kgFor(bws, w), exs)} kcal{w.kcalOverride != null ? '*' : ''}</span>{!!w.prs?.length && <span class="pill warn">🏆 {w.prs.length} PR</span>}{w.needsReview && <span class="pill info" data-testid="autoended-badge" title="Ended automatically after 2 h without activity — tap to review">⏹ Auto-ended</span>}</div>
     <div class="sm">{w.exercises.slice(0, 5).map((e) => <div class="row ell" style="gap:8px;margin-top:3px"><ExThumb ex={exs.get(e.exerciseId)} size={28} /><span class="ell">{e.sets.filter((x) => x.done).length} × {exs.get(e.exerciseId)?.name || 'Unknown'}</span></div>)}{w.exercises.length > 5 && <div class="mut">+{w.exercises.length - 5} more</div>}</div>
@@ -260,15 +299,8 @@ async function saveAsRoutine(w: Workout) {
   await put('routines', r); toast('Saved as routine');
 }
 
-export function HistoryPage() {
-  const ws = useWorkouts(); const exs = exMap(useExercises());
-  const byMonth = new Map<string, Workout[]>();
-  for (const w of ws) { const d = new Date(w.start); const k = d.toLocaleString('en-AU', { month: 'long', year: 'numeric' }); if (!byMonth.has(k)) byMonth.set(k, []); byMonth.get(k)!.push(w); }
-  return <><Top title="Workout history" backBtn /><div class="page">
-    {!ws.length && <div class="empty">No workouts logged yet.</div>}
-    {[...byMonth].map(([m, l]) => <><h2>{m} <span class="mut sm">· {l.length} workouts</span></h2>{l.map((w) => <WorkoutCard w={w} exs={exs} />)}</>)}
-  </div></>;
-}
+/** #/history (old bookmarks, links from older versions) → the list on the Workout tab */
+export function HistoryRedirect() { useEffect(() => { location.replace(WORKOUT_LIST); }, []); return null; }
 
 const pad2 = (n: number) => String(n).padStart(2, '0');
 const toLocalInput = (t: number) => { const d = new Date(t); return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}T${pad2(d.getHours())}:${pad2(d.getMinutes())}`; };

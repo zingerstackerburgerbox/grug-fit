@@ -12,6 +12,8 @@ export type Workout = ImportTag & { id: string; name: string; start: number; end
   /** optional manual kcal override (intensity is legacy, unused since v1.6.1: calories come from completed sets) */
   intensity?: 'light' | 'moderate' | 'vigorous'; kcalOverride?: number | null;
   /** last edit while in progress (auto-end after 2 h idle) */ lastActivityAt?: number;
+  /** Hevy import: start/end text exactly as in the CSV (provenance / lets a later version re-derive dates) */
+  srcStart?: string; srcEnd?: string;
   /** ended automatically at the last completed set; needsReview until the user confirms/edits/resumes */ autoEnded?: boolean; needsReview?: boolean; autoEndedAt?: number };
 export type PR = { exerciseId: string; kind: '1rm' | 'weight' | 'volume' | 'reps'; value: number };
 export type RoutineEx = { exerciseId: string; sets: number; reps?: number; kg?: number; restSec: number };

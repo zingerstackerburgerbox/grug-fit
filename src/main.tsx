@@ -6,7 +6,7 @@ import { useHash } from './hooks';
 import { Toaster } from './ui';
 import { ymd } from './util';
 import { Home } from './pages/Home';
-import { ActiveWorkout, BodyWeightPage, ExerciseDetail, ExercisesPage, HistoryPage, RestBar, RoutineEdit, WorkoutDetail, WorkoutsHome } from './pages/Workouts';
+import { ActiveWorkout, BodyWeightPage, ExerciseDetail, ExercisesPage, HistoryRedirect, RestBar, RoutineEdit, WorkoutDetail, WorkoutsHome } from './pages/Workouts';
 import { LabelScan } from './pages/LabelScan';
 import { AddFood, Diary, FoodEdit, MyFoods, RecipeEdit, Trends } from './pages/Nutrition';
 import { CalendarPage, SuppEdit, SuppsPage } from './pages/Supps';
@@ -41,7 +41,7 @@ function route(h: string) {
     case 'workouts': return <WorkoutsHome />;
     case 'workout': return <ActiveWorkout />;
     case 'routine': return <RoutineEdit id={p[1]} key={p[1]} />;
-    case 'history': return p[1] ? <WorkoutDetail id={p[1]} /> : <HistoryPage />;
+    case 'history': return p[1] ? <WorkoutDetail id={p[1]} /> : <HistoryRedirect />;
     case 'exercises': return <ExercisesPage />;
     case 'exercise': return <ExerciseDetail id={p[1]} />;
     case 'body': return <BodyWeightPage />;

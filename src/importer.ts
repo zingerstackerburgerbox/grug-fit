@@ -61,13 +61,78 @@ export const numOf = (s: string | undefined): number | null => { if (s == null) 
 const pad = (n: number) => String(n).padStart(2, '0');
 const ymdOf = (t: number) => { const d = new Date(t); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; };
 const MON: Record<string, number> = { jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5, jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11 };
-/** Hevy: "23 Oct 2026, 07:15" (local time). Also ISO and "Oct 23, 2026 7:15 AM". Returns ms or null. */
-export function parseHevyDate(s: string): number | null {
-  s = s.trim(); let m = /^(\d{1,2})\s+([A-Za-z]{3,9})\.?\s+(\d{4}),?\s+(\d{1,2}):(\d{2})(?::(\d{2}))?\s*([ap]\.?m\.?)?$/i.exec(s);
-  if (m && MON[m[2].slice(0, 3).toLowerCase()] != null) return new Date(+m[3], MON[m[2].slice(0, 3).toLowerCase()], +m[1], h12(+m[4], m[7]), +m[5], +(m[6] || 0)).getTime();
-  m = /^([A-Za-z]{3,9})\.?\s+(\d{1,2}),?\s+(\d{4}),?\s+(\d{1,2}):(\d{2})(?::(\d{2}))?\s*([ap]\.?m\.?)?$/i.exec(s);
-  if (m && MON[m[1].slice(0, 3).toLowerCase()] != null) return new Date(+m[3], MON[m[1].slice(0, 3).toLowerCase()], +m[2], h12(+m[4], m[7]), +m[5], +(m[6] || 0)).getTime();
-  return localIso(s);
+// Month / weekday names in the languages Hevy and spreadsheets use (built once from Intl; English fallback above).
+const LOCALES = ['en', 'de', 'fr', 'es', 'it', 'pt', 'nl', 'sv', 'da', 'nb', 'fi', 'pl', 'cs', 'tr', 'ro', 'hu', 'id', 'ca'];
+const fold = (w: string) => w.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\./g, '');
+let NAMES: { month: Map<string, number>; weekday: Set<string> } | null = null;
+function names() {
+  if (NAMES) return NAMES;
+  const month = new Map<string, number>(Object.entries(MON)); const weekday = new Set<string>();
+  try {
+    for (const l of LOCALES) {
+      for (let i = 0; i < 12; i++) for (const st of ['short', 'long'] as const) month.set(fold(new Intl.DateTimeFormat(l, { month: st, timeZone: 'UTC' }).format(new Date(Date.UTC(2026, i, 15)))), i);
+      for (let d = 0; d < 7; d++) for (const st of ['short', 'long'] as const) weekday.add(fold(new Intl.DateTimeFormat(l, { weekday: st, timeZone: 'UTC' }).format(new Date(Date.UTC(2026, 9, 18 + d)))));
+    }
+  } catch { /* no Intl: English only */ }
+  month.set('sept', 8); month.set('mrt', 2);
+  return (NAMES = { month, weekday });
+}
+export type DateOrder = 'dmy' | 'mdy';
+/** Plausible workout date: 1990 … tomorrow. */
+export const plausibleDate = (t: number | null | undefined, now = Date.now()) => t != null && Number.isFinite(t) && t >= Date.UTC(1990, 0, 1) && t <= now + 2 * 864e5;
+/** Hevy launched ~2020 (and imports older logs from other apps), so a Hevy workout before 2010 means a misread date (e.g. 2001 / 1970 defaults). */
+export const plausibleHevyDate = (t: number | null | undefined, now = Date.now()) => plausibleDate(t, now) && t! >= new Date(2010, 0, 1).getTime();
+/**
+ * Hevy start/end times. Real exports (2024-2026) use English "d MMM yyyy, HH:mm" local time, e.g. "21 May 2025, 20:44".
+ * Also accepted, because files get re-saved by spreadsheets or come from other app versions/locales:
+ * "Oct 23, 2026, 7:15 AM", 12h/24h, seconds, 2-digit years, ISO with or without a zone ("…Z" / "+11:00" keep the instant),
+ * "2026-10-23 07:15:00", numeric "23/10/2026 07:15", "23.10.2026", "10/23/2026 7:15 PM" (day/month order from `order`,
+ * or unambiguous when one part is > 12), and month names in 18 languages ("23 okt. 2026", "23 de oct. de 2026", "23. Oktober 2026").
+ * Returns local ms, or null if it can't be read with confidence (never a guessed 1970/2001 date).
+ */
+export function parseHevyDate(raw: string, order: DateOrder = 'dmy'): number | null {
+  const s = (raw || '').trim(); if (!s) return null;
+  if (/^\d{4}-\d{2}-\d{2}[T ]\d{1,2}:\d{2}(:\d{2}(\.\d+)?)?\s*(Z|[+-]\d{2}:?\d{2})$/i.test(s)) { const t = Date.parse(s.replace(' ', 'T').replace(/([+-]\d{2})(\d{2})$/, '$1:$2')); return Number.isFinite(t) ? t : null; }
+  const toks = s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').match(/\d{1,2}:\d{2}(?::\d{2})?|\p{L}+|\d+/gu) || [];
+  let time: number[] | null = null, mer: 'am' | 'pm' | null = null; const nums: string[] = []; const months: { m: number; w: string }[] = [];
+  const N = names();
+  for (let i = 0; i < toks.length; i++) {
+    const t = toks[i];
+    if (t.includes(':')) { if (time) return null; time = t.split(':').map(Number); continue; }
+    if (/^\d+$/.test(t)) { nums.push(t); continue; }
+    if (t === 'am' || t === 'pm') { mer = t; continue; }
+    if ((t === 'a' || t === 'p') && toks[i + 1] === 'm') { mer = t === 'a' ? 'am' : 'pm'; i++; continue; }
+    if (N.month.has(t)) months.push({ m: N.month.get(t)!, w: t });
+    else if (t.length >= 3) { const hit = [...N.month.entries()].filter(([k]) => k.length > 3 && k.startsWith(t)).map(([, v]) => v); if (hit.length && hit.every((v) => v === hit[0])) months.push({ m: hit[0], w: t }); }
+  }
+  let mo: number | undefined;
+  if (months.length) { let real = months.length > 1 ? months.filter((x) => !N.weekday.has(x.w)) : months; if (!real.length) real = months; if (new Set(real.map((x) => x.m)).size !== 1) return null; mo = real[0].m; }
+  let y: number, m: number, d: number;
+  if (mo != null) {
+    // "23 Oct 2026", "Oct 23, 2026", "23 Oct 26" – the 4-digit (or last) number is the year
+    const yi = nums.findIndex((x) => x.length === 4); const yr = yi >= 0 ? nums[yi] : nums.length >= 2 ? nums[nums.length - 1] : null; if (!yr) return null;
+    const rest = nums.filter((_, i) => i !== (yi >= 0 ? yi : nums.length - 1)); if (rest.length !== 1) return null;
+    y = +yr; m = mo; d = +rest[0];
+  } else {
+    if (nums.length !== 3) return null;
+    if (nums[0].length === 4) { y = +nums[0]; m = +nums[1] - 1; d = +nums[2]; }
+    else {
+      const a = +nums[0], b = +nums[1]; y = +nums[2];
+      const dmy = a > 12 ? true : b > 12 ? false : order === 'dmy';
+      d = dmy ? a : b; m = (dmy ? b : a) - 1;
+    }
+  }
+  if (y < 100) y += 2000;
+  let hh = 0, mm = 0, ss = 0;
+  if (time) { [hh, mm, ss = 0] = time; if (mer) { if (hh < 1 || hh > 12) return null; hh = (hh % 12) + (mer === 'pm' ? 12 : 0); } }
+  if (m < 0 || m > 11 || d < 1 || d > 31 || hh > 23 || mm > 59 || ss > 59) return null;
+  const dt = new Date(y, m, d, hh, mm, ss); if (dt.getDate() !== d || dt.getMonth() !== m) return null; // 31 Feb etc.
+  return dt.getTime();
+}
+/** Pick day/month order for a whole file of numeric dates: any first part > 12 → dmy, any second part > 12 → mdy, else the phone's locale. */
+export function dateOrderOf(values: string[], fallback: DateOrder = 'dmy'): DateOrder {
+  for (const v of values) { const m = /^\s*(\d{1,2})[/.-](\d{1,2})[/.-](\d{2,4})/.exec(v); if (!m) continue; if (+m[1] > 12) return 'dmy'; if (+m[2] > 12) return 'mdy'; }
+  return fallback;
 }
 const h12 = (h: number, ap?: string) => (!ap ? h : /p/i.test(ap) ? (h % 12) + 12 : h % 12);
 /** "2026-10-20" + optional "07:15" / "7:15 AM" / "07:15:00" → local ms */
@@ -154,7 +219,7 @@ export type FileSummary = { name: string; kind: FileKind; source?: ImportSource;
 export type Existing = { exercises: Exercise[]; workouts: Workout[]; diaryIds: Set<string>; diaryCronDates: Set<string>; bodyweight: BodyWeight[]; defaultRest: number; /** exKey(name) → exercise id, from 'Merge into existing' */ exAliases?: Record<string, string> };
 export type Plan = {
   files: FileSummary[]; workouts: Workout[]; activities: Workout[]; exercises: Exercise[]; diary: DiaryEntry[]; bodyweight: BodyWeight[];
-  matched: string[]; created: string[]; skipped: { workouts: number; diary: number; days: number; weighIns: number; activities: number }; sets: number; warnings: string[];
+  matched: string[]; created: string[]; skipped: { workouts: number; diary: number; days: number; weighIns: number; activities: number; badDates?: number }; sets: number; warnings: string[];
 };
 export type Input = { name: string; text: string };
 const NUTR: [keyof Nutrients, string, number?][] = [
@@ -176,7 +241,7 @@ export function mealOf(group: string, t: number | null): Meal {
 }
 const range = (ts: number[]) => (ts.length ? { from: ymdOf(Math.min(...ts)), to: ymdOf(Math.max(...ts)) } : {});
 
-export function buildPlan(inputs: Input[], ex: Existing, opts: { cronExercises?: boolean } = {}): Plan {
+export function buildPlan(inputs: Input[], ex: Existing, opts: { cronExercises?: boolean; dateOrder?: DateOrder; now?: number } = {}): Plan {
   const plan: Plan = { files: [], workouts: [], activities: [], exercises: [], diary: [], bodyweight: [], matched: [], created: [], skipped: { workouts: 0, diary: 0, days: 0, weighIns: 0, activities: 0 }, sets: 0, warnings: [] };
   const wIds = new Set(ex.workouts.map((w) => w.id)); const exList = [...ex.exercises]; const exCache = new Map<string, Exercise>();
   const bwDates = new Set(ex.bodyweight.map((b) => b.date)); const servDates = new Set<string>(ex.diaryCronDates);
@@ -197,14 +262,16 @@ export function buildPlan(inputs: Input[], ex: Existing, opts: { cronExercises?:
     fs.source = kind === 'hevy' ? 'hevy' : 'cronometer';
     if (kind === 'hevy') {
       const H = new Set(t.headers); const lbs = H.has('weight_lbs') && !H.has('weight_kg'); const miles = H.has('distance_miles') && !H.has('distance_km');
+      const order = dateOrderOf(t.rows.map((r) => r.start_time), opts.dateOrder);
       const groups = new Map<string, Record<string, string>[]>();
       for (const r of t.rows) { const k = `${r.title}\u0001${r.start_time}`; if (!groups.has(k)) groups.set(k, []); groups.get(k)!.push(r); }
       const ts: number[] = []; let nw = 0, ns = 0;
       for (const rows of groups.values()) {
-        const r0 = rows[0]; const start = parseHevyDate(r0.start_time); if (start == null) { plan.warnings.push(`${f.name}: skipped a workout with an unreadable date “${r0.start_time}”`); continue; }
-        ts.push(start); const id = 'hevy-' + hash(`hevy|${r0.start_time}|${r0.title}`);
+        const r0 = rows[0]; const start = parseHevyDate(r0.start_time, order);
+        if (!plausibleHevyDate(start, opts.now)) { plan.warnings.push(`${f.name}: skipped a workout with an unreadable date “${r0.start_time}”`); plan.skipped.badDates = (plan.skipped.badDates || 0) + 1; continue; }
+        ts.push(start!); const id = 'hevy-' + hash(`hevy|${r0.start_time}|${r0.title}`);
         if (wIds.has(id)) { plan.skipped.workouts++; continue; }
-        const endP = parseHevyDate(r0.end_time || ''); const end = endP != null && endP > start ? endP : start + 3600e3;
+        const endP = parseHevyDate(r0.end_time || '', order); const end = endP != null && endP > start! && endP - start! < 24 * 3600e3 ? endP : start! + 3600e3;
         const exercises: WExercise[] = []; let cur: WExercise | null = null; let curTitle = '';
         rows.forEach((r, i) => {
           const title = r.exercise_title || 'Exercise';
@@ -222,7 +289,7 @@ export function buildPlan(inputs: Input[], ex: Existing, opts: { cronExercises?:
           const set: WSet = { id: `${id}-s${i}`, type, kg: mode === 'cardio' ? null : kg, reps, rpe: numOf(r.rpe), done: true, ...(km != null ? { km } : {}) };
           cur!.sets.push(set); ns++;
         });
-        const wo: Workout = { id, name: r0.title || 'Workout', start, end, exercises: exercises.filter((e) => e.sets.length), importSource: 'hevy', ...(r0.description ? { notes: r0.description } : {}) };
+        const wo: Workout = { id, name: r0.title || 'Workout', start: start!, end, exercises: exercises.filter((e) => e.sets.length), importSource: 'hevy', srcStart: r0.start_time, srcEnd: r0.end_time || '', ...(r0.description ? { notes: r0.description } : {}) };
         if (!wo.exercises.length) continue;
         plan.workouts.push(wo); wIds.add(id); nw++;
       }

@@ -1,5 +1,6 @@
 /** Settings › Import data: Hevy + Cronometer CSV import with tutorial, preview, dedupe and undo. All on-device. */
-import { useRef, useState } from 'preact/hooks';
+import { WORKOUT_LIST } from './Workouts';
+import { useEffect, useRef, useState } from 'preact/hooks';
 import { all, bump, db, get, getSettings, reconcileNow } from '../db';
 import { useQuery } from '../hooks';
 import type { BodyWeight, DiaryEntry, Exercise, Food, Routine, Workout } from '../types';
@@ -23,8 +24,10 @@ export async function applyPlan(p: Plan) {
 }
 export async function importedCounts() {
   const [w, dI, b, e] = await Promise.all([all<Workout>('workouts'), all<DiaryEntry>('diary'), all<BodyWeight>('bodyweight'), all<Exercise>('exercises')]);
+  const hv = w.filter((x) => x.importSource === 'hevy' && Number.isFinite(x.start)).map((x) => x.start);
+  const range = hv.length ? { from: Math.min(...hv), to: Math.max(...hv) } : null;
   const c = (src: ImportSource) => ({ workouts: w.filter((x) => x.importSource === src).length, diary: dI.filter((x) => x.importSource === src).length, weighIns: b.filter((x) => x.importSource === src).length, exercises: e.filter((x) => x.importSource === src).length });
-  return { hevy: c('hevy'), cronometer: c('cronometer') };
+  return { hevy: c('hevy'), cronometer: c('cronometer'), range };
 }
 /** Undo: delete everything tagged with the source. Imported custom exercises are kept if a remaining workout or routine still uses them. */
 export async function removeImported(src: ImportSource) {
@@ -47,9 +50,11 @@ const fmtRange = (a?: string, b?: string) => (a ? (a === b ? fmtDate(a) : `${fmt
 export function ImportSection() {
   const inp = useRef<HTMLInputElement>(null);
   const [files, setFiles] = useState<Input[] | null>(null); const [plan, setPlan] = useState<Plan | null>(null);
-  const [cronEx, setCronEx] = useState(false); const [busy, setBusy] = useState(false); const [done, setDone] = useState('');
+  const [cronEx, setCronEx] = useState(false); const [busy, setBusy] = useState(false); const [done, setDone] = useState(''); const [doneW, setDoneW] = useState(0);
+  useEffect(() => { if (/[?&]import=1/.test(location.hash)) setTimeout(() => document.querySelector('[data-testid=import-section]')?.scrollIntoView({ block: 'start' }), 100); }, []);
   const counts = useQuery(importedCounts, [], null);
-  const preview = async (fs: Input[], ce = cronEx) => { setPlan(buildPlan(fs, await existing(), { cronExercises: ce })); };
+  // ambiguous numeric dates (only in re-saved files): month first on US-style phones, else day first
+  const preview = async (fs: Input[], ce = cronEx) => { setPlan(buildPlan(fs, await existing(), { cronExercises: ce, dateOrder: /^(en-US|en-PH|es-US|fil)/i.test(navigator.language) ? 'mdy' : 'dmy' })); };
   const pick = async (list: FileList | null) => {
     if (!list?.length) return; setDone(''); setBusy(true);
     try { const fs = await Promise.all([...list].map(async (f) => ({ name: f.name, text: await f.text() }))); setFiles(fs); await preview(fs); }
@@ -59,8 +64,10 @@ export function ImportSection() {
     if (!plan) return; setBusy(true);
     try {
       await applyPlan(plan);
-      const parts = [plan.workouts.length && `${plan.workouts.length} workouts`, plan.diary.length && `${plan.diary.length} food entries`, plan.bodyweight.length && `${plan.bodyweight.length} weigh-ins`, plan.activities.length && `${plan.activities.length} activities`].filter(Boolean);
-      setDone(parts.length ? `Imported ${parts.join(', ')}.` : 'Nothing new to import – everything in these files was already imported.'); toast('Import complete');
+      const hw = plan.workouts.map((w) => w.start); const rng = hw.length ? ` from ${fmtDate(Math.min(...hw))} to ${fmtDate(Math.max(...hw))}` : '';
+      const parts = [plan.workouts.length && `${plan.workouts.length} workouts${rng}`, plan.diary.length && `${plan.diary.length} food entries`, plan.bodyweight.length && `${plan.bodyweight.length} weigh-ins`, plan.activities.length && `${plan.activities.length} activities`].filter(Boolean);
+      setDone(parts.length ? `Imported ${parts.join(', ')}.` : 'Nothing new to import – everything in these files was already imported.'); setDoneW(plan.workouts.length);
+      toast(plan.workouts.length ? `Imported ${plan.workouts.length} workouts${rng} — see the Workout tab` : 'Import complete');
       setPlan(null); setFiles(null);
     } finally { setBusy(false); }
   };
@@ -87,7 +94,8 @@ export function ImportSection() {
       </ol><div class="mut xs">Menus may vary by app version.</div></details>
     <input ref={inp} type="file" multiple accept={ACCEPT} style="display:none" data-testid="import-input" onChange={(e) => pick(e.currentTarget.files)} />
     <button class="btn p" data-testid="import-choose" disabled={busy} onClick={() => inp.current?.click()}>📂 Choose files (CSV)</button>
-    {done && <div class="sm" data-testid="import-done" style="color:var(--acc)">✅ {done}</div>}
+    {done && <div class="col" data-testid="import-done-box"><div class="sm" data-testid="import-done" style="color:var(--acc)">✅ {done}</div>
+      {doneW > 0 && <a class="btn b2" href={WORKOUT_LIST} data-testid="import-view-history">View workouts →</a>}</div>}
     {plan && <div class="card col import-preview" data-testid="import-preview" data-editing="1" style="background:var(--bg);margin:0">
       <b>Preview</b>
       {plan.files.map((f) => <div class="sm" data-testid="import-file" data-kind={f.kind}>
@@ -107,6 +115,7 @@ export function ImportSection() {
       <div class="grid2"><button class="btn" onClick={() => { setPlan(null); setFiles(null); }}>Cancel</button>
         <button class="btn p" data-testid="import-go" disabled={busy || !total} onClick={doImport}>{total ? 'Import' : 'Nothing new'}</button></div>
     </div>}
+    {counts?.range && <div class="xs mut" data-testid="import-range">Imported Hevy workouts: {counts.hevy.workouts} · {fmtDate(counts.range.from)} – {fmtDate(counts.range.to)} · <a href={WORKOUT_LIST}>View on Workout tab</a></div>}
     {counts && (['hevy', 'cronometer'] as ImportSource[]).map((src) => { const c = counts[src]; const n = c.workouts + c.diary + c.weighIns; if (!n) return null;
       return <button class="btn d sm" data-testid={`import-undo-${src}`} onClick={async () => { if (!confirmDo(`Remove all data imported from ${src === 'hevy' ? 'Hevy' : 'Cronometer'}? (${[c.workouts && `${c.workouts} workouts`, c.diary && `${c.diary} food entries`, c.weighIns && `${c.weighIns} weigh-ins`].filter(Boolean).join(', ')}) Things you logged in Grug Fit are not affected.`)) return; const k = await removeImported(src); setDone(''); toast(`Removed ${k} imported items`); }}>
         🗑 Remove imported {src === 'hevy' ? 'Hevy' : 'Cronometer'} data ({[c.workouts && `${c.workouts} workouts`, c.diary && `${c.diary} food`, c.weighIns && `${c.weighIns} weigh-ins`].filter(Boolean).join(', ')})</button>; })}
