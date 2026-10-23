@@ -37,9 +37,20 @@ export function offToFood(p: any): Food | null {
   return { id: p.code ? 'off_' + p.code : uid(), name: String(name).trim(), brand: brand || undefined, barcode: p.code, source: 'off', unit: liquid ? 'ml' : 'g', per100, servings, image: p.image_front_small_url || p.image_small_url };
 }
 
+/** Why a lookup failed, in words a bug report can carry: timeout / network / HTTP n / parse. */
+export class LookupError extends Error { constructor(public kind: 'timeout' | 'network' | 'http' | 'parse', msg: string) { super(msg); } }
 async function fetchJson(url: string, ms = 12000) {
   const c = new AbortController(); const t = setTimeout(() => c.abort(), ms);
-  try { const r = await fetch(url, { signal: c.signal }); if (r.status === 404 && url.includes('/product/')) return { status: 0 }; if (!r.ok) throw new Error(r.status === 503 ? 'server busy (503)' : 'HTTP ' + r.status); return await r.json(); } finally { clearTimeout(t); }
+  let r: Response;
+  try { r = await fetch(url, { signal: c.signal }); }
+  catch (e: any) { clearTimeout(t); throw e?.name === 'AbortError' ? new LookupError('timeout', `timed out after ${Math.round(ms / 1000)} s`) : new LookupError('network', `network error (${e?.message || e})`); }
+  try {
+    if (r.status === 404 && url.includes('/product/')) return { status: 0 };
+    if (!r.ok) throw new LookupError('http', r.status === 503 ? 'server busy (HTTP 503)' : 'HTTP ' + r.status);
+    const txt = await r.text();
+    try { return JSON.parse(txt); } catch { throw new LookupError('parse', `unreadable response (${txt.slice(0, 40).replace(/\s+/g, ' ')}…)`); }
+  } catch (e: any) { if (e instanceof LookupError) throw e; throw e?.name === 'AbortError' ? new LookupError('timeout', `timed out after ${Math.round(ms / 1000)} s`) : new LookupError('network', `network error (${e?.message || e})`); }
+  finally { clearTimeout(t); }
 }
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 /** Open Food Facts full-text search. The classic cgi endpoint is CORS-enabled but often rate-limited (503),
@@ -59,13 +70,21 @@ export async function searchOFF(q: string): Promise<Food[]> {
   const au = new Set(hits.filter((h) => (h.countries_tags || []).includes('en:australia')).map((h) => 'off_' + h.code));
   return foods.sort((a, b) => Number(au.has(b.id)) - Number(au.has(a.id)));
 }
-/** Returns the product, null if not in OFF, or { partial } if OFF knows the code but has no nutrition data. */
-export async function lookupBarcode(code: string): Promise<Food | null | { partial: string }> {
+const found = (j: any) => j && (j.status === 1 || j.status === 'success' || j.status === 'success_with_warnings') && j.product;
+/** Returns the product, null if not in OFF, or { partial } if OFF knows the code but has no nutrition data.
+ *  Transient failures (timeout / network / 5xx / garbled body) are retried once via the v0 endpoint before giving up. */
+export async function lookupBarcode(code: string, ms = 10000): Promise<Food | null | { partial: string }> {
   let partial = '';
   const tries = [code]; if (code.length === 12) tries.push('0' + code); if (code.length === 13 && code.startsWith('0')) tries.push(code.slice(1));
   for (const c of tries) {
-    const j = await fetchJson(`https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(c)}.json?fields=${FIELDS}`, 6000);
-    if (j.status === 1 && j.product) {
+    let j: any;
+    try { j = await fetchJson(`https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(c)}.json?fields=${FIELDS}`, ms); }
+    catch (e) {
+      if (!(e instanceof LookupError) || (e.kind === 'http' && !/50\d/.test(e.message))) throw e;
+      await sleep(600);
+      j = await fetchJson(`https://world.openfoodfacts.org/api/v0/product/${encodeURIComponent(c)}.json?fields=${FIELDS}`, ms);
+    }
+    if (found(j)) {
       const f = offToFood({ ...j.product, code: j.product.code || c });
       if (f && (f.per100.kcal > 0 || f.per100.protein > 0 || f.per100.fat > 0 || f.per100.carbs > 0)) return { ...f, barcode: code };
       if (f) partial = f.brand ? `${f.name} (${f.brand})` : f.name;

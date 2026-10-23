@@ -162,7 +162,7 @@ export function AddFood({ date, meal }: { date: string; meal: Meal }) {
   const [tab, setTab] = useState<'search' | 'recent' | 'frequent' | 'mine'>('recent');
   const [q, setQ] = useState(''); const [res, setRes] = useState<Food[] | null>(null); const [busy, setBusy] = useState(false); const [err, setErr] = useState('');
   const [pick, setPick] = useState<Food | undefined>(); const [scan, setScan] = useState(false);
-  const [lookup, setLookup] = useState(''); const [notFound, setNotFound] = useState<string | null>(null); const [partialName, setPartialName] = useState(''); const [usdaNote, setUsdaNote] = useState('');
+  const [lookup, setLookup] = useState(''); const [notFound, setNotFound] = useState<string | null>(null); const [partialName, setPartialName] = useState(''); const [usdaNote, setUsdaNote] = useState(''); const [diag, setDiag] = useState('');
   useEffect(() => {
     const hp = hashParams();
     if (hp.get('scan') === '1') setScan(true);
@@ -178,23 +178,30 @@ export function AddFood({ date, meal }: { date: string; meal: Meal }) {
   };
   /** Lookup order: 1) saved/custom foods  2) Open Food Facts  3) USDA FoodData Central (Branded)  4) not-found card. */
   const barcode = async (code: string) => {
-    setErr(''); setNotFound(null); setUsdaNote('');
-    const local = await byBarcode(code); if (local) { setScan(false); setPick(local); return; }
+    setErr(''); setNotFound(null); setUsdaNote(''); setDiag('');
+    const local = await byBarcode(code);
+    // a saved food with no nutrition at all (e.g. an abandoned manual entry) shouldn't hide a real online match
+    const empty = local && !(local.per100.kcal || local.per100.protein || local.per100.fat || local.per100.carbs);
+    if (local && !empty) { setScan(false); setPick(local); return; }
     const remember = async (f: Food) => { // cache as a saved food so the next scan is instant and works offline
       const ex = await get<Food>('foods', f.id); const keep = ex ? { ...f, lastServing: ex.lastServing, useCount: ex.useCount, lastUsed: ex.lastUsed, servings: [...f.servings, ...(ex.servings || []).filter((x) => x.kind === 'custom')] } : f;
       await put('foods', keep); setLookup(''); setScan(false); setPartialName(''); setPick(keep);
     };
     setLookup(`Looking up ${code} on Open Food Facts…`);
-    let partial = '', offErr = '';
-    try { const f = await lookupBarcode(code); if (f && 'partial' in f) partial = f.partial; else if (f) { await remember(f); return; } }
-    catch (e: any) { offErr = e?.message || 'network error'; }
-    const finish = (note: string, e = '') => { setLookup(''); setScan(false); setPartialName(partial); setUsdaNote(note); setErr(e); setNotFound(code); };
+    let partial = '', offErr = ''; const t0 = Date.now(); const d: string[] = [];
+    try { const f = await lookupBarcode(code); if (f && 'partial' in f) { partial = f.partial; d.push('OFF: found, no nutrition data'); } else if (f) { await remember(f); return; } else d.push('OFF: not found'); }
+    catch (e: any) { offErr = e?.message || 'network error'; d.push('OFF: ' + offErr); }
+    const finish = (note: string, e = '') => {
+      if (empty) d.push('saved food with this barcode has no nutrition');
+      setDiag(`${d.join(' · ')} · ${((Date.now() - t0) / 1000).toFixed(1)} s · ${navigator.onLine ? 'online' : 'offline'}`);
+      if (empty && local) { setLookup(''); setScan(false); setPick(local); return; } // nothing better online: show the saved one
+      setLookup(''); setScan(false); setPartialName(partial); setUsdaNote(note); setErr(e); setNotFound(code); };
     if (!navigator.onLine) { finish('', `Couldn't look up ${code}: you are offline. Try again, or create it as a custom food.`); return; }
     setLookup(`${partial ? 'No nutrition data on Open Food Facts' : 'Not in Open Food Facts'} — checking USDA FoodData Central…`);
     let note = '';
     const key = (await getSettings()).usdaKey; // read fresh: the hook's value may still be loading right after navigation
-    try { const u = await lookupFDC(code, key); if (u) { await remember(u); return; } }
-    catch (e: any) { note = e instanceof FdcBusy ? (/key rejected/.test(e.message) ? 'USDA rejected the API key in Settings — check it, or clear it to use the shared DEMO_KEY.' : `USDA busy, try again in a minute (${e.message}).${key ? '' : ' A free personal API key in Settings avoids the shared limit.'}`) : `USDA lookup failed (${e?.message || 'error'}).`; }
+    try { const u = await lookupFDC(code, key); if (u) { await remember(u); return; } d.push('USDA: not found'); }
+    catch (e: any) { d.push('USDA: ' + (e?.message || 'error')); note = e instanceof FdcBusy ? (/key rejected/.test(e.message) ? 'USDA rejected the API key in Settings — check it, or clear it to use the shared DEMO_KEY.' : `USDA busy, try again in a minute (${e.message}).${key ? '' : ' A free personal API key in Settings avoids the shared limit.'}`) : `USDA lookup failed (${e?.message || 'error'}).`; }
     finish(note, offErr ? `Open Food Facts lookup failed (${offErr}).` : '');
   };
   const ql = q.toLowerCase().trim();
@@ -209,12 +216,12 @@ export function AddFood({ date, meal }: { date: string; meal: Meal }) {
       <button class="btn p" type="submit" aria-label="Search">🔍</button><button class="btn b2" type="button" onClick={() => setScan(true)} aria-label="Scan barcode">▥</button></form>
     {lookup && !scan && <div class="card sm" style="margin-top:10px">⏳ {lookup}</div>}
     {notFound && <div class="card col" style="border-color:var(--warn);margin-top:10px" data-testid="notfound">
-      <div class="sm">{partialName ? <>Open Food Facts knows <b>{partialName}</b> ({notFound}) but has no nutrition data for it.</> : <><b>Barcode {notFound}</b> isn't in Open Food Facts{usdaNote ? '' : ' or USDA FoodData Central'}{err ? ' (or lookup failed)' : ''}.</>} Create it as a custom food from the label — next time you scan it, Grug Fit will find it instantly.</div>
+      <div class="sm">{partialName ? <>Open Food Facts knows <b>{partialName}</b> ({notFound}) but has no nutrition data for it.</> : err ? <><b>Barcode {notFound}</b>: {err} Tap “Retry lookup” to try again.</> : <><b>Barcode {notFound}</b> isn't in Open Food Facts{usdaNote ? '' : ' or USDA FoodData Central'}.</>} Create it as a custom food from the label — next time you scan it, Grug Fit will find it instantly.</div>
       {usdaNote && <div class="xs" data-testid="usda-note" style="color:var(--warn)">⚠️ {usdaNote}</div>}
-      {err && <div class="xs mut">{err}</div>}
       <a class="btn p" data-testid="scan-label-notfound" href={`#/food/label?barcode=${notFound}&ret=${date}/${meal}${partialName ? `&name=${encodeURIComponent(partialName)}` : ''}`}>📷 Scan nutrition label</a>
       <a class="btn" href={`#/food/edit/new?barcode=${notFound}&ret=${date}/${meal}${partialName ? `&name=${encodeURIComponent(partialName)}` : ''}`}>Type it in manually</a>
-      <button class="btn sm" onClick={() => setScan(true)}>Scan again</button></div>}
+      <div class="grid2"><button class="btn sm" data-testid="retry-lookup" onClick={() => barcode(notFound)}>↻ Retry lookup</button><button class="btn sm" onClick={() => setScan(true)}>Scan again</button></div>
+      {diag && <div class="xs mut" data-testid="lookup-diag" style="word-break:break-word">Details: {diag}</div>}</div>}
     <div class="chips" style="margin:10px 0">{([['search', 'Search'], ['recent', 'Recent'], ['frequent', 'Frequent'], ['mine', 'My foods & recipes']] as const).map(([k, l]) => <button class={'chip ' + (tab === k ? 'on' : '')} onClick={() => setTab(k)}>{l}</button>)}</div>
     <div class="grid3"><a class="btn sm" href={`#/food/label?ret=${date}/${meal}`} data-testid="scan-label">📷 Scan label</a><a class="btn sm" href={`#/food/edit/new?ret=${date}/${meal}`}>+ Custom food</a><a class="btn sm" href="#/recipe/new">+ Recipe</a></div>
     {busy && <div class="empty">Searching Open Food Facts…</div>}

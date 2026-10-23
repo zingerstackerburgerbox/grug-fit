@@ -1,13 +1,13 @@
 {
   "name": "grug-fit",
-  "version": "1.5.0",
+  "version": "1.5.1",
   "description": "",
   "main": "index.js",
   "scripts": {
     "dev": "node scripts/copy-ocr.mjs && vite",
     "build": "node scripts/copy-ocr.mjs && vite build",
     "preview": "node tests/serve.mjs dist 4173",
-    "test": "node tests/smoke.mjs && node tests/ocr.mjs && node tests/onboarding.mjs && node tests/exviz-audit.mjs && node tests/exviz.mjs && node tests/seed-migration.mjs && node tests/usda.mjs && node tests/update.mjs"
+    "test": "node tests/smoke.mjs && node tests/ocr.mjs && node tests/onboarding.mjs && node tests/exviz-audit.mjs && node tests/exviz.mjs && node tests/seed-migration.mjs && node tests/usda.mjs && node tests/safcol.mjs && node tests/update.mjs"
   },
   "keywords": [],
   "author": "",
