@@ -78,7 +78,7 @@ const prior = { id: 'wPrev', name: 'Push Day', start: T0 - 3 * 864e5, end: T0 - 
   // history card: kcal from the 2 ticked sets only (80×5, 85×5 bench, 80 kg lifter) = 4.25 + 4.40 ≈ 9; the unticked 120 kg set and idle time add nothing
   await page.click('[data-testid=ae-yes]'); await page.waitForTimeout(300);
   if ((await getv(page, 'workouts', 'wA' + T0)).needsReview) fail('"Yes" did not clear the flag'); else log('"Yes, it was complete" → reviewed');
-  await page.goto(BASE + '#/history'); await page.waitForSelector('[data-testid=card-kcal]'); const k = await page.locator('[data-testid=card-kcal]').first().textContent(); log('history kcal', k, 'volume', vol);
+  await page.goto(BASE + '#/history'); await page.waitForSelector('[data-testid=card-kcal]'); await page.waitForFunction(() => /\d/.test(document.querySelector('[data-testid=card-kcal]')?.textContent || ''), null, { timeout: 5000 }).catch(() => {}); const k = await page.locator('[data-testid=card-kcal]').first().textContent(); log('history kcal', k, 'volume', vol);
   if (!/🔥 9 kcal/.test(k)) fail('kcal should come from ticked sets only (9)'); if (await page.locator('[data-testid=autoended-badge]').count()) fail('badge still shown after review');
   await page.context().close();
 }

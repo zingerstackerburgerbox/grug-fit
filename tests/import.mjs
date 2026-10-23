@@ -52,7 +52,7 @@ await page.click('text=Cancel');
 if (JSON.stringify(await counts()) !== JSON.stringify(c)) fail('counts changed after re-import preview');
 
 // imported data shows in the app
-await page.goto(BASE + '#/history'); await page.waitForSelector('[data-testid=card-kcal]'); const cards = await page.locator('[data-testid=card-kcal]').count(); log('history cards:', cards); if (cards !== 5) fail('history should list 5 workouts');
+await page.goto(BASE + '#/history'); await page.waitForSelector('[data-testid=card-kcal]'); await page.waitForFunction(() => /\d/.test(document.querySelector('[data-testid=card-kcal]')?.textContent || ''), null, { timeout: 5000 }).catch(() => {}); const cards = await page.locator('[data-testid=card-kcal]').count(); log('history cards:', cards); if (cards !== 5) fail('history should list 5 workouts');
 await page.goto(BASE + '#/food/2026-10-20'); await page.waitForSelector('text=Oats, Rolled, Dry'); const diary = await page.textContent('.page');
 if (!/1 cup · from Cronometer/.test(diary) || !/50 g/.test(diary)) fail('diary amounts'); else log('diary 20 Oct shows Cronometer entries');
 await page.goto(BASE + '#/food/2026-10-19'); await page.waitForSelector('text=Cronometer daily total'); log('19 Oct: daily total entry shown');

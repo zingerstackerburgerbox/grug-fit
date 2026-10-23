@@ -38,7 +38,7 @@ const sum = (await page.textContent('[data-testid=workout-kcal-value]')).trim();
 if (sum !== '31 kcal') fail('summary kcal ' + sum);
 if (!/Rest time isn't counted/.test(await page.textContent('[data-testid=kcal-explain]'))) fail('explanation missing');
 await page.screenshot({ path: 'screenshots/40-kcal-summary.png' });
-await page.goto(BASE + '#/history'); await page.waitForSelector('[data-testid=card-kcal]'); await page.waitForTimeout(300);
+await page.goto(BASE + '#/history'); await page.waitForSelector('[data-testid=card-kcal]'); await page.waitForFunction(() => /\d/.test(document.querySelector('[data-testid=card-kcal]')?.textContent || ''), null, { timeout: 5000 }).catch(() => {}); await page.waitForTimeout(300);
 const cards = await page.locator('[data-testid=card-kcal]').allTextContents(); log('history cards:', cards.join(' | '));
 if (cards.length !== 2 || !cards.every((c) => /🔥 31 kcal/.test(c))) fail('long-rest and short-rest workouts should both be 31 kcal');
 await page.goto(BASE + '#/'); await page.waitForSelector('[data-testid=burn-split]'); await page.waitForTimeout(400);

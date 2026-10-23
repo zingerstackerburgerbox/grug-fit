@@ -2,6 +2,7 @@
 import { all, get } from './db';
 import type { BodyWeight, Exercise, Nutrients, Settings, Workout } from './types';
 import { estimateWorkoutKcal, type ExLookup } from './setKcal';
+import { daySteps, stepCache, type DaySteps } from './steps';
 
 export type Sex = 'male' | 'female';
 export type Goal = 'cut' | 'maintain' | 'bulk';
@@ -38,7 +39,7 @@ export function weightAt(list: BodyWeight[], date: string): number | null {
 }
 export async function latestWeight(): Promise<number | null> { const l = sortBW(await all<BodyWeight>('bodyweight')); return l[l.length - 1]?.kg ?? null; }
 
-export type DayEnergy = { kg: number | null; bmr: number | null; sedentary: number | null; workouts: { id: string; name: string; kcal: number; live?: boolean }[]; workoutKcal: number; burned: number | null; target: number; eatBack: boolean };
+export type DayEnergy = { kg: number | null; bmr: number | null; sedentary: number | null; workouts: { id: string; name: string; kcal: number; live?: boolean }[]; workoutKcal: number; /** v1.9.0: phone step counter (Android app) */ steps: DaySteps; stepKcal: number; burned: number | null; target: number; eatBack: boolean };
 export async function dayEnergy(date: string, s: Settings): Promise<DayEnergy> {
   const bws = await all<BodyWeight>('bodyweight'); const exs = new Map((await all<Exercise>('exercises')).map((e) => [e.id, e])); const kg = weightAt(bws, date);
   const p = s.profile; let b: number | null = null;
@@ -49,6 +50,7 @@ export async function dayEnergy(date: string, s: Settings): Promise<DayEnergy> {
   const act = (await get<{ w: Workout | null }>('kv', 'active'))?.w;
   if (act && act.start >= from && act.start < to) list.push({ id: act.id, name: act.name, kcal: workoutKcal(act, kg, exs), live: true });
   const wk = list.reduce((a, x) => a + x.kcal, 0);
+  const st = daySteps(date, await stepCache(), ws, exs as any, kg, p); const sk = st.kcal;
   const sed = b != null ? Math.round(sedentaryBurn(b)) : null; const eb = eatBackOn(s);
-  return { kg, bmr: b != null ? Math.round(b) : null, sedentary: sed, workouts: list, workoutKcal: wk, burned: sed != null ? sed + wk : null, target: Math.round(s.targets.kcal + (eb ? wk : 0)), eatBack: eb };
+  return { kg, bmr: b != null ? Math.round(b) : null, sedentary: sed, workouts: list, workoutKcal: wk, steps: st, stepKcal: sk, burned: sed != null ? sed + wk + sk : null, target: Math.round(s.targets.kcal + (eb ? wk + sk : 0)), eatBack: eb };
 }

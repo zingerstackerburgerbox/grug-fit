@@ -12,6 +12,7 @@ import { startWorkout, useActive, useWorkouts, WorkoutCard, WORKOUT_LIST } from 
 import { sumN } from '../util';
 import { useExercises } from './ExercisePicker';
 import { FactCard } from './Fact';
+import { MoveDataCard, ShellUpdateBanner, StepsCard } from './Steps';
 
 const weekStart = (t: number) => { const d = new Date(t); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); return ymd(d); };
 export function Home() {
@@ -28,8 +29,11 @@ export function Home() {
   const now = new Date();
   return <><Top title="Grug Fit" right={<a class="btn ic" href="#/settings" aria-label="Settings">⚙️</a>} /><div class="page">
     <div class="mut sm" style="margin:-2px 2px 10px">{WD[now.getDay()]} {now.getDate()} {MONTHS[now.getMonth()]}</div>
+    <ShellUpdateBanner />
+    <MoveDataCard />
     <InstallBanner />
     <BurnBar date={today} />
+    <StepsCard />
     <PackageFixNote />
     <a class="card" style="display:block;color:inherit;text-decoration:none" href={`#/food/${today}`}>
       <div class="row between" style="margin-bottom:8px"><b>Today's nutrition</b><span class="mut sm">{n ? `${energy(n.kcal, s)} ${s.energyUnit}` : ''} →</span></div>

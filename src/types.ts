@@ -60,6 +60,8 @@ export type Settings = {
   coachKey?: string; coachOwnerToken?: string; coachConsent?: number;
   /** Home 'Fitness fact of the day' card: open (default), collapsed, or off */
   factCard?: 'open' | 'collapsed' | 'off';
+  /** v1.9.0 steps (Android app): daily goal; hide the Home steps card */
+  stepGoal?: number; stepsCard?: 'on' | 'off';
   /** onboarding finished/skipped (timestamp) */
   onboarded?: number;
 };

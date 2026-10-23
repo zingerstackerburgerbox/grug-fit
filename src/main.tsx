@@ -15,6 +15,8 @@ import { Onboarding } from './pages/Onboarding';
 import { getSettings } from './db';
 import { scheduleReminders } from './doses';
 import { registerSW, showUpdatedToast } from './update';
+import { armStepSync } from './steps';
+import { AndroidAppPage } from './pages/Steps';
 import type { Meal } from './types';
 import { checkStale } from './autoend';
 import { AutoEndReview, WorkoutMiniBar } from './pages/AutoEndReview';
@@ -57,6 +59,7 @@ function route(h: string) {
     case 'supp': return <SuppEdit id={p[1]} key={p[1]} />;
     case 'calendar': return <CalendarPage />;
     case 'settings': return <SettingsPage />;
+    case 'android': return <AndroidAppPage />;
     case 'coach': return <CoachPage />;
     case 'welcome': return <Onboarding />;
     default: return <Home />;
@@ -80,7 +83,7 @@ function App() {
     init().then(() => checkStale()).catch(() => null).then(async () => {
       const p = await pv; setPriv(p.private ? (privateDismissed() ? 'warn' : 'block') : 'no'); document.documentElement.dataset.private = p.reason;
       const ob = !!(await getSettings().catch(() => ({} as any))).onboarded; setOnboard(!ob); setReady(true);
-      if (ob) { armPersist(); protectStorage(); } scheduleReminders(); showUpdatedToast(); });
+      if (ob) { armPersist(); protectStorage(); } scheduleReminders(); showUpdatedToast(); armStepSync(); });
     const v = () => { if (document.visibilityState === 'visible') { scheduleReminders(); checkStale(); } };
     document.addEventListener('visibilitychange', v); const t = setInterval(() => checkStale(), 60e3);
     return () => { document.removeEventListener('visibilitychange', v); clearInterval(t); };
