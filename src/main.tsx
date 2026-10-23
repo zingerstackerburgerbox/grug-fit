@@ -18,6 +18,7 @@ import { registerSW, showUpdatedToast } from './update';
 import type { Meal } from './types';
 import { checkStale } from './autoend';
 import { AutoEndReview, WorkoutMiniBar } from './pages/AutoEndReview';
+import { CoachPage } from './pages/Coach';
 
 addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); (window as any).__installPrompt = e; dispatchEvent(new Event('installprompt')); });
 
@@ -25,6 +26,7 @@ const I = {
   home: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 11l9-7 9 7v9a1 1 0 01-1 1h-5v-6H9v6H4a1 1 0 01-1-1z" /></svg>,
   lift: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 7v10M18 7v10M3 9v6M21 9v6M6 12h12" /></svg>,
   food: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 3v8a2 2 0 002 2v8M11 3v8M3 3v8a2 2 0 002 2M17 21V3c2.5 0 4 3 4 7s-1.5 4-4 4" /></svg>,
+  coach: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M4 5h16v11H9l-5 4z" /><path d="M8 10h.01M12 10h.01M16 10h.01" stroke-linecap="round" stroke-width="2.6" /></svg>,
   pill: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="8" width="18" height="8" rx="4" transform="rotate(-35 12 12)" /><path d="M9.5 8.5l5 6" /></svg>,
   gear: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.6 1.6 0 00.3 1.8l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.6 1.6 0 00-1.8-.3 1.6 1.6 0 00-1 1.5V21a2 2 0 11-4 0v-.1a1.6 1.6 0 00-1-1.5 1.6 1.6 0 00-1.8.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.6 1.6 0 00.3-1.8 1.6 1.6 0 00-1.5-1H3a2 2 0 110-4h.1a1.6 1.6 0 001.5-1 1.6 1.6 0 00-.3-1.8l-.1-.1a2 2 0 112.8-2.8l.1.1a1.6 1.6 0 001.8.3H9a1.6 1.6 0 001-1.5V3a2 2 0 114 0v.1a1.6 1.6 0 001 1.5 1.6 1.6 0 001.8-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.6 1.6 0 00-.3 1.8V9a1.6 1.6 0 001.5 1H21a2 2 0 110 4h-.1a1.6 1.6 0 00-1.5 1z" /></svg>
 };
@@ -52,13 +54,14 @@ function route(h: string) {
     case 'supp': return <SuppEdit id={p[1]} key={p[1]} />;
     case 'calendar': return <CalendarPage />;
     case 'settings': return <SettingsPage />;
+    case 'coach': return <CoachPage />;
     case 'welcome': return <Onboarding />;
     default: return <Home />;
   }
 }
 const TABS: [string, string, keyof typeof I, string[]][] = [
   ['/', 'Home', 'home', ['']], ['/workouts', 'Workout', 'lift', ['workouts', 'workout', 'routine', 'history', 'exercises', 'exercise', 'body']],
-  ['/food', 'Food', 'food', ['food', 'foods', 'recipe']], ['/supps', 'Doses', 'pill', ['supps', 'supp', 'calendar']], ['/settings', 'Settings', 'gear', ['settings']]
+  ['/food', 'Food', 'food', ['food', 'foods', 'recipe']], ['/coach', 'Coach', 'coach', ['coach']], ['/supps', 'Doses', 'pill', ['supps', 'supp', 'calendar']], ['/settings', 'Settings', 'gear', ['settings']]
 ];
 function UpdateBanner() {
   const [show, setShow] = useState(false);

@@ -1,0 +1,5 @@
+# copy to .dev.vars for `wrangler dev` (never commit .dev.vars)
+XAI_API_KEY=dummy-key-for-local-testing
+OWNER_TOKEN=local-owner-token
+# point at the mock upstream from test/mock-upstream.mjs instead of xAI:
+UPSTREAM_URL=http://127.0.0.1:8788/v1/chat/completions

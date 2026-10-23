@@ -159,3 +159,20 @@ button.exthumb.tap { cursor: pointer; min-height: 0; }
 .modal { background: var(--bg2); border: 1px solid var(--line); border-radius: 18px; padding: 18px; width: 100%; max-width: 420px; gap: 10px; box-shadow: 0 12px 40px rgba(0,0,0,.6); }
 .unticked { opacity: .55; }
 body:has(.minibar) .page { padding-bottom: calc(146px + env(safe-area-inset-bottom)); }
+.coach { padding-bottom: calc(150px + env(safe-area-inset-bottom)); }
+.chat { display: flex; flex-direction: column; gap: 10px; }
+.bubble { max-width: 88%; padding: 10px 12px; border-radius: 16px; line-height: 1.45; font-size: 15px; word-wrap: break-word; }
+.bubble.me { align-self: flex-end; background: #12321f; border: 1px solid #1f5f38; white-space: pre-wrap; border-bottom-right-radius: 6px; }
+.bubble.bot { align-self: flex-start; background: var(--bg2); border: 1px solid var(--line); border-bottom-left-radius: 6px; max-width: 96%; }
+.md p { margin: 0 0 8px; } .md p:last-child { margin-bottom: 0; } .md ul, .md ol { margin: 4px 0 8px; padding-left: 20px; } .md li { margin: 2px 0; }
+.md h3, .md h4, .md h5, .md h6 { margin: 8px 0 4px; font-size: 15px; } .md code { background: var(--bg3); padding: 1px 4px; border-radius: 4px; font-size: 13px; }
+.md pre { background: var(--bg3); padding: 8px; border-radius: 8px; overflow-x: auto; } .md a { color: var(--acc2); } .md hr { border: 0; border-top: 1px solid var(--line); }
+.md-table { overflow-x: auto; margin: 6px 0; } .md table { border-collapse: collapse; font-size: 13px; } .md th, .md td { border: 1px solid var(--line); padding: 4px 6px; text-align: left; }
+.typing { display: flex; gap: 4px; padding: 14px; } .typing span { width: 7px; height: 7px; border-radius: 50%; background: var(--mut); animation: pulse 1s infinite; } .typing span:nth-child(2) { animation-delay: .2s; } .typing span:nth-child(3) { animation-delay: .4s; }
+.composer { position: fixed; left: 0; right: 0; bottom: calc(62px + env(safe-area-inset-bottom)); z-index: 9; display: flex; gap: 8px; padding: 8px 12px; background: #12151b; border-top: 1px solid var(--line); }
+.composer textarea { flex: 1; min-height: 46px; max-height: 120px; padding: 11px 12px; resize: none; }
+.composer .btn { min-width: 52px; }
+body:has(.minibar) .composer { bottom: calc(106px + env(safe-area-inset-bottom)); }
+.btn.sugg { justify-content: flex-start; text-align: left; font-weight: 600; }
+.action-card { margin: 8px 0 2px; background: var(--bg3); gap: 8px; } .action-card.dismissed { opacity: .55; }
+.coach-err { border-color: var(--warn); margin: 0; }

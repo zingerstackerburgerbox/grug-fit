@@ -1,3 +1,5 @@
+import { useQuota, quotaText } from './Coach';
+import { coachMode, fetchStatus } from '../coach';
 import { useEffect, useState } from 'preact/hooks';
 import { clearAll, exportAll, importAll, getSettings, put } from '../db';
 import { useSettings } from '../hooks';
@@ -88,6 +90,8 @@ export function SettingsPage() {
     <h2>Food lookup</h2>
     <div class="card col"><UsdaKeyField />
       <div class="mut xs">Barcodes Open Food Facts doesn't know are checked in USDA FoodData Central (US branded foods). The shared DEMO_KEY allows only ~30 lookups an hour; a <a href="https://fdc.nal.usda.gov/api-key-signup" target="_blank" rel="noopener">free personal key</a> raises that to 1,000.</div></div>
+    <h2>Coach</h2>
+    <CoachSettings />
     <h2>Dose reminders</h2>
     <div class="card col"><label class="row sm"><input type="checkbox" style="width:24px;min-height:24px" checked={s.reminders} onChange={async (e) => { const on = e.currentTarget.checked; if (on && typeof Notification !== 'undefined' && Notification.permission !== 'granted') setPerm(await Notification.requestPermission()); await save({ reminders: on }); setTimeout(scheduleReminders, 50); }} /> Enable reminder notifications</label>
       <div class="mut xs">Permission: {perm}. {'TimestampTrigger' in window ? 'This browser supports Notification Triggers, so reminders are scheduled with the system.' : ''}</div>
@@ -107,4 +111,24 @@ export function SettingsPage() {
       <button class="btn sm" data-testid="ocr-offline" onClick={async () => { toast('Downloading label scanner (~6 MB)…'); try { const m = await import('../ocr/ocr'); await m.prefetchOcr(); toast('Label scanning is ready offline'); } catch (e: any) { toast('Download failed: ' + (e?.message || e)); } }}>📷 Make label scanning available offline</button>
     <div class="mut xs center" style="margin-top:10px">Food data from Open Food Facts (ODbL)</div>
   </div></>;
+}
+
+function CoachSettings() {
+  const [s0, setS0] = useState<Settings | null>(null); useEffect(() => { getSettings().then(setS0); }, []);
+  const q = useQuota(); const [key, setKey] = useState(''); const [tok, setTok] = useState(''); const [showKey, setShowKey] = useState(false);
+  useEffect(() => { if (s0) { setKey(s0.coachKey || ''); setTok(s0.coachOwnerToken || ''); } }, [s0]);
+  if (!s0) return <div class="card mut sm">Loading…</div>;
+  const commit = async (p: Partial<Settings>, msg: string) => { const cur = await getSettings(); const n = { ...cur, ...p }; await put('kv', n); setS0(n); toast(msg); fetchStatus(); };
+  const mode = coachMode({ ...s0, coachKey: key || undefined });
+  return <div class="card col" data-testid="coach-settings">
+    <div class="sm">Status: <b data-testid="coach-mode">{mode === 'own' ? 'Using your own xAI key' : mode === 'proxy' ? 'Using the Grug Fit coach service' : 'Coach is being set up'}</b>{mode === 'proxy' && q && <> · <span data-testid="coach-remaining">{quotaText(q)}</span></>}</div>
+    <label class="f">Use my own xAI API key (optional)<div class="row"><input type={(showKey ? 'text' : 'password') as any} autocomplete="off" spellcheck={false} value={key} placeholder="xai-…" data-testid="coach-key" onInput={(e) => setKey(e.currentTarget.value.trim())} />
+      <button class="btn sm" type="button" onClick={() => setShowKey(!showKey)}>{showKey ? 'Hide' : 'Show'}</button></div></label>
+    <div class="grid2"><button class="btn sm p" data-testid="coach-key-save" onClick={() => commit({ coachKey: key || undefined }, key ? 'xAI key saved on this device' : 'Own key cleared')}>Save key</button>{s0.coachKey && <button class="btn sm" onClick={() => { setKey(''); commit({ coachKey: undefined }, 'Own key cleared'); }}>Remove key</button>}</div>
+    <div class="mut xs">With your own key the app calls api.x.ai directly from this device (no daily cap; usage billed to your xAI account). The key is stored only on this device and is left out of backups.</div>
+    <label class="f">Owner token (optional)<input type="password" autocomplete="off" value={tok} data-testid="coach-owner" onInput={(e) => setTok(e.currentTarget.value.trim())} placeholder="Only for the app owner" /></label>
+    <button class="btn sm" data-testid="coach-owner-save" onClick={() => commit({ coachOwnerToken: tok || undefined }, tok ? 'Owner token saved' : 'Owner token cleared')}>Save owner token</button>
+    <div class="mut xs">The coach sends a summary of your logs (profile, targets, 14 days of nutrition totals, recent workouts, PRs, body weight, supplements and adherence) with each message. Chat history stays on this device; clear it from the Coach tab.</div>
+    {s0.coachConsent && <button class="btn g sm" onClick={() => commit({ coachConsent: undefined }, 'Privacy notice will show again')}>Show the privacy notice again</button>}
+  </div>;
 }

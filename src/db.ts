@@ -109,6 +109,8 @@ export async function getSettings(): Promise<Settings> {
 export async function exportAll() {
   const d = await db(); const out: any = { app: 'grugfit', version: 1, schema: SCHEMA_VERSION, exported: new Date().toISOString(), data: {} };
   for (const s of STORES) out.data[s] = await d.getAll(s);
+  // never put credentials in a backup file
+  out.data.kv = out.data.kv.map((r: any) => (r.id === 'settings' ? (({ coachKey, coachOwnerToken, ...x }) => x)(r) : r));
   return out;
 }
 export async function importAll(json: any, mode: 'replace' | 'merge' = 'replace') {

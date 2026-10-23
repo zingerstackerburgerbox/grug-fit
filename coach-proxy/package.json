@@ -1,0 +1,13 @@
+{
+  "name": "grug-coach-proxy",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node test/unit.mjs",
+    "dev": "wrangler dev --local --port 8787",
+    "deploy": "wrangler deploy"
+  },
+  "devDependencies": {
+    "wrangler": "^4"
+  }
+}

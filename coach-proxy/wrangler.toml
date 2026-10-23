@@ -1,0 +1,21 @@
+name = "grug-coach-proxy"
+main = "src/index.js"
+compatibility_date = "2026-05-01"
+workers_dev = true
+preview_urls = false
+
+# Workers KV for daily counters. Create it with:  npx wrangler kv namespace create COACH_KV
+# then paste the printed id below (and a preview_id for `wrangler dev --remote`, optional).
+[[kv_namespaces]]
+binding = "COACH_KV"
+id = "d64fc88337b842b6a12133b5286decd2"
+
+[vars]
+MODEL = "grok-4.7"
+DEVICE_DAILY_CAP = "30"
+GLOBAL_DAILY_CAP = "500"
+MAX_INPUT_CHARS = "24000"
+MAX_TOKENS = "1200"
+KILL_SWITCH = "0"
+ALLOWED_ORIGINS = "https://zingerstackerburgerbox.github.io,http://localhost:5173,http://localhost:4173,http://127.0.0.1:5173,http://127.0.0.1:4173"
+# Secrets (never in this file): XAI_API_KEY (required), OWNER_TOKEN (optional)

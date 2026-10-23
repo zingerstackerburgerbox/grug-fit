@@ -51,6 +51,8 @@ export type Settings = {
   usdaKey?: string;
   /** add today's workout calories to the calorie target ("eat back"); undefined = default for goal */
   eatBack?: boolean;
+  /** AI Coach: optional own xAI key (calls api.x.ai directly), owner token for the proxy, privacy notice accepted (timestamp) */
+  coachKey?: string; coachOwnerToken?: string; coachConsent?: number;
   /** Home 'Fitness fact of the day' card: open (default), collapsed, or off */
   factCard?: 'open' | 'collapsed' | 'off';
   /** onboarding finished/skipped (timestamp) */
