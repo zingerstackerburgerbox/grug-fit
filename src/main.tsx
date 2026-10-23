@@ -20,6 +20,8 @@ import { checkStale } from './autoend';
 import { AutoEndReview, WorkoutMiniBar } from './pages/AutoEndReview';
 import { CoachPage } from './pages/Coach';
 import { initInstall } from './install';
+import { armPersist, checkPrivate, privateDismissed, protectStorage } from './privacy';
+import { PrivateBanner, PrivateBlock } from './pages/Private';
 
 initInstall();
 
@@ -71,10 +73,14 @@ function UpdateBanner() {
   return <button class="update-banner" onClick={() => location.reload()} data-testid="update-banner">⬆️ Update ready – tap to refresh<span class="xs mut"> (finish your workout/edit first; nothing is lost)</span></button>;
 }
 function App() {
-  const [ready, setReady] = useState(false); const h = useHash(); const [onboard, setOnboard] = useState(false);
+  const [ready, setReady] = useState(false); const h = useHash(); const [onboard, setOnboard] = useState(false); const [priv, setPriv] = useState<'no' | 'block' | 'warn'>('no');
   useEffect(() => {
     // stale-workout check before first render, so an abandoned workout is already ended (and its review shown) on launch
-    init().then(() => checkStale()).catch(() => null).then(async () => { setOnboard(!(await getSettings()).onboarded); setReady(true); scheduleReminders(); showUpdatedToast(); });
+    const pv = checkPrivate();
+    init().then(() => checkStale()).catch(() => null).then(async () => {
+      const p = await pv; setPriv(p.private ? (privateDismissed() ? 'warn' : 'block') : 'no'); document.documentElement.dataset.private = p.reason;
+      const ob = !!(await getSettings().catch(() => ({} as any))).onboarded; setOnboard(!ob); setReady(true);
+      if (ob) { armPersist(); protectStorage(); } scheduleReminders(); showUpdatedToast(); });
     const v = () => { if (document.visibilityState === 'visible') { scheduleReminders(); checkStale(); } };
     document.addEventListener('visibilitychange', v); const t = setInterval(() => checkStale(), 60e3);
     return () => { document.removeEventListener('visibilitychange', v); clearInterval(t); };
@@ -83,8 +89,12 @@ function App() {
   if (!ready) return <div class="empty">Loading…</div>;
   const seg = h.split('/').filter(Boolean)[0] || '';
   // first open (fresh or existing install upgraded to v1.3): show onboarding once, unless a workout is in progress
-  if (onboard && seg !== 'workout') return <><main key="onboarding"><Onboarding onDone={() => setOnboard(false)} /></main><UpdateBanner /><Toaster /></>;
+  // private/incognito window (heuristic): block everything until they move to a normal window, or tap "I'm not in incognito"
+  if (priv === 'block') return <><PrivateBlock onContinue={() => setPriv('warn')} /><Toaster /></>;
+  const banner = priv === 'warn' ? <PrivateBanner /> : null;
+  if (onboard && seg !== 'workout') return <>{banner}<main key="onboarding"><Onboarding onDone={() => { setOnboard(false); armPersist(); protectStorage(); }} /></main><UpdateBanner /><Toaster /></>;
   return <>
+    {banner}
     <main key={h}>{route(h)}</main>
     <div class="dock"><RestBar /><WorkoutMiniBar hidden={seg === 'workout'} /></div>
     <nav class="tabs">{TABS.map(([href, label, ic, segs]) => <a href={'#' + href} class={segs.includes(seg) ? 'on' : ''}>{I[ic]}<span>{label}</span></a>)}</nav>

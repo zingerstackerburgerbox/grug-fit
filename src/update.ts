@@ -27,7 +27,7 @@ export function showUpdatedToast() {
   localStorage.setItem('buildId', BUILD_ID);
 }
 export function registerSW() {
-  if (!('serviceWorker' in navigator) || !import.meta.env.PROD) return;
+  if (!navigator.serviceWorker || !import.meta.env.PROD) return;
   let hadController = !!navigator.serviceWorker.controller;
   navigator.serviceWorker.addEventListener('controllerchange', () => {
     if (!hadController) { hadController = true; return; } // first install: nothing to reload

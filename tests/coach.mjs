@@ -21,6 +21,8 @@ await ctx.route('https://coach.test/**', async (r) => {
   reqs.push({ h, body: JSON.parse(r.request().postData() || '{}') });
   if (mode === 'abort') return r.abort('failed');
   if (mode === 'limit') return r.fulfill({ status: 429, contentType: 'application/json', headers: { ...cors, 'X-Coach-Remaining': '0' }, body: JSON.stringify({ error: 'device_limit', message: 'Daily limit', remaining: 0, cap: 30, resetAt: '2026-10-24T00:00:00.000Z' }) });
+  if (mode === 'iplimit') return r.fulfill({ status: 429, contentType: 'application/json', headers: cors, body: JSON.stringify({ error: 'ip_limit', message: 'net', remaining: 0, cap: 60, resetAt: '2026-10-24T00:00:00.000Z' }) });
+  if (mode === 'rl') return r.fulfill({ status: 429, contentType: 'application/json', headers: cors, body: JSON.stringify({ error: 'rate_limited', message: 'slow', retryAfter: 60 }) });
   if (mode === 'disabled') return r.fulfill({ status: 503, contentType: 'application/json', headers: cors, body: JSON.stringify({ error: 'disabled', message: 'off' }) });
   return r.fulfill({ status: 200, headers: { ...cors, 'content-type': 'text/event-stream', 'X-Coach-Remaining': String(30 - reqs.length), 'X-Coach-Cap': '30' }, body: sse(reply) });
 });
@@ -72,6 +74,8 @@ if (reqs[1].body.messages.filter((m) => m.role !== 'system').length !== 3) fail(
 // 3. errors
 mode = 'limit'; await page.fill('textarea[aria-label="Message the coach"]', 'more?'); await page.click('[data-testid=coach-send]'); await page.waitForSelector('[data-testid=coach-error]');
 let et = await page.textContent('[data-testid=coach-error]'); log('limit:', et); if (!/used today/.test(et) || await page.locator('[data-testid=coach-retry]').count()) fail('limit message');
+mode = 'iplimit'; await page.fill('textarea[aria-label="Message the coach"]', 'net cap?'); await page.click('[data-testid=coach-send]'); await page.waitForTimeout(400); et = await page.textContent('[data-testid=coach-error]'); log('ip limit:', et); if (!/Daily coach limit reached for this network/.test(et)) fail('ip_limit message');
+mode = 'rl'; await page.fill('textarea[aria-label="Message the coach"]', 'fast?'); await page.click('[data-testid=coach-send]'); await page.waitForTimeout(400); et = await page.textContent('[data-testid=coach-error]'); log('rate limited:', et); if (!/wait a minute/.test(et)) fail('rate_limited message');
 mode = 'disabled'; await page.fill('textarea[aria-label="Message the coach"]', 'hello?'); await page.click('[data-testid=coach-send]'); await page.waitForTimeout(400); et = await page.textContent('[data-testid=coach-error]'); log('disabled:', et); if (!/switched off/.test(et)) fail('disabled message');
 mode = 'abort'; await page.fill('textarea[aria-label="Message the coach"]', 'net?'); await page.click('[data-testid=coach-send]'); await page.waitForTimeout(400); et = await page.textContent('[data-testid=coach-error]'); log('network:', et);
 if (!/Couldn't reach/.test(et)) fail('network message'); mode = 'ok'; reply = 'Back online reply.'; await page.click('[data-testid=coach-retry]'); await page.waitForSelector('text=Back online reply.'); log('retry → reply');

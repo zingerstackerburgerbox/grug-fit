@@ -11,6 +11,7 @@ import { scheduleReminders } from '../doses';
 import { KCAL_EXPLAIN } from '../setKcal';
 import { ImportSection } from './Import';
 import { InstallSetting } from './Install';
+import { StorageCard } from './Private';
 import { GOAL_LABEL, ageFromBirthYear, bmr, eatBackOn, latestWeight, sedentaryBurn, type Goal } from '../energy';
 import { go, useQuery } from '../hooks';
 import { LB } from '../util';
@@ -100,6 +101,7 @@ export function SettingsPage() {
     <h2>Import data</h2>
     <ImportSection />
     <h2>Backup (important!)</h2>
+    <StorageCard />
     <div class="card col"><div class="sm mut">All data lives only on this device in the browser's storage. Uninstalling the app or clearing Chrome site data deletes it. Export a backup regularly.</div>
       <button class="btn p" onClick={doExport}>⬇ Export all data (JSON)</button>
       <div class="grid2"><button class="btn" onClick={() => doImport('replace')}>Import (replace)</button><button class="btn" onClick={() => doImport('merge')}>Import (merge)</button></div>

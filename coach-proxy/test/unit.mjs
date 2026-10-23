@@ -7,7 +7,7 @@ const { srv, seen } = await startMock(8788);
 const env = (o = {}) => ({ COACH_KV: KV, XAI_API_KEY: 'sk-test', OWNER_TOKEN: 'owner-secret', UPSTREAM_URL: 'http://127.0.0.1:8788/v1/chat/completions', DEVICE_DAILY_CAP: '3', GLOBAL_DAILY_CAP: '5', ...o });
 const DEV = '3f0b6a8e-1c2d-4e5f-8a9b-0c1d2e3f4a5b', DEV2 = '7a1b2c3d-4e5f-4a6b-9c8d-7e6f5a4b3c2d';
 const ORIGIN = 'https://zingerstackerburgerbox.github.io';
-const req = (path, { method = 'POST', origin = ORIGIN, device = DEV, owner, body } = {}) => new Request('https://proxy.test' + path, { method, headers: { ...(origin ? { Origin: origin } : {}), ...(device ? { 'X-Device-Id': device } : {}), ...(owner ? { 'X-Owner-Token': owner } : {}), 'Content-Type': 'application/json' }, body: body == null ? undefined : typeof body === 'string' ? body : JSON.stringify(body) });
+const req = (path, { method = 'POST', origin = ORIGIN, device = DEV, owner, body, ip } = {}) => new Request('https://proxy.test' + path, { method, headers: { ...(ip ? { 'CF-Connecting-IP': ip } : {}), ...(origin ? { Origin: origin } : {}), ...(device ? { 'X-Device-Id': device } : {}), ...(owner ? { 'X-Owner-Token': owner } : {}), 'Content-Type': 'application/json' }, body: body == null ? undefined : typeof body === 'string' ? body : JSON.stringify(body) });
 const chat = (o = {}) => ({ messages: [{ role: 'system', content: 'You are a coach' }, { role: 'user', content: 'hi' }], ...o });
 const call = async (r, e = env()) => { const res = await worker.fetch(r, e, {}); let j = null; const t = await res.text(); try { j = JSON.parse(t); } catch {} return { res, j, t }; };
 
@@ -41,5 +41,22 @@ r = await call(req('/chat', { device: DEV2, body: chat() })); ok(r.res.status ==
 // upstream error mapping
 kv.clear(); r = await call(req('/chat', { body: chat({ messages: [{ role: 'user', content: 'UPSTREAM_FAIL' }] }) })); ok(r.res.status === 502 && r.j.error === 'upstream_error' && r.j.upstreamStatus === 500, 'upstream 500 → 502 upstream_error');
 r = await call(req('/chat', { body: chat() }), env({ XAI_API_KEY: '' })); ok(r.res.status === 500 && r.j.error === 'misconfigured', 'missing secret → misconfigured');
-ok([...kv.keys()].every((k) => /^(d|g):\d{4}-\d\d-\d\d/.test(k)), 'KV keys are per-day counters only (no message content stored)');
+// per-network (IP) cap: clearing storage = new device id, but same network → still capped
+kv.clear(); const ipEnv = env({ DEVICE_DAILY_CAP: '30', IP_DAILY_CAP: '2', GLOBAL_DAILY_CAP: '100', IP_SALT: 'pepper' });
+const D3 = '11111111-2222-4333-8444-555555555555', D4 = '66666666-7777-4888-9999-aaaaaaaaaaaa';
+r = await call(req('/chat', { device: D3, ip: '203.0.113.7', body: chat() }), ipEnv); ok(r.res.status === 200 && r.res.headers.get('x-coach-remaining') === '1', 'IP cap 2: 1st message, remaining 1 (min of device/IP/global)');
+r = await call(req('/chat', { device: D4, ip: '203.0.113.7', body: chat() }), ipEnv); ok(r.res.status === 200, '"new device" (cleared storage / incognito) on the same network: 2nd message');
+r = await call(req('/chat', { device: '99999999-2222-4333-8444-555555555555', ip: '203.0.113.7', body: chat() }), ipEnv); ok(r.res.status === 429 && r.j.error === 'ip_limit' && /this network/.test(r.j.message), 'third device id, same IP → 429 ip_limit "for this network"');
+r = await call(req('/status', { method: 'GET', device: '99999999-2222-4333-8444-555555555555', ip: '203.0.113.7' }), ipEnv); ok(r.j.remaining === 0 && r.j.network.used === 2 && r.j.network.cap === 2, '/status: remaining 0 for a fresh device on a capped network');
+r = await call(req('/chat', { device: D3, ip: '198.51.100.9', body: chat() }), ipEnv); ok(r.res.status === 200, 'other network not affected');
+r = await call(req('/chat', { device: D4, ip: '203.0.113.7', owner: 'owner-secret', body: chat() }), ipEnv); ok(r.res.status === 200 && r.res.headers.get('x-coach-remaining') === 'unlimited', 'owner token bypasses the IP cap');
+const keys = [...kv.keys()]; ok(!keys.some((k) => k.includes('203.0.113') || k.includes('198.51.100')), 'raw IPs never stored in KV: ' + keys.filter((k) => k.startsWith('i:')).join(', '));
+const I = await import('../src/index.js'); const k1 = await I.ipKey(req('/x', { ip: '203.0.113.7' }), { IP_SALT: 'pepper' }), k2 = await I.ipKey(req('/x', { ip: '203.0.113.7' }), { IP_SALT: 'salt2' });
+ok(/^[0-9a-f]{32}$/.test(k1) && k1 !== k2, 'IP key = salted SHA-256 (salt changes the key)');
+// rate-limit binding (10/min): refused when the binding says no
+const rl = { calls: 0, limit: async ({ key }) => { rl.calls++; rl.key = key; return { success: rl.calls <= 1 }; } };
+kv.clear(); r = await call(req('/chat', { ip: '203.0.113.7', body: chat() }), env({ COACH_RL: rl })); ok(r.res.status === 200 && rl.key === await I.ipKey(req('/x', { ip: '203.0.113.7' }), env({ COACH_RL: rl })), 'rate limiter keyed on the hashed IP');
+r = await call(req('/chat', { ip: '203.0.113.7', body: chat() }), env({ COACH_RL: rl })); ok(r.res.status === 429 && r.j.error === 'rate_limited', 'rate limiter → 429 rate_limited');
+r = await call(req('/chat', { ip: '203.0.113.7', owner: 'owner-secret', body: chat() }), env({ COACH_RL: rl })); ok(r.res.status === 200, 'owner bypasses the rate limiter');
+ok([...kv.keys()].every((k) => /^(d|g|i):\d{4}-\d\d-\d\d/.test(k)), 'KV keys are per-day counters only (no message content stored)');
 srv.close(); if (failed) { console.error(failed + ' failed'); process.exit(1); } console.log('PROXY UNIT TESTS PASSED');

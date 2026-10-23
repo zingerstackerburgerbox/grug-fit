@@ -1,7 +1,8 @@
 /**
  * Grug Fit AI Coach proxy (Cloudflare Worker).
  * Holds the xAI API key as a Worker secret and forwards sanitised chat requests to xAI, with abuse controls:
- * Origin allowlist + CORS, per-device and global daily caps (Workers KV), input/output size caps, a kill switch,
+ * Origin allowlist + CORS, per-device, per-network (salted SHA-256 of CF-Connecting-IP; raw IPs are never stored) and global
+ * daily caps (Workers KV), an optional per-minute rate limit (Workers Rate Limiting binding COACH_RL), input/output size caps, a kill switch,
  * and an optional OWNER_TOKEN bypass. Only `messages`, `model` (allowlisted) and `stream` are taken from the client.
  */
 const DEFAULTS = {
@@ -9,6 +10,7 @@ const DEFAULTS = {
   UPSTREAM_URL: 'https://api.x.ai/v1/chat/completions',
   ALLOWED_ORIGINS: 'https://zingerstackerburgerbox.github.io,http://localhost:5173,http://localhost:4173,http://127.0.0.1:5173,http://127.0.0.1:4173',
   DEVICE_DAILY_CAP: '30',
+  IP_DAILY_CAP: '60',
   GLOBAL_DAILY_CAP: '500',
   MAX_INPUT_CHARS: '24000',
   MAX_MESSAGES: '40',
@@ -52,9 +54,16 @@ export function sanitise(body, env) {
   const model = typeof body.model === 'string' && allowed.includes(body.model) ? body.model : cfg(env, 'MODEL');
   return { out: { model, messages, stream: body.stream === true, max_tokens: int(env, 'MAX_TOKENS') } };
 }
-async function counts(env, device, day) {
-  const [d, g] = await Promise.all([env.COACH_KV.get(`d:${day}:${device}`), env.COACH_KV.get(`g:${day}`)]);
-  return { d: parseInt(d || '0', 10), g: parseInt(g || '0', 10) };
+async function counts(env, device, ip, day) {
+  const [d, i, g] = await Promise.all([env.COACH_KV.get(`d:${day}:${device}`), env.COACH_KV.get(`i:${day}:${ip}`), env.COACH_KV.get(`g:${day}`)]);
+  return { d: parseInt(d || '0', 10), i: parseInt(i || '0', 10), g: parseInt(g || '0', 10) };
+}
+/** Network key: SHA-256(IP_SALT + ip), truncated. The raw IP is never stored or logged. */
+export async function ipKey(request, env) {
+  const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
+  const salt = String(env.IP_SALT || 'grug-coach-unsalted'); // IP_SALT is a Worker secret in production
+  const h = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`${salt}\u0000${ip}`)));
+  return [...h.slice(0, 16)].map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 const bump = (env, key, v) => env.COACH_KV.put(key, String(v), { expirationTtl: 3 * 86400 });
 
@@ -71,13 +80,13 @@ export default {
     const device = request.headers.get('X-Device-Id') || '';
     if (!UUID.test(device)) return err(400, 'bad_device', 'Missing or invalid X-Device-Id (random UUID).', cors);
     const owner = !!env.OWNER_TOKEN && safeEqual(request.headers.get('X-Owner-Token') || '', String(env.OWNER_TOKEN));
-    const day = today(); const capD = int(env, 'DEVICE_DAILY_CAP'), capG = int(env, 'GLOBAL_DAILY_CAP');
-    const c = await counts(env, device, day);
-    const remaining = owner ? null : Math.max(0, Math.min(capD - c.d, capG - c.g));
+    const day = today(); const capD = int(env, 'DEVICE_DAILY_CAP'), capI = int(env, 'IP_DAILY_CAP'), capG = int(env, 'GLOBAL_DAILY_CAP');
+    const ip = await ipKey(request, env); const c = await counts(env, device, ip, day);
+    const remaining = owner ? null : Math.max(0, Math.min(capD - c.d, capI - c.i, capG - c.g));
     const limitHeaders = { 'X-Coach-Remaining': owner ? 'unlimited' : String(remaining), 'X-Coach-Cap': owner ? 'unlimited' : String(capD), 'X-Coach-Reset': resetAt() };
 
     if (url.pathname === '/status' && request.method === 'GET')
-      return json(200, { enabled: true, owner, remaining: owner ? null : remaining, cap: capD, used: c.d, resetAt: resetAt(), model: cfg(env, 'MODEL') }, { ...cors, ...limitHeaders });
+      return json(200, { enabled: true, owner, remaining: owner ? null : remaining, cap: capD, used: c.d, network: { used: c.i, cap: capI }, resetAt: resetAt(), model: cfg(env, 'MODEL') }, { ...cors, ...limitHeaders });
     if (url.pathname !== '/chat' || request.method !== 'POST') return err(404, 'not_found', 'Use POST /chat or GET /status.', cors);
     if (!env.XAI_API_KEY) return err(500, 'misconfigured', 'XAI_API_KEY secret is not set.', cors);
 
@@ -88,10 +97,15 @@ export default {
 
     if (!owner) {
       if (c.d >= capD) return err(429, 'device_limit', `Daily limit reached (${capD} messages). It resets at midnight UTC.`, { ...cors, ...limitHeaders }, { remaining: 0, cap: capD, resetAt: resetAt() });
+      if (c.i >= capI) return err(429, 'ip_limit', `Daily coach limit reached for this network (${capI} messages). It resets at midnight UTC.`, { ...cors, ...limitHeaders }, { remaining: 0, cap: capI, resetAt: resetAt() });
       if (c.g >= capG) return err(429, 'global_limit', 'The coach is busy today (shared daily limit reached). Try again tomorrow.', { ...cors, ...limitHeaders }, { remaining: 0, resetAt: resetAt() });
     }
+    if (!owner && env.COACH_RL) { // Workers Rate Limiting binding: short-burst protection per network
+      const { success } = await env.COACH_RL.limit({ key: ip }).catch(() => ({ success: true }));
+      if (!success) return err(429, 'rate_limited', 'Too many messages in a short time – wait a minute and try again.', { ...cors, ...limitHeaders }, { retryAfter: 60 });
+    }
     // count before forwarding (KV is eventually consistent, so caps are approximate under bursts; see README)
-    await Promise.all([owner ? null : bump(env, `d:${day}:${device}`, c.d + 1), bump(env, `g:${day}`, c.g + 1)]);
+    await Promise.all([owner ? null : bump(env, `d:${day}:${device}`, c.d + 1), owner ? null : bump(env, `i:${day}:${ip}`, c.i + 1), bump(env, `g:${day}`, c.g + 1)]);
     if (!owner) limitHeaders['X-Coach-Remaining'] = String(Math.max(0, remaining - 1));
 
     let up;

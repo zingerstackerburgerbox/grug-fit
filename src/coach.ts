@@ -114,6 +114,8 @@ export async function streamChat(history: ChatMsg[], onDelta: (text: string) => 
   if (mode === 'proxy') { const rem = r.headers.get('X-Coach-Remaining'); if (rem != null) saveQuota({ remaining: rem === 'unlimited' ? null : +rem, owner: rem === 'unlimited', resetAt: r.headers.get('X-Coach-Reset') || undefined, cap: +(r.headers.get('X-Coach-Cap') || 0) || undefined }); }
   if (!r.ok) {
     let j: any = {}; try { j = await r.json(); } catch {}
+    if (r.status === 429 && mode === 'proxy' && j.error === 'rate_limited') throw new CoachError('limit', 'Too many messages in a short time – wait a minute and try again.', j);
+    if (r.status === 429 && mode === 'proxy' && j.error === 'ip_limit') { saveQuota({ remaining: 0, resetAt: j.resetAt, cap: j.cap }); throw new CoachError('limit', `Daily coach limit reached for this network (${j.cap} messages, shared by everyone on this Wi-Fi/connection). It resets ${j.resetAt ? 'at ' + new Date(j.resetAt).toLocaleTimeString('en-AU', { hour: 'numeric', minute: '2-digit' }) : 'tomorrow'}.`, j); }
     if (r.status === 429 && mode === 'proxy') { saveQuota({ remaining: 0, resetAt: j.resetAt, cap: j.cap }); throw new CoachError('limit', j.error === 'global_limit' ? "The coach has hit today's shared limit. Try again tomorrow." : `You've used today's ${j.cap || ''} coach messages. They reset ${j.resetAt ? 'at ' + new Date(j.resetAt).toLocaleTimeString('en-AU', { hour: 'numeric', minute: '2-digit' }) : 'tomorrow'}.`.replace('  ', ' '), j); }
     if (r.status === 503 && j.error === 'disabled') throw new CoachError('disabled', 'The coach is switched off for now. Try again later.');
     if (r.status === 413) throw new CoachError('too_long', 'This chat is too long for the coach. Tap “Clear chat” and ask again.');

@@ -13,9 +13,17 @@ id = "d64fc88337b842b6a12133b5286decd2"
 [vars]
 MODEL = "grok-4.7"
 DEVICE_DAILY_CAP = "30"
+# per network (salted hash of CF-Connecting-IP; friends on the same Wi-Fi share it)
+IP_DAILY_CAP = "60"
 GLOBAL_DAILY_CAP = "500"
 MAX_INPUT_CHARS = "24000"
 MAX_TOKENS = "1200"
 KILL_SWITCH = "0"
 ALLOWED_ORIGINS = "https://zingerstackerburgerbox.github.io,http://localhost:5173,http://localhost:4173,http://127.0.0.1:5173,http://127.0.0.1:4173"
-# Secrets (never in this file): XAI_API_KEY (required), OWNER_TOKEN (optional)
+# Secrets (never in this file): XAI_API_KEY (required), IP_SALT (required for private IP hashing), OWNER_TOKEN (optional)
+
+# Workers Rate Limiting binding: max 10 /chat requests per minute per network (counters are per Cloudflare location)
+[[ratelimits]]
+name = "COACH_RL"
+namespace_id = "1001"
+simple = { limit = 10, period = 60 }

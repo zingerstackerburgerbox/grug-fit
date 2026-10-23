@@ -6,9 +6,12 @@ A small proxy that lets the Grug Fit app talk to xAI without shipping an API key
 - `GET /status` returns `{ enabled, owner, remaining, cap, used, resetAt, model }` for the calling device.
 - Every request needs an allowed `Origin` (`ALLOWED_ORIGINS`) and an `X-Device-Id` UUID. With `X-Owner-Token: <OWNER_TOKEN>`, the daily caps don't apply.
 - Daily caps are counted in Workers KV per UTC day: `DEVICE_DAILY_CAP` (30) per device and `GLOBAL_DAILY_CAP` (500) in total. A counter goes up before the request is forwarded, and its key expires after 3 days.
+- Per-network cap: `IP_DAILY_CAP` (60, set in wrangler.toml) per public IP. The IP is never stored. The key is `i:<day>:<first 16 bytes of SHA-256(IP_SALT + "\0" + CF-Connecting-IP)>`, and `IP_SALT` is a secret (`openssl rand -hex 32 | tr -d '\n' | npx wrangler secret put IP_SALT`). A request is refused if **any** cap (device, network or global) is reached. The owner token bypasses all of them. `/status` also returns `network: { used, cap }`, and `remaining` is the smallest of the three.
+- Burst limit: the optional `COACH_RL` rate-limit binding (`[[ratelimits]]`, 10 requests per 60 s per hashed IP, counted per Cloudflare location) returns 429 `rate_limited`.
+- Caveats: people behind one public IP (home Wi-Fi, CGNAT on mobile, offices) share the 60. Someone who rotates IPs (VPN, some carriers) can get round it. KV is eventually consistent, so counts can be off by a few under parallel bursts.
 - Input caps: `MAX_MESSAGES` (40) and `MAX_INPUT_CHARS` (24000).
 - `KILL_SWITCH = "1"` makes every request return 503 `disabled`.
-- Errors are JSON: `{ error, message, ... }`. The error codes are `origin_not_allowed`, `bad_device`, `bad_request`, `too_long`, `device_limit`, `global_limit`, `disabled`, `upstream_error`, `upstream_unreachable`, `not_found` and `misconfigured`. Responses also carry the headers `X-Coach-Remaining`, `X-Coach-Cap` and `X-Coach-Reset`.
+- Errors are JSON: `{ error, message, ... }`. The error codes are `origin_not_allowed`, `bad_device`, `bad_request`, `too_long`, `device_limit`, `ip_limit`, `global_limit`, `rate_limited`, `disabled`, `upstream_error`, `upstream_unreachable`, `not_found` and `misconfigured`. Responses also carry the headers `X-Coach-Remaining`, `X-Coach-Cap` and `X-Coach-Reset`.
 
 The device ID is not authentication: a determined user can rotate it, and a non-browser client can fake `Origin`. The global cap is what limits total spend. KV is eventually consistent, so under bursts of parallel requests the counts can overshoot a cap slightly.
 

@@ -1,3 +1,4 @@
+import { onWrite } from './privacy';
 import { openDB, type IDBPDatabase } from 'idb';
 import { SEED_EXERCISES, SEED_ADDED, SEED_REFRESH } from './seed';
 import { DEFAULT_SETTINGS } from './util';
@@ -31,7 +32,7 @@ export function db() {
 }
 export const all = async <T = any>(s: StoreName): Promise<T[]> => (await db()).getAll(s);
 export const get = async <T = any>(s: StoreName, id: string): Promise<T | undefined> => (await db()).get(s, id);
-export const put = async (s: StoreName, v: any) => { await (await db()).put(s, v); bump(); };
+export const put = async (s: StoreName, v: any) => { await (await db()).put(s, v); bump(); onWrite(); };
 export const del = async (s: StoreName, id: string) => { await (await db()).delete(s, id); bump(); };
 export const byDate = async <T = any>(s: StoreName, from: string, to: string): Promise<T[]> => (await db()).getAllFromIndex(s, 'date', IDBKeyRange.bound(from, to));
 export const byBarcode = async (code: string) => (await db()).getFromIndex('foods', 'barcode', code);
@@ -53,7 +54,6 @@ export async function init() {
     await tx.done;
   }
   await migrate();
-  try { await navigator.storage?.persist?.(); } catch {}
 }
 type Tx = any;
 /** Data migrations, keyed by the schema version they produce. Each must be idempotent and must never drop user data. */
