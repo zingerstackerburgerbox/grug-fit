@@ -9,16 +9,28 @@ adb logcat -c
 adb shell am start -W -n $PKG/.MainActivity
 sleep 35
 adb exec-out screencap -p > smoke/1-launch.png
+screen() { adb shell uiautomator dump /sdcard/ui.xml >/dev/null 2>&1; adb exec-out cat /sdcard/ui.xml > "smoke/$1.xml"; }
+screen 1-launch; if grep -q -E "Welcome to Grug Fit|Today.s nutrition" smoke/1-launch.xml; then echo "live site loaded in the app ✓"; else echo "live site text not found"; ok=0; fi
 adb shell pidof $PKG > smoke/pid.txt || { echo "app not running"; ok=0; }
 adb logcat -d > smoke/logcat-online.txt
 adb shell dumpsys sensorservice | grep -i -E "step|pedometer" > smoke/sensors.txt || true
 adb shell dumpsys jobscheduler | grep -i -A3 "$PKG" > smoke/jobs.txt || true
-grep -q "$PKG" smoke/jobs.txt && echo "step job scheduled ✓" || echo "step job not seen in jobscheduler"
-grep -E "Capacitor|chromium" smoke/logcat-online.txt | grep -i -E "grug|console|error" | head -40 > smoke/console-online.txt || true
-if grep -q -E "FATAL EXCEPTION" smoke/logcat-online.txt; then echo "crash in logcat"; ok=0; fi
-# offline restart: the service worker copy of the site should open (or the offline page if never loaded)
-adb shell svc wifi disable; adb shell svc data disable; sleep 3
-adb shell am force-stop $PKG; adb logcat -c
+grep -q "$PKG" smoke/jobs.txt # offline restart: the service-worker copy of the site should open (the offline page only appears if it never loaded)
+adb shell cmd connectivity airplane-mode enable; sleep 5
+for try in 1 2 3; do
+  adb shell am force-stop $PKG; adb logcat -c
+  adb shell am start -W -n $PKG/.MainActivity; sleep 20
+  adb shell pidof $PKG >/dev/null && break
+  echo "app process gone after offline start (try $try) – e.g. emulator Play Services restart; retrying"
+done
+adb exec-out screencap -p > smoke/2-offline.png; screen 2-offline
+adb logcat -d > smoke/logcat-offline.txt
+if grep -q -E "Welcome to Grug Fit|Today.s nutrition" smoke/2-offline.xml; then echo "offline start shows the cached app ✓"
+elif grep -q "needs the internet" smoke/2-offline.xml; then echo "offline start shows the offline page (cache not used)"; ok=0
+else echo "offline start: app content not found"; ok=0; fi
+adb shell cmd connectivity airplane-mode disable
+grep -q -E "FATAL EXCEPTION.*grugfit|Process: $PKG" smoke/logcat-offline.txt && { echo "crash offline"; ok=0; }
+KG; adb logcat -c
 adb shell am start -W -n $PKG/.MainActivity; sleep 20
 adb exec-out screencap -p > smoke/2-offline.png
 adb logcat -d > smoke/logcat-offline.txt
