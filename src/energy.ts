@@ -1,11 +1,10 @@
-/** Energy maths: Mifflin-St Jeor BMR, sedentary expenditure, goal-based targets and MET workout calories. */
+/** Energy maths: Mifflin-St Jeor BMR, sedentary expenditure, goal-based targets and per-set workout calories (see setKcal.ts). */
 import { all, get } from './db';
-import type { BodyWeight, Nutrients, Settings, Workout } from './types';
+import type { BodyWeight, Exercise, Nutrients, Settings, Workout } from './types';
+import { estimateWorkoutKcal, type ExLookup } from './setKcal';
 
 export type Sex = 'male' | 'female';
 export type Goal = 'cut' | 'maintain' | 'bulk';
-export type Intensity = 'light' | 'moderate' | 'vigorous';
-export const MET: Record<Intensity, number> = { light: 3.5, moderate: 5, vigorous: 6 };
 export const SEDENTARY = 1.2; // PAL multiplier, also used as the resting MET baseline already counted in the day
 export const GOAL_LABEL: Record<Goal, string> = { cut: 'Cutting', maintain: 'Maintaining', bulk: 'Bulking' };
 
@@ -26,12 +25,11 @@ export function suggestTargets(kg: number, expenditure: number, goal: Goal): Pic
 }
 export const eatBackOn = (s: Settings) => s.eatBack ?? (s.profile ? s.profile.goal !== 'cut' : false);
 
-/** kcal above the resting baseline: (MET − 1.2) × kg × hours. Manual override wins. */
-export function workoutKcal(w: Pick<Workout, 'start' | 'end' | 'intensity' | 'kcalOverride'>, kg: number | null, now = Date.now()) {
+/** Net workout kcal from completed sets only (elapsed time / rest is not used). Manual override wins. */
+export function workoutKcal(w: Pick<Workout, 'exercises' | 'kcalOverride'>, kg: number | null, exs: ExLookup) {
   if (w.kcalOverride != null) return Math.round(w.kcalOverride);
   if (!kg) return 0;
-  const h = Math.max(0, ((w.end ?? now) - w.start) / 3.6e6);
-  return Math.round(Math.max(0, MET[w.intensity || 'moderate'] - SEDENTARY) * kg * Math.min(h, 6));
+  return Math.round(estimateWorkoutKcal(w, kg, exs));
 }
 export const sortBW = (l: BodyWeight[]) => [...l].sort((a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id));
 /** body weight on (or before) a date, falling back to the earliest entry */
@@ -41,15 +39,15 @@ export function weightAt(list: BodyWeight[], date: string): number | null {
 export async function latestWeight(): Promise<number | null> { const l = sortBW(await all<BodyWeight>('bodyweight')); return l[l.length - 1]?.kg ?? null; }
 
 export type DayEnergy = { kg: number | null; bmr: number | null; sedentary: number | null; workouts: { id: string; name: string; kcal: number; live?: boolean }[]; workoutKcal: number; burned: number | null; target: number; eatBack: boolean };
-export async function dayEnergy(date: string, s: Settings, now = Date.now()): Promise<DayEnergy> {
-  const bws = await all<BodyWeight>('bodyweight'); const kg = weightAt(bws, date);
+export async function dayEnergy(date: string, s: Settings): Promise<DayEnergy> {
+  const bws = await all<BodyWeight>('bodyweight'); const exs = new Map((await all<Exercise>('exercises')).map((e) => [e.id, e])); const kg = weightAt(bws, date);
   const p = s.profile; let b: number | null = null;
   if (p && kg) b = bmr(kg, p.heightCm, ageFromBirthYear(p.birthYear, new Date(date)), p.sex);
   const from = new Date(date + 'T00:00:00').getTime(), to = from + 864e5;
   const ws = (await all<Workout>('workouts')).filter((w) => w.end && w.start >= from && w.start < to);
-  const list: DayEnergy['workouts'] = ws.map((w) => ({ id: w.id, name: w.name, kcal: workoutKcal(w, kg) }));
+  const list: DayEnergy['workouts'] = ws.map((w) => ({ id: w.id, name: w.name, kcal: workoutKcal(w, kg, exs) }));
   const act = (await get<{ w: Workout | null }>('kv', 'active'))?.w;
-  if (act && act.start >= from && act.start < to) list.push({ id: act.id, name: act.name, kcal: workoutKcal(act, kg, now), live: true });
+  if (act && act.start >= from && act.start < to) list.push({ id: act.id, name: act.name, kcal: workoutKcal(act, kg, exs), live: true });
   const wk = list.reduce((a, x) => a + x.kcal, 0);
   const sed = b != null ? Math.round(sedentaryBurn(b)) : null; const eb = eatBackOn(s);
   return { kg, bmr: b != null ? Math.round(b) : null, sedentary: sed, workouts: list, workoutKcal: wk, burned: sed != null ? sed + wk : null, target: Math.round(s.targets.kcal + (eb ? wk : 0)), eatBack: eb };

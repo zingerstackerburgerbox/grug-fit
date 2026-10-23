@@ -6,7 +6,7 @@ import { dayTotals } from './Nutrition';
 /** Header strip: estimated calories burned today (sedentary + workouts) and calories remaining vs target. */
 export function useDayEnergy(date: string) {
   const s = useSettings(); const now = useNow(30000);
-  return useQuery(() => dayEnergy(date, s, Date.now()), [date, s, Math.floor(now / 30000)]);
+  return useQuery(() => dayEnergy(date, s), [date, s, Math.floor(now / 30000)]);
 }
 export function BurnBar({ date = ymd() }: { date?: string }) {
   const s = useSettings(); const e = useDayEnergy(date);

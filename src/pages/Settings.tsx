@@ -6,6 +6,7 @@ import { NumInput, Seg, Top, confirmDo, num, toast } from '../ui';
 import { DEFAULT_SETTINGS, MICROS, fmtDate, fmtTime, r1, ymd } from '../util';
 import { APP_VERSION, BUILD_ID, BUILD_TIME } from '../update';
 import { scheduleReminders } from '../doses';
+import { KCAL_EXPLAIN } from '../setKcal';
 import { GOAL_LABEL, ageFromBirthYear, bmr, eatBackOn, latestWeight, sedentaryBurn, type Goal } from '../energy';
 import { go, useQuery } from '../hooks';
 import { LB } from '../util';
@@ -34,6 +35,7 @@ function ProfileCard({ s }: { s: Settings }) {
     {B != null && <div class="sm">Age {age} · BMR {r1(B).toFixed(0)} kcal · <b>sedentary burn ~{Math.round(sedentaryBurn(B))} kcal/day</b></div>}
     <div class="grid2"><button class="btn" onClick={saveAll}>Save profile</button><button class="btn p" onClick={async () => { await saveAll(); go('/welcome?step=result&from=settings'); }} data-testid="recalculate">Recalculate targets</button></div>
     <label class="row sm"><input type="checkbox" style="width:24px;min-height:24px" checked={eatBackOn(s)} onChange={(e) => put('kv', { ...s, eatBack: e.currentTarget.checked })} data-testid="eatback" /> Add workout calories to my daily target (“eat back” what I burn training)</label>
+    <div class="mut xs" data-testid="kcal-method">🔥 Workout calories: {KCAL_EXPLAIN}</div>
     <div class="mut xs">{eatBackOn(s) ? 'On: on workout days your calorie target grows by the workout estimate.' : 'Off: your calorie target stays fixed; workouts only show in “Burned today”.'} Default is on for maintaining/bulking, off for cutting.</div>
   </div>;
 }

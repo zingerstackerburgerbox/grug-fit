@@ -75,11 +75,11 @@ const prior = { id: 'wPrev', name: 'Push Day', start: T0 - 3 * 864e5, end: T0 - 
   if (w.exercises.length !== 1 || w.exercises[0].sets.length !== 3 || w.exercises[0].sets[2].done !== false || w.exercises[0].sets[2].kg !== 120) fail('set handling (keep filled unticked, drop empty)');
   if (!(w.prs.length && w.prs.every((p) => p.kind !== 'weight' || p.value === 85))) fail('PRs should come from ticked sets only (85 kg), not the unticked 120');
   const txt = await page.textContent('[data-testid=autoend-text]'); if (!/18:00/.test(txt) || !/18:40/.test(txt) || !/40 min/.test(txt)) fail('modal text times/duration');
-  // history card: badge + kcal from trimmed duration: (5 − 1.2) × 80 kg × 40/60 h = 203
+  // history card: kcal from the 2 ticked sets only (80×5, 85×5 bench, 80 kg lifter) = 4.25 + 4.40 ≈ 9; the unticked 120 kg set and idle time add nothing
   await page.click('[data-testid=ae-yes]'); await page.waitForTimeout(300);
   if ((await getv(page, 'workouts', 'wA' + T0)).needsReview) fail('"Yes" did not clear the flag'); else log('"Yes, it was complete" → reviewed');
   await page.goto(BASE + '#/history'); await page.waitForSelector('[data-testid=card-kcal]'); const k = await page.locator('[data-testid=card-kcal]').first().textContent(); log('history kcal', k, 'volume', vol);
-  if (!/203 kcal/.test(k)) fail('kcal not from trimmed duration'); if (await page.locator('[data-testid=autoended-badge]').count()) fail('badge still shown after review');
+  if (!/🔥 9 kcal/.test(k)) fail('kcal should come from ticked sets only (9)'); if (await page.locator('[data-testid=autoended-badge]').count()) fail('badge still shown after review');
   await page.context().close();
 }
 
