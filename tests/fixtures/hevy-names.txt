@@ -1,0 +1,105 @@
+Bench Press (Barbell)
+Bench Press (Dumbbell)
+Incline Bench Press (Barbell)
+Incline Bench Press (Dumbbell)
+Decline Bench Press (Barbell)
+Chest Fly (Dumbbell)
+Cable Fly Crossovers
+Chest Press (Machine)
+Butterfly (Pec Deck)
+Push Up
+Chest Dip
+Bench Press - Close Grip (Barbell)
+Deadlift (Barbell)
+Bent Over Row (Barbell)
+Bent Over Row (Dumbbell)
+Pendlay Row (Barbell)
+T Bar Row
+Dumbbell Row
+Pull Up
+Pull Up (Weighted)
+Chin Up
+Lat Pulldown (Cable)
+Lat Pulldown - Close Grip (Cable)
+Lat Pulldown (Machine)
+Seated Cable Row - V Grip (Cable)
+Seated Cable Row - Bar Grip
+Seated Row (Machine)
+Iso-Lateral Row (Machine)
+Straight Arm Lat Pulldown (Cable)
+Back Extension (Hyperextension)
+Rack Pull
+Overhead Press (Barbell)
+Overhead Press (Dumbbell)
+Seated Overhead Press (Dumbbell)
+Shoulder Press (Machine Plates)
+Arnold Press (Dumbbell)
+Lateral Raise (Dumbbell)
+Lateral Raise (Cable)
+Single Arm Lateral Raise (Cable)
+Front Raise (Dumbbell)
+Rear Delt Reverse Fly (Dumbbell)
+Rear Delt Reverse Fly (Machine)
+Face Pull
+Upright Row (Barbell)
+Shrug (Dumbbell)
+Shrug (Barbell)
+Bicep Curl (Barbell)
+Bicep Curl (Dumbbell)
+Bicep Curl (Cable)
+Hammer Curl (Dumbbell)
+Preacher Curl (Barbell)
+Seated Incline Curl (Dumbbell)
+Concentration Curl
+EZ Bar Biceps Curl
+Triceps Pushdown
+Triceps Rope Pushdown
+Triceps Extension (Cable)
+Triceps Extension (Dumbbell)
+Skullcrusher (Barbell)
+Triceps Dip
+Bench Dip
+Wrist Curl (Barbell)
+Squat (Barbell)
+Front Squat (Barbell)
+Leg Press (Machine)
+Leg Press Horizontal (Machine)
+Hack Squat (Machine)
+Leg Extension (Machine)
+Bulgarian Split Squat
+Lunge (Dumbbell)
+Walking Lunge (Dumbbell)
+Goblet Squat
+Step Up
+Romanian Deadlift (Barbell)
+Romanian Deadlift (Dumbbell)
+Lying Leg Curl (Machine)
+Seated Leg Curl (Machine)
+Good Morning (Barbell)
+Hip Thrust (Barbell)
+Glute Bridge
+Hip Abduction (Machine)
+Glute Kickback (Cable)
+Sumo Deadlift
+Standing Calf Raise (Machine)
+Seated Calf Raise
+Calf Raise (Machine)
+Standing Calf Raise
+Plank
+Crunch
+Hanging Leg Raise
+Cable Crunch
+Russian Twist
+Ab Wheel
+Kettlebell Swing
+Power Clean (Barbell)
+Farmers Walk
+Burpee
+Thruster (Barbell)
+Squat (Smith Machine)
+Bench Press (Smith Machine)
+Hip Adduction (Machine)
+Leg Raise Parallel Bars
+Running
+Treadmill
+Cycling

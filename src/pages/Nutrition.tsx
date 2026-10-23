@@ -166,10 +166,12 @@ export function FoodAmountSheet({ open, onClose, food: food0, entry, date, meal,
         // food may have been deleted: rebuild a grams-only food from the entry's snapshot so it stays editable
         const ff: Food = f || { id: entry.foodId, name: entry.name, source: 'custom', per100: scaleN(entry.n, 100 / Math.max(entry.grams, 0.001)), servings: [] };
         const units = unitsFor(ff); const i = matchUnit(units, entry);
-        setFood(ff); setUi(i); setQty(i === 0 ? r1(entry.grams) : Math.round((entry.grams / units[i].grams) * 100) / 100);
+        const j = i === 0 && ff.gramsUnknown && units.length > 1 ? 1 : i;
+        setFood(ff); setUi(j); setQty(j === 0 ? r1(entry.grams) : Math.round((entry.grams / units[j].grams) * 100) / 100);
       });
     } else if (food0) {
-      const units = unitsFor(food0); setFood(food0); const [i, qq] = pickDefault(food0, units); setUi(i); setQty(qq);
+      const units = unitsFor(food0); setFood(food0); const [i, qq] = pickDefault(food0, units);
+      if (i === 0 && food0.gramsUnknown && units.length > 1) { setUi(1); setQty(1); } else { setUi(i); setQty(qq); }
     }
   }, [open, entry?.id, food0?.id]);
   if (!open || !food) return null;
@@ -185,7 +187,9 @@ export function FoodAmountSheet({ open, onClose, food: food0, entry, date, meal,
   const save = async () => {
     if (grams <= 0) return;
     const label = ui === 0 ? base : unit.label;
-    const e: DiaryEntry = { id: entry?.id || uid(), date: entry?.date || date, meal: m, foodId: food.id, name: food.brand ? `${food.name} (${food.brand})` : food.name, grams, qty: q, serving: label, n, created: entry?.created || Date.now() };
+    const e: DiaryEntry = { id: entry?.id || uid(), date: entry?.date || date, meal: m, foodId: food.id, name: food.brand ? `${food.name} (${food.brand})` : food.name, grams, qty: q, serving: label, n, created: entry?.created || Date.now(),
+      // imported entries stay tagged (so 'Remove imported data' still finds them); unknown-weight units show as logged, e.g. '2 cup'
+      ...(entry?.importSource ? { importSource: entry.importSource } : {}), ...(food.gramsUnknown && ui > 0 ? { amountLabel: `${r1(q)} ${label}` } : {}) };
     await put('diary', e);
     const stored = (await get<Food>('foods', food.id)) || food;
     await put('foods', { ...stored, servings: stored.servings, lastServing: { label, qty: q }, ...(entry ? {} : { lastUsed: Date.now(), useCount: (stored.useCount || 0) + 1 }) });
@@ -195,7 +199,7 @@ export function FoodAmountSheet({ open, onClose, food: food0, entry, date, meal,
     <div class="col amount-sheet">
       {(food.brand || food.barcode) && <div class="mut sm" style="margin-top:-8px">{food.brand}{food.brand && food.barcode ? ' · ' : ''}{food.barcode ? `▥ ${food.barcode}` : ''}{food.source === 'usda' && <span class="srcbadge" data-testid="src-usda" title="USDA FoodData Central (Branded Foods), public domain">Source: USDA</span>}</div>}
       <label class="f">Unit
-        <div class="unitchips" role="radiogroup" aria-label="Unit">{units.map((u, i) => <button type="button" role="radio" aria-checked={i === ui} class={'chip ' + (i === ui ? 'on' : '')} onClick={() => switchUnit(i)}>{i === 0 ? (base === 'ml' ? 'ml' : 'grams') : unitLabel(u, food)}</button>)}
+        <div class="unitchips" role="radiogroup" aria-label="Unit">{units.map((u, i) => i === 0 && food.gramsUnknown && units.length > 1 ? null : <button type="button" role="radio" aria-checked={i === ui} class={'chip ' + (i === ui ? 'on' : '')} onClick={() => switchUnit(i)}>{i === 0 ? (base === 'ml' ? 'ml' : 'grams') : unitLabel(u, food)}</button>)}
           <button type="button" class="chip" data-testid="edit-servings" onClick={() => setDefOpen(!defOpen)} aria-label="Edit servings">✎ Edit servings</button></div></label>
       {units.length === 1 && !defOpen && <div class="mut xs">No serving size for this product — logging in {base}. Tap “Edit servings” to add one (e.g. slice = 35 {base}).</div>}
       {defOpen && <ServingsEditor food={food} onDone={servingsSaved} />}

@@ -1,4 +1,5 @@
 import { onWrite } from './privacy';
+import { reconcile, type Changes, type Data } from './reconcile';
 import { openDB, type IDBPDatabase } from 'idb';
 import { SEED_EXERCISES, SEED_ADDED, SEED_REFRESH } from './seed';
 import { DEFAULT_SETTINGS } from './util';
@@ -13,7 +14,7 @@ export type StoreName = (typeof STORES)[number];
  *  - SCHEMA_VERSION: data-shape version stored in kv 'schema'; MIGRATIONS[n] transforms records from n-1 to n (see migrate()).
  */
 export const DB_VERSION = 1;
-export const SCHEMA_VERSION = 4;
+export const SCHEMA_VERSION = 5;
 let dbp: Promise<IDBPDatabase> | null = null;
 export function db() {
   if (!dbp) dbp = openDB('grugfit', DB_VERSION, {
@@ -72,8 +73,30 @@ const MIGRATIONS: Record<number, (tx: Tx) => Promise<void>> = {
   3: (tx) => addSeed(tx, SEED_ADDED[3]),
   // v4: Reverse Cable Crunch (ex086) is now the kneeling, back-to-the-stack movement: refresh only its how-to text. Same id, so logged sets,
   // routines, notes and any rename stay as they are; the visual comes from code. Custom exercises are never touched.
-  4: (tx) => refreshSeed(tx, SEED_REFRESH[4])
+  4: (tx) => refreshSeed(tx, SEED_REFRESH[4]),
+  // v5 (app v1.8.3): imported Hevy/Cronometer history behaves exactly like native (normalised workouts, built-in exercise ids, PRs over the
+  // whole history, real foods for Cronometer entries). Same code runs after every import; see reconcile.ts.
+  5: async (tx) => { await reconcileTx(tx); }
 };
+/** Load everything reconcile() needs from a readwrite tx over all stores, apply its changes in the same tx. */
+export async function reconcileTx(tx: Tx, extra?: (d: Data) => Changes & { exAliases?: Record<string, string> }) {
+  const st = (n: string) => tx.objectStore(n);
+  const [workouts, exercises, routines, diary, foods, active, al, settings] = await Promise.all([st('workouts').getAll(), st('exercises').getAll(), st('routines').getAll(), st('diary').getAll(), st('foods').getAll(), st('kv').get('active'), st('kv').get('exAliases'), st('kv').get('settings')]);
+  const data: Data = { workouts, exercises, routines, diary, foods, active: active?.w || null, exAliases: al?.v || {}, defaultRest: settings?.defaultRest ?? 90 };
+  const c = extra ? extra(data) : reconcile(data);
+  for (const w of c.workouts) await st('workouts').put(w);
+  for (const r of c.routines) await st('routines').put(r);
+  for (const e of c.diary) await st('diary').put(e);
+  for (const f of c.foods) await st('foods').put(f);
+  for (const id of c.delExercises) await st('exercises').delete(id);
+  if (c.active) await st('kv').put({ ...active, id: 'active', w: c.active });
+  if ((c as any).exAliases) await st('kv').put({ id: 'exAliases', v: (c as any).exAliases });
+  return c;
+}
+/** Run reconcile now (after an import, merge, edit or delete). */
+export async function reconcileNow(extra?: (d: Data) => Changes & { exAliases?: Record<string, string> }) {
+  const tx = (await db()).transaction(STORES as any, 'readwrite'); const c = await reconcileTx(tx, extra); await tx.done; bump(); return c;
+}
 async function refreshSeed(tx: Tx, ids: string[]) {
   const store = tx.objectStore('exercises');
   for (const e of SEED_EXERCISES.filter((x) => ids.includes(x.id))) {

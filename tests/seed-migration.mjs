@@ -27,7 +27,7 @@ const asV140 = (page, extra = '') => idb(page, `await p(tx('exercises','readwrit
   const before = await asV140(page); await boot(page);
   const after = await idb(page, `return { n: (await p(tx('exercises').getAll())).length, schema: (await p(tx('kv').get('schema'))).v, ex010: await p(tx('exercises').get('ex010')), mine: await p(tx('exercises').get('cxmine')), w: await p(tx('workouts').get('w1')), d: await p(tx('diary').get('d1')) }`);
   log('existing install: exercises', before, '→', after.n, 'schema', after.schema);
-  if (after.n !== before + 1) fail('expected exactly one new built-in'); if (after.schema !== 4) fail('schema not 4');
+  if (after.n !== before + 1) fail('expected exactly one new built-in'); if (after.schema !== 5) fail('schema not 5');
   if (after.ex010.name !== 'My Push Up' || after.ex010.notes !== 'mine') fail('edited built-in was overwritten');
   if (!after.mine || !after.w || after.w.exercises[0].sets[0].kg !== 100 || !after.d) fail('user data lost'); else log('user data intact (custom exercise, renamed built-in, workout, diary)');
   const rc = await named(page, 'Reverse Cable Crunch'); if (rc.length !== 1) fail('Reverse Cable Crunch count ' + rc.length); else log('added once:', rc[0].id, rc[0].muscle, rc[0].equipment);
@@ -51,7 +51,7 @@ const asV140 = (page, extra = '') => idb(page, `await p(tx('exercises','readwrit
     return (await p(tx('exercises').getAll())).length;`);
   await boot(page);
   const r = await idb(page, `return { n: (await p(tx('exercises').getAll())).length, e: await p(tx('exercises').get('ex086')), w: await p(tx('workouts').get('w86')), r: await p(tx('routines').get('r86')), schema: (await p(tx('kv').get('schema'))).v }`);
-  if (r.schema !== 4 || r.n !== n0) fail('v1.4.1 upgrade: schema/count ' + r.schema + ' ' + n0 + '→' + r.n);
+  if (r.schema !== 5 || r.n !== n0) fail('v1.4.1 upgrade: schema/count ' + r.schema + ' ' + n0 + '→' + r.n);
   if (!/back to the stack/.test(r.e.how || '') || r.e.name !== 'Reverse Cable Crunch' || r.e.muscle !== 'Core' || r.e.equipment !== 'Cable') fail('ex086 not refreshed: ' + JSON.stringify(r.e)); else log('v1.4.1 install: ex086 refreshed in place (kneeling how-to), count unchanged');
   if (r.w.exercises[0].exerciseId !== 'ex086' || r.w.exercises[0].sets[0].kg !== 30 || r.w.exercises[0].notes !== 'felt it' || r.r.exercises[0].exerciseId !== 'ex086') fail('history/routine changed'); else log('logged workout + routine still point at ex086, sets/notes intact');
   await page.goto(BASE + '#/exercise/ex086'); await page.waitForSelector('[data-testid=ex-how]');

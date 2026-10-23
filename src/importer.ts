@@ -96,6 +96,24 @@ export const HEVY_ALIASES: Record<string, string> = {
   'Butterfly (Pec Deck)': 'Pec Deck (Machine)', 'Chest Fly (Machine)': 'Pec Deck (Machine)', 'Rear Delt Reverse Fly (Dumbbell)': 'Rear Delt Fly (Dumbbell)', 'Rear Delt Reverse Fly (Machine)': 'Reverse Pec Deck (Machine)',
   'Seated Calf Raise': 'Seated Calf Raise (Machine)', 'Calf Raise (Machine)': 'Standing Calf Raise (Machine)', 'Ab Wheel': 'Ab Wheel Rollout', 'Lunge (Dumbbell)': 'Walking Lunge (Dumbbell)',
   'Triceps Extension (Cable)': 'Overhead Triceps Extension (Cable)', 'Triceps Extension (Dumbbell)': 'Overhead Triceps Extension (Dumbbell)', 'Bench Dip': 'Triceps Dip',
+  'Straight Arm Lat Pulldown (Cable)': 'Straight Arm Pulldown', 'Lat Pulldown - Wide Grip (Cable)': 'Lat Pulldown (Cable)', 'Wide Grip Lat Pulldown (Cable)': 'Lat Pulldown (Cable)',
+  'Seated Incline Curl (Dumbbell)': 'Incline Curl (Dumbbell)', 'Incline Dumbbell Curl': 'Incline Curl (Dumbbell)', 'Bench Press - Close Grip (Barbell)': 'Close Grip Bench Press', 'Close Grip Bench Press (Barbell)': 'Close Grip Bench Press',
+  'Single Arm Lateral Raise (Cable)': 'Lateral Raise (Cable)', 'Single Arm Triceps Pushdown (Cable)': 'Triceps Pushdown (Cable)', 'Triceps Pushdown (Cable - Straight Bar)': 'Triceps Pushdown (Cable)',
+  'Glute Kickback (Cable)': 'Cable Kickback', 'Cable Crossover': 'Cable Fly Crossovers', 'Cable Fly': 'Cable Fly Crossovers', 'Chest Fly (Cable)': 'Cable Fly Crossovers',
+  'Iso-Lateral Row (Machine)': 'Seated Row (Machine)', 'Seated Row (Machine)': 'Seated Row (Machine)', 'Hammer Strength Row': 'Seated Row (Machine)',
+  'Calf Raise': 'Calf Raise (Bodyweight)', 'Standing Calf Raise': 'Calf Raise (Bodyweight)', 'Standing Calf Raise (Bodyweight)': 'Calf Raise (Bodyweight)', 
+  'Leg Extension': 'Leg Extension (Machine)', 'Leg Press': 'Leg Press (Machine)', 'Lying Leg Curl': 'Lying Leg Curl (Machine)', 'Seated Leg Curl': 'Seated Leg Curl (Machine)', 
+  'Hip Thrust': 'Hip Thrust (Barbell)', 'Bulgarian Split Squat': 'Bulgarian Split Squat (Dumbbell)', 'Split Squat (Dumbbell)': 'Bulgarian Split Squat (Dumbbell)',
+  'Walking Lunge': 'Walking Lunge (Dumbbell)', 'Lunge': 'Walking Lunge (Dumbbell)', 'Goblet Squat (Kettlebell)': 'Goblet Squat (Dumbbell)', 'Step Up': 'Step Up (Dumbbell)',
+  'Romanian Deadlift': 'Romanian Deadlift (Barbell)', 'Stiff Leg Deadlift (Barbell)': 'Romanian Deadlift (Barbell)', 'Sumo Deadlift': 'Sumo Deadlift (Barbell)', 'Deadlift': 'Deadlift (Barbell)',
+  'Bench Press': 'Bench Press (Barbell)', 'Incline Bench Press': 'Incline Bench Press (Barbell)', 'Squat': 'Squat (Barbell)', 'Back Squat (Barbell)': 'Squat (Barbell)', 'Front Squat': 'Front Squat (Barbell)',
+  'Overhead Press': 'Overhead Press (Barbell)', 'Military Press (Barbell)': 'Overhead Press (Barbell)', 'Seated Overhead Press (Barbell)': 'Overhead Press (Barbell)', 'Shoulder Press (Machine Plates)': 'Shoulder Press (Machine)',
+  'Bent Over Row': 'Bent Over Row (Barbell)', 'Barbell Row': 'Bent Over Row (Barbell)', 'T Bar Row': 'T-Bar Row', 'Chest Supported T Bar Row': 'T-Bar Row',
+  'Pull Up (Weighted)': 'Pull Up', 'Chin Up (Weighted)': 'Chin Up', 'Push Up (Weighted)': 'Push Up', 'Chest Dip (Weighted)': 'Chest Dip', 'Triceps Dip (Weighted)': 'Triceps Dip', 'Dip': 'Chest Dip',
+  'Hammer Curl': 'Hammer Curl (Dumbbell)', 'Bicep Curl': 'Bicep Curl (Dumbbell)', 'Biceps Curl (Dumbbell)': 'Bicep Curl (Dumbbell)', 'Biceps Curl (Barbell)': 'Bicep Curl (Barbell)', 'Biceps Curl (Cable)': 'Bicep Curl (Cable)',
+  'Cable Curl': 'Bicep Curl (Cable)', 'Concentration Curl (Dumbbell)': 'Concentration Curl', 'Lying Triceps Extension (Barbell)': 'Skullcrusher (EZ Bar)', 'Overhead Triceps Extension': 'Overhead Triceps Extension (Dumbbell)',
+  'Shrug': 'Shrug (Dumbbell)', 'Plank (Bodyweight)': 'Plank', 'Kneeling Cable Crunch': 'Cable Crunch', 
+  'Kettlebell Swing (Kettlebell)': 'Kettlebell Swing', 'Farmers Walk': "Farmer's Walk (Dumbbell)", 'Farmer Carry': "Farmer's Walk (Dumbbell)", 'Clean (Barbell)': 'Power Clean (Barbell)', 'Thruster': 'Thruster (Barbell)',
   'Leg Press Horizontal (Machine)': 'Leg Press (Machine)', 'Hip Abduction (Machine)': 'Hip Abduction (Machine)', 'Back Extension (Hyperextension)': 'Back Extension'
 };
 const EQUIP: [RegExp, string][] = [[/smith|machine|assisted|lever|hammer strength|plate loaded/i, 'Machine'], [/ez bar|barbell|trap bar|landmine/i, 'Barbell'], [/dumbbell/i, 'Dumbbell'], [/cable|rope/i, 'Cable'], [/kettlebell/i, 'Kettlebell'], [/band/i, 'Band'], [/bodyweight|weighted/i, 'Bodyweight']];
@@ -114,19 +132,26 @@ export function guessExercise(name: string): Pick<Exercise, 'muscle' | 'equipmen
   const muscle = MUSCLE.find(([re]) => re.test(name))?.[1] || 'Other';
   return { muscle, equipment: muscle === 'Cardio' && !paren ? 'Other' : equipment };
 }
-/** Find an existing exercise for a Hevy title: exact (normalised) → alias → base name (+ matching equipment) if unique. */
-export function matchExercise(title: string, exercises: Exercise[]): Exercise | undefined {
+const eqOf = (paren: string) => (/smith/i.test(paren) ? 'Smith' : EQUIP.find(([re]) => re.test(paren))?.[1]);
+/** Find an existing exercise for a Hevy title: user merge alias → exact (normalised) → alias → base name with the same equipment
+ *  (a bare built-in, or a built-in whose bracket is the same kind of equipment, e.g. "(Barbell)" ≈ "(EZ Bar)"; Smith ≠ Machine) if unique. */
+export function matchExercise(title: string, exercises: Exercise[], userAliases: Record<string, string> = {}): Exercise | undefined {
   const byKey = new Map<string, Exercise>(); for (const e of exercises) if (!byKey.has(exKey(e.name)) || !e.custom) byKey.set(exKey(e.name), e);
-  const k = exKey(title); if (byKey.has(k)) return byKey.get(k);
+  const k = exKey(title);
+  if (userAliases[k]) { const u = exercises.find((e) => e.id === userAliases[k]); if (u) return u; }
+  if (byKey.has(k)) return byKey.get(k);
   const alias = Object.entries(HEVY_ALIASES).find(([a]) => exKey(a) === k)?.[1]; if (alias && byKey.has(exKey(alias))) return byKey.get(exKey(alias));
-  const { base, paren } = splitParen(title); const bk = exKey(base); const eq = paren ? EQUIP.find(([re]) => re.test(paren))?.[1] : undefined;
-  const cands = exercises.filter((e) => { const sp = splitParen(e.name); return exKey(sp.base) === bk && (!paren || (!sp.paren && e.equipment === eq)); });
+  const { base, paren } = splitParen(title); const bk = exKey(base); const eq = paren ? eqOf(paren) : undefined;
+  const same = exercises.filter((e) => exKey(splitParen(e.name).base) === bk);
+  let cands = same.filter((e) => { const sp = splitParen(e.name); return !paren || (!sp.paren && e.equipment === eq); });
+  if (!cands.length && paren && eq) cands = same.filter((e) => { const sp = splitParen(e.name); return !e.custom && !!sp.paren && eqOf(sp.paren) === eq; });
+  if (cands.length > 1) { const builtIn = cands.filter((e) => !e.custom); if (builtIn.length === 1) cands = builtIn; }
   return cands.length === 1 ? cands[0] : undefined;
 }
 
 // ---------------------------------------------------------------- plan
 export type FileSummary = { name: string; kind: FileKind; source?: ImportSource; rows: number; from?: string; to?: string; counts: Record<string, number>; note?: string };
-export type Existing = { exercises: Exercise[]; workouts: Workout[]; diaryIds: Set<string>; diaryCronDates: Set<string>; bodyweight: BodyWeight[]; defaultRest: number };
+export type Existing = { exercises: Exercise[]; workouts: Workout[]; diaryIds: Set<string>; diaryCronDates: Set<string>; bodyweight: BodyWeight[]; defaultRest: number; /** exKey(name) → exercise id, from 'Merge into existing' */ exAliases?: Record<string, string> };
 export type Plan = {
   files: FileSummary[]; workouts: Workout[]; activities: Workout[]; exercises: Exercise[]; diary: DiaryEntry[]; bodyweight: BodyWeight[];
   matched: string[]; created: string[]; skipped: { workouts: number; diary: number; days: number; weighIns: number; activities: number }; sets: number; warnings: string[];
@@ -158,7 +183,7 @@ export function buildPlan(inputs: Input[], ex: Existing, opts: { cronExercises?:
   const tables = inputs.map((f) => { const t = toTable(f.text); return { f, t, kind: detectKind(t.headers) }; });
   const resolveEx = (title: string): Exercise => {
     const k = exKey(title); if (exCache.has(k)) return exCache.get(k)!;
-    let e = matchExercise(title, exList);
+    let e = matchExercise(title, exList, ex.exAliases);
     if (e) { if (!plan.matched.includes(title)) plan.matched.push(title); }
     else { e = { id: 'cx-hevy-' + hash(k), name: title.trim(), ...guessExercise(title), custom: true, importSource: 'hevy' }; exList.push(e); plan.exercises.push(e); plan.created.push(title.trim()); }
     exCache.set(k, e); return e;

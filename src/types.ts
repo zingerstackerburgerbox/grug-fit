@@ -19,7 +19,9 @@ export type Routine = { id: string; name: string; exercises: RoutineEx[]; notes?
 export type BodyWeight = ImportTag & { id: string; date: string; kg: number };
 /** A unit of a food. `grams` = grams (or ml for liquids) in ONE of this unit. Base units 'g'/'ml' are implicit and not stored. */
 export type Serving = { label: string; grams: number; note?: string; kind?: 'serving' | 'package' | 'custom' };
-export type Food = {
+export type Food = ImportTag & {
+  /** imported foods logged in units of unknown weight (e.g. Cronometer '1 cup'): per100 is per 100 'pseudo-grams' = 1 unit; the grams unit is hidden */
+  gramsUnknown?: boolean;
   id: string; name: string; brand?: string; barcode?: string; source: 'off' | 'usda' | 'custom' | 'recipe'; /** USDA FoodData Central id (source 'usda') */ fdcId?: number;
   per100: Nutrients; servings: Serving[]; lastUsed?: number; useCount?: number;
   ingredients?: { foodId: string; name: string; grams: number }[]; recipeServings?: number; image?: string;

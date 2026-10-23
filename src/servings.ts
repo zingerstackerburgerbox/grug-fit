@@ -8,7 +8,7 @@ export function unitsFor(f: Food): Serving[] {
   const b = baseUnit(f);
   return [{ label: b, grams: 1 }, ...servingsOf(f).filter((s) => !isBase(s.label) && s.grams > 0)];
 }
-export const unitLabel = (s: Serving, f: Pick<Food, 'unit'>) => (isBase(s.label) ? s.label : `${/^[\d½¼¾]/.test(s.label) ? '' : '1 '}${s.label} (${r1(s.grams)} ${baseUnit(f)}${s.note ? ` · ${s.note}` : ''})`);
+export const unitLabel = (s: Serving, f: Pick<Food, 'unit' | 'gramsUnknown'>) => (isBase(s.label) ? s.label : f.gramsUnknown ? `${/^[\d½¼¾]/.test(s.label) ? '' : '1 '}${s.label}` : `${/^[\d½¼¾]/.test(s.label) ? '' : '1 '}${s.label} (${r1(s.grams)} ${baseUnit(f)}${s.note ? ` · ${s.note}` : ''})`);
 /** Find the unit an existing diary entry was logged with (by label, then by grams-per-unit). */
 export function matchUnit(units: Serving[], e: Pick<DiaryEntry, 'serving' | 'grams' | 'qty'>): number {
   if (isBase(e.serving)) return 0;

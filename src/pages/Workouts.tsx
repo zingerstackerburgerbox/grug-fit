@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
-import { all, del, get, put } from '../db';
+import { all, del, get, put, reconcileNow } from '../db';
+import { mergeExercise } from '../reconcile';
 import { go, useLatest, useNow, useQuery, useSettings } from '../hooks';
 import type { BodyWeight, Exercise, Routine, RoutineEx, SetType, Settings, WExercise, WSet, Workout } from '../types';
 import { Bar, LineChart, NumInput, Seg, Sheet, Top, confirmDo, num, toast } from '../ui';
@@ -37,6 +38,9 @@ const exMap = (l: Exercise[]) => new Map(l.map((e) => [e.id, e]));
 export const useWorkouts = () => useQuery(() => all<Workout>('workouts').then((l) => l.filter((w) => w.end).sort((a, b) => b.start - a.start)), [], []) as Workout[];
 export const useActive = () => useQuery(() => get<{ id: string; w: Workout }>('kv', 'active').then((x) => x?.w || null), [], null);
 const newSet = (p?: Partial<WSet>): WSet => ({ id: uid(), type: 'N', kg: null, reps: null, rpe: null, done: false, ...p });
+const SRC_LABEL: Record<string, string> = { hevy: 'from Hevy', cronometer: 'from Cronometer' };
+/** the only visible difference for imported workouts: a small grey tag (Settings › Import › Remove imported data still finds them) */
+const SrcTag = ({ w }: { w: Workout }) => (w.importSource ? <span class="xs mut" data-testid="src-tag">{SRC_LABEL[w.importSource]}</span> : null);
 const PR_LABEL: Record<string, string> = { '1rm': 'Est. 1RM', weight: 'Heaviest weight', volume: 'Best volume', reps: 'Most reps' };
 
 export async function startWorkout(routine?: Routine) {
@@ -49,6 +53,15 @@ export async function startWorkout(routine?: Routine) {
   };
   await put('kv', { id: 'active', w });
   go('/workout/active');
+}
+
+/** 'Repeat workout': same exercises, set types and last time's weight/reps prefilled (not ticked) – native and imported alike */
+export async function repeatWorkout(src: Workout) {
+  const cur = await get('kv', 'active');
+  if (cur && !confirmDo('A workout is already in progress. Discard it and start a new one?')) { go('/workout/active'); return; }
+  const w: Workout = { id: uid(), name: src.name, start: Date.now(), lastActivityAt: Date.now(), ...(src.routineId ? { routineId: src.routineId } : {}),
+    exercises: src.exercises.map((e) => ({ id: uid(), exerciseId: e.exerciseId, restSec: e.restSec, sets: e.sets.filter((x) => x.done).map((x) => newSet({ type: x.type, kg: x.kg, reps: x.reps, ...(x.km != null ? { km: x.km } : {}) })) })).filter((e) => e.sets.length) };
+  await put('kv', { id: 'active', w }); go('/workout/active');
 }
 
 export function WorkoutsHome() {
@@ -80,8 +93,8 @@ export function WorkoutsHome() {
 export function WorkoutCard({ w, exs }: { w: Workout; exs: Map<string, Exercise> }) {
   const s = useSettings(); const bws = useBW();
   return <a class="card" style="display:block;color:inherit;text-decoration:none" href={`#/history/${w.id}`}>
-    <div class="row between"><div class="b">{w.name}</div><div class="mut sm">{fmtDate(w.start)}</div></div>
-    <div class="row mut sm wrap" style="gap:14px;margin:6px 0"><span>⏱ {fmtDur((w.end || w.start) - w.start)}</span><span>🏋️ {Math.round(Number(wDisp(workoutVolume(w), s)))} {s.weightUnit}</span><span>{workoutSetCount(w)} sets</span><span data-testid="card-kcal">🔥 {workoutKcal(w, kgFor(bws, w), exs)} kcal{w.kcalOverride != null ? '*' : ''}</span>{!!w.prs?.length && <span class="pill warn">🏆 {w.prs.length} PR</span>}{w.needsReview && <span class="pill info" data-testid="autoended-badge" title="Ended automatically after 2 h without activity — tap to review">⏹ Auto-ended</span>}</div>
+    <div class="row between"><div class="b">{w.name}</div><div class="mut sm">{fmtDate(w.start)}</div></div>{w.importSource && <div style="margin-top:-2px"><SrcTag w={w} /></div>}
+    <div class="row mut sm wrap" style="gap:14px;margin:6px 0"><span>⏱ {fmtDur((w.end || w.start) - w.start)}</span><span>🏋️ {Math.round(Number(wDisp(workoutVolume(w), s)))} {s.weightUnit}</span><span>{workoutSetCount(w)} set{workoutSetCount(w) === 1 ? '' : 's'}</span><span data-testid="card-kcal">🔥 {workoutKcal(w, kgFor(bws, w), exs)} kcal{w.kcalOverride != null ? '*' : ''}</span>{!!w.prs?.length && <span class="pill warn">🏆 {w.prs.length} PR</span>}{w.needsReview && <span class="pill info" data-testid="autoended-badge" title="Ended automatically after 2 h without activity — tap to review">⏹ Auto-ended</span>}</div>
     <div class="sm">{w.exercises.slice(0, 5).map((e) => <div class="row ell" style="gap:8px;margin-top:3px"><ExThumb ex={exs.get(e.exerciseId)} size={28} /><span class="ell">{e.sets.filter((x) => x.done).length} × {exs.get(e.exerciseId)?.name || 'Unknown'}</span></div>)}{w.exercises.length > 5 && <div class="mut">+{w.exercises.length - 5} more</div>}</div>
   </a>;
 }
@@ -270,7 +283,7 @@ export function WorkoutDetail({ id }: { id: string }) {
   const saveEdit = async () => {
     if (!d) return; if (!d.end || d.end <= d.start) { toast('End time must be after the start time'); return; }
     const nw: Workout = { ...d, exercises: d.exercises.map((e) => ({ ...e, sets: e.sets.filter((x) => x.done || x.kg != null || x.reps != null) })).filter((e) => e.sets.length), needsReview: false };
-    nw.prs = detectPRs(nw, hist); await put('workouts', nw); toast('Workout updated');
+    nw.prs = detectPRs(nw, hist); await put('workouts', nw); await reconcileNow(); toast('Workout updated');
     setEdit(false); setD(null); history.replaceState(null, '', `#/history/${id}`);
   };
   return <><Top title={edit ? 'Edit workout' : w.name} backBtn right={edit ? <button class="btn p sm" data-testid="save-workout" onClick={saveEdit}>Save</button> : <><button class="btn sm" data-testid="edit-workout" onClick={() => setEdit(true)}>Edit</button><button class="btn sm" onClick={() => saveAsRoutine(w)}>Save as routine</button></>} /><div class="page" data-editing={edit ? '1' : undefined}>
@@ -280,7 +293,8 @@ export function WorkoutDetail({ id }: { id: string }) {
       <div class="grid2"><label class="f">Start<input type="datetime-local" data-testid="edit-start" value={toLocalInput(d.start)} onInput={(e) => { const t = fromLocalInput(e.currentTarget.value); if (t) setD({ ...d, start: t }); }} /></label>
         <label class="f">End<input type="datetime-local" data-testid="edit-end" value={toLocalInput(d.end || d.start)} onInput={(e) => { const t = fromLocalInput(e.currentTarget.value); if (t) setD({ ...d, end: t }); }} /></label></div>
       <div class="mut xs">Duration {fmtDur(Math.max(0, (d.end || d.start) - d.start))} · calories come from the completed sets, not the duration.</div></div>
-      : <div class="mut sm">{fmtDate(w.start)} · {fmtTime(w.start)}–{fmtTime(w.end || w.start)}{w.autoEnded ? ' · auto-ended' : ''}</div>}
+      : <div class="mut sm">{fmtDate(w.start)} · {fmtTime(w.start)}–{fmtTime(w.end || w.start)}{w.autoEnded ? ' · auto-ended' : ''}{w.importSource ? ' · ' : ''}<SrcTag w={w} /></div>}
+    {!edit && w.notes && <div class="sm mut" style="margin-top:4px">{w.notes}</div>}
     <div class="kpi" style="margin-top:8px"><div><span class="mut xs">Duration</span><b data-testid="detail-duration">{fmtDur((w.end || 0) - w.start)}</b></div><div><span class="mut xs">Volume</span><b>{Math.round(Number(wDisp(workoutVolume(w), s)))} {s.weightUnit}</b></div><div><span class="mut xs">Sets</span><b>{workoutSetCount(w)}</b></div></div>
     {!edit && !!w.prs?.length && <div class="card" style="margin-top:12px;border-color:var(--warn)"><h3>🏆 Personal records</h3>{w.prs.map((p) => <div class="row between sm"><span>{exs.get(p.exerciseId)?.name}</span><span class="pill warn">{PR_LABEL[p.kind]}: {p.kind === 'reps' ? p.value : `${wDisp(p.value, s)} ${s.weightUnit}`}</span></div>)}</div>}
     {!edit && <WorkoutKcalCard key={String(w.end) + w.start + JSON.stringify(w.exercises)} w={w} exs={exs} onChange={() => {}} />}
@@ -293,7 +307,8 @@ export function WorkoutDetail({ id }: { id: string }) {
           <button class="btn ic" aria-label="Delete set" onClick={() => setD((o) => o && { ...o, exercises: o.exercises.map((x, i) => (i === ei ? { ...x, sets: x.sets.filter((_, j) => j !== si) } : x)) })}>✕</button></div>
         : <div class={'row between sm' + (st.done ? '' : ' unticked')} style="padding:4px 0"><span class={'stype ' + st.type} style="min-height:0">{st.type === 'N' ? ++n : st.type}</span><span class="grow">{fmtSet(st, exs.get(e.exerciseId), s)}{st.rpe ? ` @ RPE ${st.rpe}` : ''}{!st.done && <span class="pill" style="margin-left:6px">not ticked</span>}</span><span class="mut">{st.done ? `1RM ${r1(Number(wDisp(e1rm(st.kg || 0, st.reps || 0), s)))}` : ''}</span></div>)}</div>; })}
     {edit ? <button class="btn full" style="margin-top:20px" onClick={() => { setEdit(false); setD(null); history.replaceState(null, '', `#/history/${id}`); }}>Cancel editing</button>
-      : <button class="btn d full" style="margin-top:20px" onClick={async () => { if (confirmDo('Delete this workout from history?')) { await del('workouts', w.id); history.back(); } }}>Delete workout</button>}
+      : <><button class="btn b2 full" style="margin-top:20px" data-testid="repeat-workout" onClick={() => repeatWorkout(w)}>↻ Repeat workout</button>
+        <button class="btn d full" style="margin-top:10px" data-testid="delete-workout" onClick={async () => { if (confirmDo('Delete this workout from history?')) { await del('workouts', w.id); await reconcileNow(); history.back(); } }}>Delete workout</button></>}
   </div></>;
 }
 
@@ -308,7 +323,13 @@ export function ExercisesPage() {
 
 export function ExerciseDetail({ id }: { id: string }) {
   const ex = useQuery(() => get<Exercise>('exercises', id), [id]); const ws = useWorkouts(); const s = useSettings();
-  const [metric, setMetric] = useState<'1rm' | 'kg' | 'vol'>('1rm'); const [edit, setEdit] = useState(false);
+  const [metric, setMetric] = useState<'1rm' | 'kg' | 'vol'>('1rm'); const [edit, setEdit] = useState(false); const [merge, setMerge] = useState(false);
+  const doMerge = async (toId: string) => {
+    const to = await get<Exercise>('exercises', toId); if (!ex || !to || to.id === ex.id) return;
+    if (!confirmDo(`Merge “${ex.name}” into “${to.name}”? All its sets (${h.length} workout${h.length === 1 ? '' : 's'}) and routines move to “${to.name}”, future imports of this name go there too, and “${ex.name}” is removed.`)) return;
+    const c = await reconcileNow((d) => mergeExercise(d, ex.id, to.id)); setMerge(false); setEdit(false);
+    toast(`Merged into ${to.name}${c.workouts.length ? ` · ${c.workouts.length} workouts updated` : ''}`); location.replace(`#/exercise/${to.id}`);
+  };
   const h = useMemo(() => exerciseHistory(ws, id), [ws, id]);
   if (!ex) return <Top title="Exercise" backBtn />;
   const best = h.length ? { r: Math.max(...h.map((x) => x.best1rm)), k: Math.max(...h.map((x) => x.bestKg)), v: Math.max(...h.map((x) => x.volume)) } : null;
@@ -325,7 +346,10 @@ export function ExerciseDetail({ id }: { id: string }) {
     {[...h].reverse().map((x) => <a class="card" style="display:block;color:inherit;text-decoration:none" href={`#/history/${x.workoutId}`}><div class="row between"><b>{fmtDate(x.date)}</b><span class="mut sm">1RM {r1(Number(wDisp(x.best1rm, s)))} {s.weightUnit}</span></div>
       <div class="sm mut">{x.sets.map((st) => `${st.type !== 'N' ? st.type + ' ' : ''}${wDisp(st.kg, s) || 0}×${st.reps}`).join('  ·  ')}</div></a>)}
     <Sheet open={edit} onClose={() => setEdit(false)} title="Edit exercise"><CustomExerciseForm initial={ex} onSaved={() => setEdit(false)} />
+      <button class="btn full" style="margin-top:10px" data-testid="merge-exercise" onClick={() => setMerge(true)}>⇄ Merge into an existing exercise…</button>
+      <div class="mut xs">For duplicates (e.g. an imported “{ex.name}” that is the same as a built-in exercise): history, charts and PRs combine.</div>
       <button class="btn d full" style="margin-top:10px" onClick={async () => { if (confirmDo('Delete this custom exercise? Past workouts keep their sets but show "Unknown".')) { await del('exercises', ex.id); history.back(); } }}>Delete exercise</button></Sheet>
+    <ExercisePicker open={merge} onClose={() => setMerge(false)} onAdd={(ids) => { const t = ids.find((x) => x !== id); if (t) doMerge(t); }} />
   </div></>;
 }
 

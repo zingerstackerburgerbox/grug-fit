@@ -1,15 +1,15 @@
 /** Settings › Import data: Hevy + Cronometer CSV import with tutorial, preview, dedupe and undo. All on-device. */
 import { useRef, useState } from 'preact/hooks';
-import { all, bump, db, getSettings } from '../db';
+import { all, bump, db, get, getSettings, reconcileNow } from '../db';
 import { useQuery } from '../hooks';
-import type { BodyWeight, DiaryEntry, Exercise, Routine, Workout } from '../types';
+import type { BodyWeight, DiaryEntry, Exercise, Food, Routine, Workout } from '../types';
 import { buildPlan, KIND_LABEL, type ImportSource, type Input, type Plan } from '../importer';
 import { confirmDo, toast } from '../ui';
 import { fmtDate } from '../util';
 
 async function existing() {
-  const [exercises, workouts, diary, bodyweight, s] = await Promise.all([all<Exercise>('exercises'), all<Workout>('workouts'), all<DiaryEntry>('diary'), all<BodyWeight>('bodyweight'), getSettings()]);
-  return { exercises, workouts, diaryIds: new Set(diary.map((d) => d.id)), diaryCronDates: new Set(diary.filter((d) => d.importSource === 'cronometer' && !d.id.startsWith('cron-day-')).map((d) => d.date)), bodyweight, defaultRest: s.defaultRest };
+  const [exercises, workouts, diary, bodyweight, s, al] = await Promise.all([all<Exercise>('exercises'), all<Workout>('workouts'), all<DiaryEntry>('diary'), all<BodyWeight>('bodyweight'), getSettings(), get<{ v: Record<string, string> }>('kv', 'exAliases')]);
+  return { exAliases: al?.v || {}, exercises, workouts, diaryIds: new Set(diary.map((d) => d.id)), diaryCronDates: new Set(diary.filter((d) => d.importSource === 'cronometer' && !d.id.startsWith('cron-day-')).map((d) => d.date)), bodyweight, defaultRest: s.defaultRest };
 }
 export async function applyPlan(p: Plan) {
   const d = await db(); const tx = d.transaction(['exercises', 'workouts', 'diary', 'bodyweight'], 'readwrite');
@@ -18,6 +18,8 @@ export async function applyPlan(p: Plan) {
   for (const e of p.diary) tx.objectStore('diary').put(e);
   for (const b of p.bodyweight) tx.objectStore('bodyweight').put(b);
   await tx.done; bump();
+  // make the new history behave exactly like native: PRs over the whole history, real foods for Cronometer entries, normalised workouts
+  return reconcileNow();
 }
 export async function importedCounts() {
   const [w, dI, b, e] = await Promise.all([all<Workout>('workouts'), all<DiaryEntry>('diary'), all<BodyWeight>('bodyweight'), all<Exercise>('exercises')]);
@@ -26,14 +28,16 @@ export async function importedCounts() {
 }
 /** Undo: delete everything tagged with the source. Imported custom exercises are kept if a remaining workout or routine still uses them. */
 export async function removeImported(src: ImportSource) {
-  const [ws, ds, bs, es, rs] = await Promise.all([all<Workout>('workouts'), all<DiaryEntry>('diary'), all<BodyWeight>('bodyweight'), all<Exercise>('exercises'), all<Routine>('routines')]);
+  const [ws, ds, bs, es, rs, fs] = await Promise.all([all<Workout>('workouts'), all<DiaryEntry>('diary'), all<BodyWeight>('bodyweight'), all<Exercise>('exercises'), all<Routine>('routines'), all<Food>('foods')]);
+  const usedFoods = new Set(ds.filter((x) => x.importSource !== src).map((x) => x.foodId));
   const keepW = ws.filter((w) => w.importSource !== src); const used = new Set([...keepW.flatMap((w) => w.exercises.map((e) => e.exerciseId)), ...rs.flatMap((r) => r.exercises.map((e) => e.exerciseId))]);
-  const d = await db(); const tx = d.transaction(['exercises', 'workouts', 'diary', 'bodyweight'], 'readwrite'); let n = 0;
+  const d = await db(); const tx = d.transaction(['exercises', 'workouts', 'diary', 'bodyweight', 'foods'], 'readwrite'); let n = 0;
   for (const w of ws) if (w.importSource === src) { tx.objectStore('workouts').delete(w.id); n++; }
   for (const x of ds) if (x.importSource === src) { tx.objectStore('diary').delete(x.id); n++; }
   for (const x of bs) if (x.importSource === src) { tx.objectStore('bodyweight').delete(x.id); n++; }
   for (const x of es) if (x.importSource === src && !used.has(x.id)) { tx.objectStore('exercises').delete(x.id); n++; }
-  await tx.done; bump(); return n;
+  for (const x of fs) if (x.importSource === src && !usedFoods.has(x.id)) tx.objectStore('foods').delete(x.id);
+  await tx.done; await reconcileNow(); return n; // PRs of the remaining workouts are recomputed without the removed history
 }
 
 const ACCEPT = '.csv,text/csv,text/comma-separated-values,application/csv,application/vnd.ms-excel,text/plain';
