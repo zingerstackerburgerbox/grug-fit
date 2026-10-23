@@ -34,8 +34,12 @@ const raw: [string, string, string][] = [
   ['Russian Twist', 'Core', 'Bodyweight'], ['Ab Wheel Rollout', 'Core', 'Other'], ['Pallof Press (Cable)', 'Core', 'Cable'],
   // Full body / other
   ['Kettlebell Swing', 'Full Body', 'Kettlebell'], ['Power Clean (Barbell)', 'Full Body', 'Barbell'], ['Farmer\'s Walk (Dumbbell)', 'Full Body', 'Dumbbell'],
-  ['Burpee', 'Full Body', 'Bodyweight'], ['Thruster (Barbell)', 'Full Body', 'Barbell']
+  ['Burpee', 'Full Body', 'Bodyweight'], ['Thruster (Barbell)', 'Full Body', 'Barbell'],
+  // Added later: ALWAYS append (ids are positional) and list the new ids in SEED_ADDED for the install migration.
+  ['Reverse Cable Crunch', 'Core', 'Cable'] // ex086, v1.4.1
 ];
 export const SEED_EXERCISES: Exercise[] = raw.map(([name, muscle, equipment], i) => ({ id: 'ex' + String(i + 1).padStart(3, '0'), name, muscle, equipment }));
+/** Built-ins added after the first release, keyed by the schema version whose migration adds them to existing installs. */
+export const SEED_ADDED: Record<number, string[]> = { 3: ['ex086'] };
 export const MUSCLES = ['Chest', 'Back', 'Shoulders', 'Traps', 'Biceps', 'Triceps', 'Forearms', 'Quadriceps', 'Hamstrings', 'Glutes', 'Calves', 'Core', 'Full Body', 'Cardio', 'Other'];
 export const EQUIPMENT = ['Barbell', 'Dumbbell', 'Machine', 'Cable', 'Bodyweight', 'Kettlebell', 'Band', 'Other'];

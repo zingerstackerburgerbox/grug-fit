@@ -1,5 +1,5 @@
 import { openDB, type IDBPDatabase } from 'idb';
-import { SEED_EXERCISES } from './seed';
+import { SEED_EXERCISES, SEED_ADDED } from './seed';
 import { DEFAULT_SETTINGS } from './util';
 import { normaliseServings, isBase } from './servings';
 import type { Settings } from './types';
@@ -12,7 +12,7 @@ export type StoreName = (typeof STORES)[number];
  *  - SCHEMA_VERSION: data-shape version stored in kv 'schema'; MIGRATIONS[n] transforms records from n-1 to n (see migrate()).
  */
 export const DB_VERSION = 1;
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
 let dbp: Promise<IDBPDatabase> | null = null;
 export function db() {
   if (!dbp) dbp = openDB('grugfit', DB_VERSION, {
@@ -67,8 +67,20 @@ const MIGRATIONS: Record<number, (tx: Tx) => Promise<void>> = {
       else if (/^serving \((.*)\)$/.test(serving)) serving = 'serving';
       if (serving !== e.serving || qty !== e.qty) await tx.objectStore('diary').put({ ...e, serving, qty, legacyServing: e.legacyServing || e.serving });
     }
-  }
+  },
+  // v3: add new built-in exercises to existing installs. Never overwrites: skips ids already present and names the user already has (e.g. a custom one).
+  3: (tx) => addSeed(tx, SEED_ADDED[3])
 };
+async function addSeed(tx: Tx, ids: string[]) {
+  const store = tx.objectStore('exercises');
+  const have = await store.getAll();
+  const names = new Set(have.map((e: any) => String(e.name).trim().toLowerCase()));
+  const idSet = new Set(have.map((e: any) => e.id));
+  for (const e of SEED_EXERCISES.filter((x) => ids.includes(x.id))) {
+    if (idSet.has(e.id) || names.has(e.name.toLowerCase())) continue;
+    await store.put(e);
+  }
+}
 /** Bring stored data up to SCHEMA_VERSION. `force` re-runs all (idempotent) migrations, e.g. after importing an old backup. */
 export async function migrate(force = false) {
   const d = await db();

@@ -1,8 +1,11 @@
 /** Parametric stick-figure renderer for exercise visuals (original art, generated SVG).
  *  Angles: absolute degrees, 0 = pointing down, +90 = facing direction (+x), 180 = up, −90 = behind. */
 export type V = [number, number];
-export type Limb = { a?: [number, number]; to?: V; rel?: V; bend?: 1 | -1 };
-export type Pose = { hip: V; torso: number; head?: number; tl?: number; nk?: number; lt?: number; armN: Limb; armF?: Limb; legN: Limb; legF?: Limb; foot?: number; footF?: number };
+/** A limb is given as absolute angles [upper, lower] (`a`) or as an IK target (`to` absolute / `rel` to the root).
+ *  The joint (elbow/knee) always bends the anatomical way — see `flexSense`. `bend` is only honoured together with `proj`,
+ *  for poses where shoulder rotation makes the elbow *look* reversed in 2-D (e.g. back-squat grip, hands behind the head). */
+export type Limb = { a?: [number, number]; to?: V; rel?: V; bend?: 1 | -1; proj?: boolean };
+export type Pose = { /** face-down (push-up, plank): flips the flexion sense */ prone?: boolean; hip: V; torso: number; head?: number; tl?: number; nk?: number; lt?: number; armN: Limb; armF?: Limb; legN: Limb; legF?: Limb; foot?: number; footF?: number };
 export type Prop =
   | { t: 'bb' | 'db' | 'kb' | 'wheel' | 'dbH' | 'dbV' | 'handle' | 'plate'; at: Anchor; off?: V; r?: number; ang?: number }
   | { t: 'bbF'; at: Anchor; off?: V; w?: number }
@@ -25,39 +28,67 @@ const add = (p: V, q: V, k = 1): V => [p[0] + q[0] * k, p[1] + q[1] * k];
 const angOf = (p: V, q: V) => (Math.atan2(q[0] - p[0], q[1] - p[1]) * 180) / Math.PI;
 const dist = (p: V, q: V) => Math.hypot(q[0] - p[0], q[1] - p[1]);
 
-function solve(root: V, s: Limb, l1: number, l2: number, defBend: 1 | -1): { j: V; e: V; a1: number; a2: number } {
-  if (s.a) { const j = add(root, dir(s.a[0]), l1); return { j, e: add(j, dir(s.a[1]), l2), a1: s.a[0], a2: s.a[1] }; }
+const norm = (a: number) => ((((a + 180) % 360) + 360) % 360) - 180;
+/** Joint flexion sense in screen angles: +1 = forearm/shin rotates in the +angle direction when the joint flexes.
+ *  Elbows flex "forward" (+), knees "backward" (−) for a figure facing +x; mirrored for the far limb in front view and for prone poses. */
+export const flexSense = (arm: boolean, mirrored: boolean, prone?: boolean, proj?: boolean) => (arm ? 1 : -1) * (mirrored ? -1 : 1) * (prone ? -1 : 1) * (proj ? -1 : 1);
+export const FLEX_MAX = 172, FLEX_MIN = -5; // a few degrees of natural hyperextension allowed
+/** Two-bone IK. Picks the solution whose joint bends anatomically and clamps angle-specified joints to [FLEX_MIN, FLEX_MAX]. */
+function solve(root: V, s: Limb, l1: number, l2: number, sense: number): { j: V; e: V; a1: number; a2: number } {
+  if (s.a) {
+    const a1 = s.a[0]; const fl = Math.min(FLEX_MAX, Math.max(FLEX_MIN, norm(sense * (s.a[1] - a1)))); const a2 = a1 + sense * fl;
+    const j = add(root, dir(a1), l1); return { j, e: add(j, dir(a2), l2), a1, a2 };
+  }
   const T: V = s.to ? s.to : add(root, s.rel || [0, l1 + l2]);
   let d = dist(root, T); const base = angOf(root, T); d = Math.min(Math.max(d, Math.abs(l1 - l2) + 0.01), (l1 + l2) * 0.9999);
-  const A = (Math.acos((l1 * l1 + d * d - l2 * l2) / (2 * l1 * d)) * 180) / Math.PI;
-  const a1 = base + (s.bend ?? defBend) * A; const j = add(root, dir(a1), l1); const e = add(root, dir(base), d);
+  const A = (Math.acos(Math.min(1, Math.max(-1, (l1 * l1 + d * d - l2 * l2) / (2 * l1 * d)))) * 180) / Math.PI;
+  const e = add(root, dir(base), d);
+  // the anatomical solution: the joint sits on the side that makes the lower bone rotate by +sense (flexion ≥ 0)
+  const b = -sense as 1 | -1; const a1 = base + b * A; const j = add(root, dir(a1), l1);
   return { j, e, a1, a2: angOf(j, e) };
 }
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 const lerpV = (a: V, b: V, t: number): V => [lerp(a[0], b[0], t), lerp(a[1], b[1], t)];
+/** shortest angular path from a to b */
+const lerpA = (a: number, b: number, t: number) => a + norm(b - a) * t;
 function lerpLimb(a: Limb | undefined, b: Limb | undefined, t: number): Limb | undefined {
   if (!a || !b) return a || b;
-  const o: Limb = { bend: t < 0.5 ? a.bend : b.bend };
-  if (a.a && b.a) o.a = [lerp(a.a[0], b.a[0], t), lerp(a.a[1], b.a[1], t)];
+  const o: Limb = { bend: t < 0.5 ? a.bend : b.bend, proj: t < 0.5 ? a.proj : b.proj };
+  // angles: shortest path for the upper bone, and interpolate the joint's *relative* angle so it stays within its range
+  if (a.a && b.a) { const u = lerpA(a.a[0], b.a[0], t); const ra = norm(a.a[1] - a.a[0]), rb = norm(b.a[1] - b.a[0]); o.a = [u, u + lerp(ra, rb, t)]; }
   else if (a.to && b.to) o.to = lerpV(a.to, b.to, t);
   else if (a.rel && b.rel) o.rel = lerpV(a.rel, b.rel, t);
-  else return t < 0.5 ? a : b;
+  else return t < 0.5 ? a : b; // mixed kinds are converted to angles in poseAt before we get here
   return o;
 }
 export function lerpPose(a: Pose, b: Pose, t: number): Pose {
-  return { hip: lerpV(a.hip, b.hip, t), torso: lerp(a.torso, b.torso, t), head: lerp(a.head || 0, b.head || 0, t), tl: lerp(a.tl ?? 1, b.tl ?? 1, t), nk: lerp(a.nk ?? 1, b.nk ?? 1, t), lt: lerp(a.lt ?? 1, b.lt ?? 1, t), armN: lerpLimb(a.armN, b.armN, t)!, armF: lerpLimb(a.armF, b.armF, t), legN: lerpLimb(a.legN, b.legN, t)!, legF: lerpLimb(a.legF, b.legF, t),
-    foot: a.foot != null || b.foot != null ? lerp(a.foot ?? b.foot!, b.foot ?? a.foot!, t) : undefined, footF: a.footF != null || b.footF != null ? lerp(a.footF ?? b.footF!, b.footF ?? a.footF!, t) : undefined };
+  return { prone: t < 0.5 ? a.prone : b.prone, hip: lerpV(a.hip, b.hip, t), torso: lerpA(a.torso, b.torso, t), head: lerp(a.head || 0, b.head || 0, t), tl: lerp(a.tl ?? 1, b.tl ?? 1, t), nk: lerp(a.nk ?? 1, b.nk ?? 1, t), lt: lerp(a.lt ?? 1, b.lt ?? 1, t), armN: lerpLimb(a.armN, b.armN, t)!, armF: lerpLimb(a.armF, b.armF, t), legN: lerpLimb(a.legN, b.legN, t)!, legF: lerpLimb(a.legF, b.legF, t),
+    foot: a.foot != null || b.foot != null ? lerpA(a.foot ?? b.foot!, b.foot ?? a.foot!, t) : undefined, footF: a.footF != null || b.footF != null ? lerpA(a.footF ?? b.footF!, b.footF ?? a.footF!, t) : undefined };
 }
+type LK = 'armN' | 'armF' | 'legN' | 'legF';
+const kindOf = (l?: Limb) => (!l ? '' : l.a ? 'a' : l.to ? 'to' : 'rel');
+/** when two keyframes describe a limb differently (angles vs IK target), resolve both to angles so the blend is continuous */
+function harmonise(d: Def, a: Pose, b: Pose): [Pose, Pose] {
+  const ks: LK[] = ['armN', 'armF', 'legN', 'legF']; let A = a, B = b;
+  for (const key of ks) {
+    if (!A[key] || !B[key] || kindOf(A[key]) === kindOf(B[key])) continue;
+    const ang = (P: Pose): Limb => { const k = skeleton(d, P); const i = key.endsWith('N') ? 0 : 1; return key.startsWith('arm') ? { a: [k.ua[i], k.fa[i]], proj: P[key]!.proj } : { a: [k.th[i], k.sh[i]], proj: P[key]!.proj }; };
+    A = { ...A, [key]: ang(A) }; B = { ...B, [key]: ang(B) };
+  }
+  return [A, B];
+}
+const hcache = new WeakMap<Def, [Pose, Pose][]>();
 /** pose at phase p∈[0,1): there and back through the keyframes with ease-in-out */
 export function poseAt(d: Def, p: number): Pose {
   const k = d.keys; if (k.length === 1) return k[0];
   const u = p < 0.5 ? p * 2 : 2 - p * 2; const e = (1 - Math.cos(Math.PI * u)) / 2; // 0→1→0
   const seg = e * (k.length - 1); const i = Math.min(k.length - 2, Math.floor(seg));
-  return lerpPose(k[i], k[i + 1], seg - i);
+  let H = hcache.get(d); if (!H) { H = k.slice(0, -1).map((x, j) => harmonise(d, x, k[j + 1])); hcache.set(d, H); }
+  return lerpPose(H[i][0], H[i][1], seg - i);
 }
 
 export const C = { body: '#cbd5e1', far: '#6b7686', mus: '#fb923c', eq: '#94a3b8', plate: '#3b4656', pad: '#334155', floor: '#2b303b', cable: '#7dd3fc', outline: '#171a21' };
-type Sk = { H: V; S: V; head: V; hand: [V, V]; elbow: [V, V]; knee: [V, V]; ankle: [V, V]; toe: [V, V]; SL: V; SR: V; HL: V; HR: V; front: boolean; torso: number; ua: [number, number]; th: [number, number]; sh: [number, number] };
+type Sk = { H: V; S: V; head: V; hand: [V, V]; elbow: [V, V]; knee: [V, V]; ankle: [V, V]; toe: [V, V]; SL: V; SR: V; HL: V; HR: V; front: boolean; torso: number; ua: [number, number]; fa: [number, number]; th: [number, number]; sh: [number, number] };
 
 export function skeleton(d: Def, P: Pose): Sk {
   const front = d.view === 'front';
@@ -65,14 +96,15 @@ export function skeleton(d: Def, P: Pose): Sk {
   const perp = dir(P.torso + 90); // sideways for front view
   const SR = front ? add(S, perp, -L.shW) : S, SL = front ? add(S, perp, L.shW) : S; // R = +x side (near), L = mirrored
   const HR = front ? add(H, perp, -L.hipW) : H, HL = front ? add(H, perp, L.hipW) : H;
-  const mir = (l: Limb | undefined, cx: number): Limb | undefined => !l ? l : { bend: l.bend != null ? (-l.bend as 1 | -1) : undefined, a: l.a ? [-l.a[0], -l.a[1]] : undefined, to: l.to ? [2 * cx - l.to[0], l.to[1]] : undefined, rel: l.rel ? [-l.rel[0], l.rel[1]] : undefined };
+  const mir = (l: Limb | undefined, cx: number): Limb | undefined => !l ? l : { proj: l.proj, bend: l.bend != null ? (-l.bend as 1 | -1) : undefined, a: l.a ? [-l.a[0], -l.a[1]] : undefined, to: l.to ? [2 * cx - l.to[0], l.to[1]] : undefined, rel: l.rel ? [-l.rel[0], l.rel[1]] : undefined };
   const armF = front ? (P.armF || mir(P.armN, S[0])) : (P.armF || P.armN);
   const legF = front ? (P.legF || mir(P.legN, H[0])) : (P.legF || P.legN);
-  const aN = solve(front ? SR : S, P.armN, L.ua, L.fa, -1), aF = solve(front ? SL : S, armF!, L.ua, L.fa, front ? 1 : -1);
-  const th = L.th * (P.lt ?? 1); const lN = solve(front ? HR : H, P.legN, th, L.sh, front ? -1 : 1), lF = solve(front ? HL : H, legF!, th, L.sh, 1);
+  const fs = (l: Limb | undefined, arm: boolean, far: boolean) => flexSense(arm, front && far, P.prone, l?.proj);
+  const aN = solve(front ? SR : S, P.armN, L.ua, L.fa, fs(P.armN, true, false)), aF = solve(front ? SL : S, armF!, L.ua, L.fa, fs(armF, true, true));
+  const th = L.th * (P.lt ?? 1); const lN = solve(front ? HR : H, P.legN, th, L.sh, fs(P.legN, false, false)), lF = solve(front ? HL : H, legF!, th, L.sh, fs(legF, false, true));
   const footA = (shin: number, f?: number) => f ?? (front ? shin : Math.abs(shin) < 60 ? 90 : shin + 90);
   const tN = front ? add(lN.e, [2.5, 0], 1) : add(lN.e, dir(footA(lN.a2, P.foot)), L.foot), tF = front ? add(lF.e, [-2.5, 0], 1) : add(lF.e, dir(footA(lF.a2, P.footF ?? P.foot)), L.foot);
-  return { H, S, head, hand: [aN.e, aF.e], elbow: [aN.j, aF.j], knee: [lN.j, lF.j], ankle: [lN.e, lF.e], toe: [tN, tF], SL, SR, HL, HR, front, torso: P.torso, ua: [aN.a1, aF.a1], th: [lN.a1, lF.a1], sh: [lN.a2, lF.a2] };
+  return { H, S, head, hand: [aN.e, aF.e], elbow: [aN.j, aF.j], knee: [lN.j, lF.j], ankle: [lN.e, lF.e], toe: [tN, tF], SL, SR, HL, HR, front, torso: P.torso, ua: [aN.a1, aF.a1], fa: [aN.a2, aF.a2], th: [lN.a1, lF.a1], sh: [lN.a2, lF.a2] };
 }
 const f = (n: number) => Math.round(n * 10) / 10;
 const ln = (p: V, q: V, c: string, w: number, extra = '') => `<line x1="${f(p[0])}" y1="${f(p[1])}" x2="${f(q[0])}" y2="${f(q[1])}" stroke="${c}" stroke-width="${w}" stroke-linecap="round"${extra}/>`;
