@@ -17,7 +17,7 @@ page.on('pageerror', (e) => console.log('PAGEERROR', e.message));
 const buildId = async () => { await page.goto(BASE + '#/settings'); await page.waitForSelector('[data-testid=build-id]'); return page.textContent('[data-testid=build-id]'); };
 const triggerCheck = () => page.evaluate(() => document.dispatchEvent(new Event('visibilitychange'))); // app returning to foreground -> registration.update()
 try {
-  await page.goto(BASE); await page.waitForSelector("text=Today's nutrition");
+  await page.goto(BASE); await page.click('[data-testid=ob-skip]').catch(() => {}); await page.waitForSelector("text=Today's nutrition");
   await page.waitForFunction(() => !!navigator.serviceWorker.controller);
   log('initial build:', await buildId());
   await page.goto(BASE + '#/body'); await page.locator('label:has-text("Weight") input').fill('81.7'); await page.click('text=Log weight'); await page.waitForTimeout(300);

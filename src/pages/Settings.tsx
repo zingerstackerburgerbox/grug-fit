@@ -6,6 +6,37 @@ import { NumInput, Seg, Top, confirmDo, num, toast } from '../ui';
 import { DEFAULT_SETTINGS, MICROS, fmtDate, fmtTime, r1, ymd } from '../util';
 import { APP_VERSION, BUILD_ID, BUILD_TIME } from '../update';
 import { scheduleReminders } from '../doses';
+import { GOAL_LABEL, ageFromBirthYear, bmr, eatBackOn, latestWeight, sedentaryBurn, type Goal } from '../energy';
+import { go, useQuery } from '../hooks';
+import { LB } from '../util';
+
+function ProfileCard({ s }: { s: Settings }) {
+  const kg = useQuery(latestWeight, [], null); const p = s.profile;
+  const [h, setH] = useState<number | null>(p?.heightCm ?? null); const [by, setBy] = useState<number | null>(p?.birthYear ?? null);
+  const [w, setW] = useState<number | null>(null);
+  useEffect(() => { setH(p?.heightCm ?? null); setBy(p?.birthYear ?? null); }, [p?.updated]);
+  useEffect(() => { if (kg != null) setW(r1(p?.bwUnit === 'lb' ? kg * LB : kg)); }, [kg]);
+  const bwUnit = p?.bwUnit || 'kg';
+  if (!p) return <div class="card col"><div class="sm">Set up your height, weight, age, sex and goal to see your daily calorie burn and get suggested targets.</div><button class="btn p" onClick={() => go('/welcome?from=settings')} data-testid="profile-setup">Set up profile</button></div>;
+  const age = ageFromBirthYear(p.birthYear); const B = kg ? bmr(kg, p.heightCm, age, p.sex) : null;
+  const save = async (patch: any) => { await put('kv', { ...s, profile: { ...p, ...patch, updated: Date.now() } }); };
+  const saveAll = async () => {
+    if (!h || h < 100 || h > 250 || !by) { toast('Check height and birth year'); return; }
+    await save({ heightCm: h, birthYear: by });
+    if (w) { const nkg = bwUnit === 'lb' ? w / LB : w; if (kg == null || Math.abs(nkg - kg) > 0.05) await put('bodyweight', { id: 'bw' + ymd(), date: ymd(), kg: Math.round(nkg * 100) / 100 }); }
+    toast('Profile saved');
+  };
+  return <div class="card col" data-testid="profile-card">
+    <div class="grid2"><label class="f">Height (cm)<NumInput value={h} onValue={setH} aria-label="Profile height" /></label><label class="f">Birth year<NumInput int value={by} onValue={setBy} aria-label="Profile birth year" /></label>
+      <label class="f">Weight ({bwUnit}) · latest log<NumInput value={w} onValue={setW} aria-label="Profile weight" /></label>
+      <label class="f">Sex<Seg value={p.sex} onChange={(sex) => save({ sex })} options={[['male', 'Male'], ['female', 'Female']]} /></label></div>
+    <label class="f">Goal<Seg value={p.goal} onChange={(goal: Goal) => save({ goal })} options={(['cut', 'maintain', 'bulk'] as Goal[]).map((g) => [g, GOAL_LABEL[g]] as [Goal, string])} /></label>
+    {B != null && <div class="sm">Age {age} · BMR {r1(B).toFixed(0)} kcal · <b>sedentary burn ~{Math.round(sedentaryBurn(B))} kcal/day</b></div>}
+    <div class="grid2"><button class="btn" onClick={saveAll}>Save profile</button><button class="btn p" onClick={async () => { await saveAll(); go('/welcome?step=result&from=settings'); }} data-testid="recalculate">Recalculate targets</button></div>
+    <label class="row sm"><input type="checkbox" style="width:24px;min-height:24px" checked={eatBackOn(s)} onChange={(e) => put('kv', { ...s, eatBack: e.currentTarget.checked })} data-testid="eatback" /> Add workout calories to my daily target (“eat back” what I burn training)</label>
+    <div class="mut xs">{eatBackOn(s) ? 'On: on workout days your calorie target grows by the workout estimate.' : 'Off: your calorie target stays fixed; workouts only show in “Burned today”.'} Default is on for maintaining/bulking, off for cutting.</div>
+  </div>;
+}
 
 export function SettingsPage() {
   const s = useSettings(); const [t, setT] = useState<Record<string, string>>({});
@@ -30,6 +61,8 @@ export function SettingsPage() {
   const field = (k: string, label: string) => <label class="f">{label}<input inputMode="decimal" value={t[k] ?? ''} onInput={(e) => setT({ ...t, [k]: e.currentTarget.value })} /></label>;
   return <><Top title="Settings" /><div class="page col">
     {installEvt && <button class="btn p" onClick={async () => { installEvt.prompt(); await installEvt.userChoice; (window as any).__installPrompt = null; setInstallEvt(null); }}>📲 Install Grug Fit app</button>}
+    <h2>Profile & calorie burn</h2>
+    <ProfileCard s={s} />
     <h2>Daily targets</h2>
     <div class="card col"><div class="grid2">{field('kcal', 'Energy (kcal)')}{field('protein', 'Protein (g)')}{field('carbs', 'Net carbs (g)')}{field('fat', 'Fat (g)')}{field('fibre', 'Fibre (g)')}</div>
       <details><summary class="b sm">Micronutrient targets</summary><div class="grid2" style="margin-top:10px">{MICROS.map((m) => field(m.key, `${m.label} (${m.unit})`))}</div></details>

@@ -1,3 +1,4 @@
+import { BurnBar, useDayEnergy } from './Burn';
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { all, byBarcode, byDate, del, get, put } from '../db';
 import { go, useQuery, useSettings } from '../hooks';
@@ -23,8 +24,8 @@ export async function dayTotals(date: string) {
   return { entries: entries.sort((a, b) => a.created - b.created), food: sumN(entries.map((e) => e.n)), supp: sn[date] || EMPTY };
 }
 
-export function MacroSummary({ n, s, compact }: { n: Nutrients; s: Settings; compact?: boolean }) {
-  const t = s.targets;
+export function MacroSummary({ n, s, compact, kcalTarget }: { n: Nutrients; s: Settings; compact?: boolean; kcalTarget?: number }) {
+  const t = { ...s.targets, kcal: kcalTarget ?? s.targets.kcal };
   return <div class="rings">
     <Ring value={energy(n.kcal, s)} target={energy(t.kcal, s)} color="var(--kcal)" label={eu(s)} sub={`${Math.max(0, energy(t.kcal - n.kcal, s))} left`} size={compact ? 74 : 84} />
     <Ring value={n.protein} target={t.protein} color="var(--pro)" label="Protein" sub="g" size={compact ? 74 : 84} />
@@ -41,7 +42,7 @@ export function Micros({ n, s }: { n: Nutrients; s: Settings }) {
 }
 
 export function Diary({ date }: { date: string }) {
-  const s = useSettings(); const d = useQuery(() => dayTotals(date), [date]);
+  const s = useSettings(); const d = useQuery(() => dayTotals(date), [date]); const en = useDayEnergy(date);
   const [edit, setEdit] = useState<DiaryEntry | null>(null); const [menu, setMenu] = useState<Meal | null>(null);
   const total = d ? sumN([d.food, d.supp]) : EMPTY;
   const copyMeal = async (meal: Meal, from: string) => {
@@ -55,7 +56,8 @@ export function Diary({ date }: { date: string }) {
       <div class="row between" style="margin-bottom:10px"><button class="btn ic" aria-label="Previous day" onClick={() => go(`/food/${addDays(date, -1)}`)}>◀</button>
         <label class="b" style="position:relative">{fmtDay(date)} <span class="mut sm">{WD[parseYmd(date).getDay()]} {fmtDM(date)}</span><input type="date" value={date} onInput={(e) => e.currentTarget.value && go(`/food/${e.currentTarget.value}`)} style="position:absolute;inset:0;opacity:0" aria-label="Pick date" /></label>
         <button class="btn ic" aria-label="Next day" onClick={() => go(`/food/${addDays(date, 1)}`)}>▶</button></div>
-      <div class="card"><MacroSummary n={total} s={s} />
+      <BurnBar date={date} />
+      <div class="card"><MacroSummary n={total} s={s} kcalTarget={en?.target} />
         <div class="row between sm mut" style="margin-top:8px"><span>Fibre {r1(total.fibre)} g</span><span>Total carbs {r1(total.carbs)} g</span>{d && d.supp.kcal + (d.supp.calcium || 0) + (d.supp.vitD || 0) > 0 && <span class="pill info">incl. supplements</span>}</div></div>
       {MEALS.map(([m, label]) => { const es = (d?.entries || []).filter((e) => e.meal === m); const mt = sumN(es.map((e) => e.n));
         return <div class="card" style="padding:10px 12px">

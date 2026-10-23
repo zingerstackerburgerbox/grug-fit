@@ -1,3 +1,4 @@
+import { BurnBar, useDayEnergy } from './Burn';
 import { all } from '../db';
 import { useQuery, useSettings } from '../hooks';
 import type { DiaryEntry, Exercise, Workout } from '../types';
@@ -12,7 +13,7 @@ import { useExercises } from './ExercisePicker';
 
 const weekStart = (t: number) => { const d = new Date(t); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); return ymd(d); };
 export function Home() {
-  const s = useSettings(); const today = ymd(); const d = useQuery(() => dayTotals(today), [today]);
+  const s = useSettings(); const today = ymd(); const d = useQuery(() => dayTotals(today), [today]); const en = useDayEnergy(today);
   const doses = useDoseData(); const ws = useWorkouts(); const active = useActive(); const exs = new Map(useExercises().map((e) => [e.id, e] as [string, Exercise]));
   const diaryDates = useQuery(() => all<DiaryEntry>('diary').then((l) => new Set(l.map((e) => e.date))), [], new Set<string>());
   const n = d ? sumN([d.food, d.supp]) : undefined;
@@ -25,9 +26,10 @@ export function Home() {
   const now = new Date();
   return <><Top title="Grug Fit" right={<a class="btn ic" href="#/settings" aria-label="Settings">⚙️</a>} /><div class="page">
     <div class="mut sm" style="margin:-2px 2px 10px">{WD[now.getDay()]} {now.getDate()} {MONTHS[now.getMonth()]}</div>
+    <BurnBar date={today} />
     <a class="card" style="display:block;color:inherit;text-decoration:none" href={`#/food/${today}`}>
       <div class="row between" style="margin-bottom:8px"><b>Today's nutrition</b><span class="mut sm">{n ? `${energy(n.kcal, s)} ${s.energyUnit}` : ''} →</span></div>
-      {n && <MacroSummary n={n} s={s} compact />}</a>
+      {n && <MacroSummary n={n} s={s} compact kcalTarget={en?.target} />}</a>
     <div class="kpi" style="margin-bottom:12px"><div><span class="mut xs">🏋️ Week streak</span><b>{wkStreak}</b><span class="mut xs">{weekWorkouts} this week</span></div><div><span class="mut xs">🍽 Logging streak</span><b>{foodStreak} d</b></div><div><span class="mut xs">💊 Dose streak</span><b>{doseStreak} d</b></div></div>
     <div class="card"><div class="row between"><b>Doses today</b><a class="btn g sm" href="#/calendar">Calendar →</a></div>
       <div class="list">{slots.map((sl) => <SlotRow sl={sl} />)}</div>

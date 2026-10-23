@@ -17,6 +17,7 @@ const shot = async (n) => { if (!SHOTS) return; await page.waitForSelector('.toa
 const fail = (m) => { console.error('FAIL:', m); process.exitCode = 1; };
 
 await page.goto(BASE);
+await page.click('[data-testid=ob-skip]'); // onboarding is covered by tests/onboarding.mjs
 await page.waitForSelector('text=Today\'s nutrition');
 const sw = await page.evaluate(async () => { const r = await navigator.serviceWorker.ready; return { scope: r.scope, active: !!r.active }; });
 log('service worker', JSON.stringify(sw));
@@ -199,7 +200,7 @@ for (const id of ['legacyA', 'legacyB']) await page.evaluate((id) => new Promise
   const c2 = await browser.newContext({ ...devices['Pixel 7'], colorScheme: 'dark' });
   const p2 = await c2.newPage();
   await p2.addInitScript(() => { navigator.mediaDevices.getUserMedia = () => Promise.reject(new DOMException('Permission denied', 'NotAllowedError')); });
-  await p2.goto(BASE + `#/food/add/${today}/lunch`); await p2.waitForSelector('[data-scan-open]'); await p2.click('[data-scan-open]');
+  await p2.goto(BASE); await p2.click('[data-testid=ob-skip]'); await p2.waitForSelector("text=Today's nutrition"); await p2.goto(BASE + `#/food/add/${today}/lunch`); await p2.waitForSelector('[data-scan-open]'); await p2.click('[data-scan-open]');
   const st = await p2.waitForSelector('.scanner[data-status=denied]', { timeout: 8000 }).then(() => 'denied').catch(() => 'no');
   const manualVisible = await p2.locator('.scanner input[aria-label="Barcode number"]').isVisible();
   log('permission denied state:', st, '| manual entry visible:', manualVisible); if (st !== 'denied' || !manualVisible) fail('permission denial handling');

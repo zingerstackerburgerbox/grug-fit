@@ -7,6 +7,23 @@ import { e1rm, fmtDate, fmtDM, fmtDur, fmtTime, r1, uid, vibrate, wDisp, wIn, ym
 import { detectPRs, exerciseHistory, previousSets, workoutSetCount, workoutVolume } from '../workoutLogic';
 import { CustomExerciseForm, ExerciseFilter, ExercisePicker, useExercises } from './ExercisePicker';
 import { rest } from '../rest';
+import { MET, weightAt, workoutKcal, type Intensity } from '../energy';
+
+const useBW = () => useQuery(() => all<BodyWeight>('bodyweight'), [], []) as BodyWeight[];
+const kgFor = (bws: BodyWeight[], w: Workout) => weightAt(bws, ymd(new Date(w.start)));
+/** Calorie estimate card: MET intensity picker + manual override (saved on the workout). */
+function WorkoutKcalCard({ w, onChange }: { w: Workout; onChange: (w: Workout) => void }) {
+  const bws = useBW(); const kg = kgFor(bws, w); const est = workoutKcal({ ...w, kcalOverride: null }, kg); const kcal = workoutKcal(w, kg);
+  const [ov, setOv] = useState<number | null>(w.kcalOverride ?? null);
+  const upd = async (p: Partial<Workout>) => { const nw = { ...w, ...p }; await put('workouts', nw); onChange(nw); };
+  const hrs = ((w.end || Date.now()) - w.start) / 3.6e6;
+  return <div class="card col" style="margin-top:12px" data-testid="workout-kcal"><div class="row between"><b>🔥 Calories burned</b><b data-testid="workout-kcal-value">{kcal} kcal</b></div>
+    <div class="f sm">Intensity<Seg value={(w.intensity || 'moderate') as Intensity} onChange={(intensity) => upd({ intensity })} options={[['light', 'Light 3.5'], ['moderate', 'Moderate 5'], ['vigorous', 'Vigorous 6']]} /></div>
+    <div class="mut xs">{kg ? `Estimate: (${MET[w.intensity || 'moderate']} MET − 1.2 resting) × ${r1(kg)} kg × ${r1(hrs)} h = ${est} kcal. Resting burn is already counted in your daily total, so only the extra is added.` : 'Log your body weight to get an estimate.'}</div>
+    <div class="row"><label class="f grow">Override (kcal, e.g. from a watch)<NumInput int value={ov} onValue={setOv} placeholder={String(est)} aria-label="Override calories" /></label>
+      <button class="btn sm" style="align-self:flex-end" onClick={() => upd({ kcalOverride: ov })}>Save</button>{w.kcalOverride != null && <button class="btn g sm" style="align-self:flex-end" onClick={() => { setOv(null); upd({ kcalOverride: null }); }}>Use estimate</button>}</div>
+  </div>;
+}
 
 const exMap = (l: Exercise[]) => new Map(l.map((e) => [e.id, e]));
 export const useWorkouts = () => useQuery(() => all<Workout>('workouts').then((l) => l.filter((w) => w.end).sort((a, b) => b.start - a.start)), [], []) as Workout[];
@@ -48,10 +65,10 @@ export function WorkoutsHome() {
 }
 
 export function WorkoutCard({ w, exs }: { w: Workout; exs: Map<string, Exercise> }) {
-  const s = useSettings();
+  const s = useSettings(); const bws = useBW();
   return <a class="card" style="display:block;color:inherit;text-decoration:none" href={`#/history/${w.id}`}>
     <div class="row between"><div class="b">{w.name}</div><div class="mut sm">{fmtDate(w.start)}</div></div>
-    <div class="row mut sm wrap" style="gap:14px;margin:6px 0"><span>⏱ {fmtDur((w.end || w.start) - w.start)}</span><span>🏋️ {Math.round(Number(wDisp(workoutVolume(w), s)))} {s.weightUnit}</span><span>{workoutSetCount(w)} sets</span>{!!w.prs?.length && <span class="pill warn">🏆 {w.prs.length} PR</span>}</div>
+    <div class="row mut sm wrap" style="gap:14px;margin:6px 0"><span>⏱ {fmtDur((w.end || w.start) - w.start)}</span><span>🏋️ {Math.round(Number(wDisp(workoutVolume(w), s)))} {s.weightUnit}</span><span>{workoutSetCount(w)} sets</span><span data-testid="card-kcal">🔥 {workoutKcal(w, kgFor(bws, w))} kcal{w.kcalOverride != null ? '*' : ''}</span>{!!w.prs?.length && <span class="pill warn">🏆 {w.prs.length} PR</span>}</div>
     <div class="sm">{w.exercises.slice(0, 5).map((e) => <div class="ell">{e.sets.filter((x) => x.done).length} × {exs.get(e.exerciseId)?.name || 'Unknown'}</div>)}{w.exercises.length > 5 && <div class="mut">+{w.exercises.length - 5} more</div>}</div>
   </a>;
 }
@@ -98,7 +115,7 @@ export function ActiveWorkout() {
   const [w, setW] = useState<Workout | null | undefined>(undefined);
   const [pick, setPick] = useState(false); const [setMenu, setSetMenu] = useState<{ ei: number; si: number } | null>(null);
   const [exMenu, setExMenu] = useState<number | null>(null); const [finish, setFinish] = useState(false); const [summary, setSummary] = useState<Workout | null>(null);
-  const now = useNow(1000);
+  const now = useNow(1000); const bwsA = useBW(); const liveKg = weightAt(bwsA, ymd());
   useEffect(() => { get<{ w: Workout }>('kv', 'active').then((x) => { wRef.current = x?.w || null; setW(x?.w || null); }); }, []);
   const wRef = useRef<Workout | null | undefined>(undefined); wRef.current = wRef.current === undefined ? w : wRef.current;
   const cur = () => wRef.current as Workout;
@@ -136,7 +153,7 @@ export function ActiveWorkout() {
   return <><Top title={<input value={w.name} onInput={(e) => save({ ...cur(), name: e.currentTarget.value })} style="font-size:18px;font-weight:700;background:transparent;border:0;padding:0;min-height:40px" aria-label="Workout name" />} backBtn={() => go('/workouts')}
     right={<button class="btn p sm" onClick={() => setFinish(true)}>Finish</button>} />
     <div class="page">
-      <div class="kpi"><div><span class="mut xs">Duration</span><b>{fmtDur(now - w.start)}</b></div><div><span class="mut xs">Volume</span><b>{Math.round(Number(wDisp(vol, s)))} {s.weightUnit}</b></div><div><span class="mut xs">Sets</span><b>{doneSets}</b></div></div>
+      <div class="kpi"><div><span class="mut xs">Duration</span><b>{fmtDur(now - w.start)}</b></div><div><span class="mut xs">Volume</span><b>{Math.round(Number(wDisp(vol, s)))} {s.weightUnit}</b></div><div><span class="mut xs">Sets</span><b>{doneSets}</b></div><div><span class="mut xs">🔥 Est.</span><b data-testid="live-kcal">{workoutKcal(w, liveKg, now)}</b></div></div>
       {w.exercises.map((e, ei) => {
         const ex = exs.get(e.exerciseId); const prev = prevMap.get(e.exerciseId) || [];
         let n = 0;
@@ -184,11 +201,12 @@ export function ActiveWorkout() {
     </Sheet></>;
 }
 
-function WorkoutSummary({ w, exs }: { w: Workout; exs: Map<string, Exercise> }) {
-  const s = useSettings();
+function WorkoutSummary({ w: w0, exs }: { w: Workout; exs: Map<string, Exercise> }) {
+  const s = useSettings(); const [w, setW] = useState(w0);
   return <><Top title="Workout complete 🎉" /><div class="page">
     <div class="kpi"><div><span class="mut xs">Duration</span><b>{fmtDur((w.end || 0) - w.start)}</b></div><div><span class="mut xs">Volume</span><b>{Math.round(Number(wDisp(workoutVolume(w), s)))} {s.weightUnit}</b></div><div><span class="mut xs">Sets</span><b>{workoutSetCount(w)}</b></div></div>
     {!!w.prs?.length && <div class="card" style="margin-top:12px;border-color:var(--warn)"><h3>🏆 Personal records</h3>{w.prs.map((p) => <div class="row between sm"><span>{exs.get(p.exerciseId)?.name}</span><span class="pill warn">{PR_LABEL[p.kind]}: {p.kind === 'reps' ? p.value : `${wDisp(p.value, s)} ${s.weightUnit}`}</span></div>)}</div>}
+    <WorkoutKcalCard w={w} onChange={setW} />
     <button class="btn p full" style="margin-top:12px" onClick={() => go(`/history/${w.id}`)}>View workout</button>
     <button class="btn full" style="margin-top:8px" onClick={async () => { await saveAsRoutine(w); }}>Save as routine</button>
     <button class="btn g full" style="margin-top:8px" onClick={() => go('/')}>Done</button>
@@ -217,6 +235,7 @@ export function WorkoutDetail({ id }: { id: string }) {
     <div class="mut sm">{fmtDate(w.start)} · {fmtTime(w.start)}–{fmtTime(w.end || w.start)}</div>
     <div class="kpi" style="margin-top:8px"><div><span class="mut xs">Duration</span><b>{fmtDur((w.end || 0) - w.start)}</b></div><div><span class="mut xs">Volume</span><b>{Math.round(Number(wDisp(workoutVolume(w), s)))} {s.weightUnit}</b></div><div><span class="mut xs">Sets</span><b>{workoutSetCount(w)}</b></div></div>
     {!!w.prs?.length && <div class="card" style="margin-top:12px;border-color:var(--warn)"><h3>🏆 Personal records</h3>{w.prs.map((p) => <div class="row between sm"><span>{exs.get(p.exerciseId)?.name}</span><span class="pill warn">{PR_LABEL[p.kind]}: {p.kind === 'reps' ? p.value : `${wDisp(p.value, s)} ${s.weightUnit}`}</span></div>)}</div>}
+    <WorkoutKcalCard w={w} onChange={() => {}} />
     {w.exercises.map((e) => { let n = 0; return <div class="card" style="margin-top:12px"><a class="b" style="color:var(--acc2);text-decoration:none" href={`#/exercise/${e.exerciseId}`}>{exs.get(e.exerciseId)?.name}</a>
       {e.notes && <div class="mut sm">{e.notes}</div>}
       {e.sets.map((st) => <div class="row between sm" style="padding:4px 0"><span class={'stype ' + st.type} style="min-height:0">{st.type === 'N' ? ++n : st.type}</span><span class="grow">{wDisp(st.kg, s) || 0} {s.weightUnit} × {st.reps}{st.rpe ? ` @ RPE ${st.rpe}` : ''}</span><span class="mut">1RM {r1(Number(wDisp(e1rm(st.kg || 0, st.reps || 0), s)))}</span></div>)}</div>; })}

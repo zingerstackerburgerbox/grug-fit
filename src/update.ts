@@ -4,7 +4,7 @@ import { toast } from './ui';
 export const APP_VERSION = __APP_VERSION__, BUILD_TIME = __BUILD_TIME__, BUILD_ID = __BUILD_ID__;
 const CHECK_EVERY = 30 * 60 * 1000;
 let dirty = false; let pending = false;
-const EDIT_ROUTES = [/^\/workout\/active/, /^\/routine\//, /^\/food\/edit\//, /^\/food\/label/, /^\/recipe\//, /^\/supp\//];
+const EDIT_ROUTES = [/^\/workout\/active/, /^\/routine\//, /^\/food\/edit\//, /^\/food\/label/, /^\/welcome/, /^\/recipe\//, /^\/supp\//];
 document.addEventListener('input', (e) => { if ((e.target as HTMLElement)?.closest?.('.page, .sheet, .scanner')) dirty = true; }, true);
 addEventListener('hashchange', () => { dirty = false; if (pending) maybeReload(); });
 

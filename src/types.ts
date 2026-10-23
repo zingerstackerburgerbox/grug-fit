@@ -7,7 +7,9 @@ export type Exercise = { id: string; name: string; muscle: string; equipment: st
 export type SetType = 'W' | 'N' | 'D' | 'F';
 export type WSet = { id: string; type: SetType; kg: number | null; reps: number | null; rpe?: number | null; done: boolean };
 export type WExercise = { id: string; exerciseId: string; sets: WSet[]; restSec: number; notes?: string };
-export type Workout = { id: string; name: string; start: number; end?: number; routineId?: string; exercises: WExercise[]; prs?: PR[]; notes?: string };
+export type Workout = { id: string; name: string; start: number; end?: number; routineId?: string; exercises: WExercise[]; prs?: PR[]; notes?: string;
+  /** calorie estimate inputs: MET intensity (default moderate) and optional manual kcal override */
+  intensity?: 'light' | 'moderate' | 'vigorous'; kcalOverride?: number | null };
 export type PR = { exerciseId: string; kind: '1rm' | 'weight' | 'volume' | 'reps'; value: number };
 export type RoutineEx = { exerciseId: string; sets: number; reps?: number; kg?: number; restSec: number };
 export type Routine = { id: string; name: string; exercises: RoutineEx[]; notes?: string; updated: number };
@@ -37,4 +39,11 @@ export type DoseLog = { id: string; suppId: string; scheduleId?: string; date: s
 export type Settings = {
   id: 'settings'; targets: Nutrients; energyUnit: 'kcal' | 'kJ'; weightUnit: 'kg' | 'lb'; defaultRest: number;
   vibrate: boolean; reminders: boolean;
+  /** body profile for BMR (weight comes from the latest body-weight log) */
+  profile?: Profile;
+  /** add today's workout calories to the calorie target ("eat back"); undefined = default for goal */
+  eatBack?: boolean;
+  /** onboarding finished/skipped (timestamp) */
+  onboarded?: number;
 };
+export type Profile = { heightCm: number; sex: 'male' | 'female'; birthYear: number; goal: 'cut' | 'maintain' | 'bulk'; heightUnit?: 'cm' | 'ftin'; bwUnit?: 'kg' | 'lb'; updated?: number };

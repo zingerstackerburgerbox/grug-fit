@@ -11,6 +11,8 @@ import { LabelScan } from './pages/LabelScan';
 import { AddFood, Diary, FoodEdit, MyFoods, RecipeEdit, Trends } from './pages/Nutrition';
 import { CalendarPage, SuppEdit, SuppsPage } from './pages/Supps';
 import { SettingsPage } from './pages/Settings';
+import { Onboarding } from './pages/Onboarding';
+import { getSettings } from './db';
 import { scheduleReminders } from './doses';
 import { registerSW, showUpdatedToast } from './update';
 import type { Meal } from './types';
@@ -48,6 +50,7 @@ function route(h: string) {
     case 'supp': return <SuppEdit id={p[1]} key={p[1]} />;
     case 'calendar': return <CalendarPage />;
     case 'settings': return <SettingsPage />;
+    case 'welcome': return <Onboarding />;
     default: return <Home />;
   }
 }
@@ -62,11 +65,13 @@ function UpdateBanner() {
   return <button class="update-banner" onClick={() => location.reload()} data-testid="update-banner">⬆️ Update ready – tap to refresh<span class="xs mut"> (finish your workout/edit first; nothing is lost)</span></button>;
 }
 function App() {
-  const [ready, setReady] = useState(false); const h = useHash();
-  useEffect(() => { init().then(() => { setReady(true); scheduleReminders(); showUpdatedToast(); }); const v = () => document.visibilityState === 'visible' && scheduleReminders(); document.addEventListener('visibilitychange', v); return () => document.removeEventListener('visibilitychange', v); }, []);
+  const [ready, setReady] = useState(false); const h = useHash(); const [onboard, setOnboard] = useState(false);
+  useEffect(() => { init().then(async () => { setOnboard(!(await getSettings()).onboarded); setReady(true); scheduleReminders(); showUpdatedToast(); }); const v = () => document.visibilityState === 'visible' && scheduleReminders(); document.addEventListener('visibilitychange', v); return () => document.removeEventListener('visibilitychange', v); }, []);
   useEffect(() => { window.scrollTo(0, 0); }, [h.split('?')[0]]);
   if (!ready) return <div class="empty">Loading…</div>;
   const seg = h.split('/').filter(Boolean)[0] || '';
+  // first open (fresh or existing install upgraded to v1.3): show onboarding once, unless a workout is in progress
+  if (onboard && seg !== 'workout') return <><main key="onboarding"><Onboarding onDone={() => setOnboard(false)} /></main><UpdateBanner /><Toaster /></>;
   return <>
     <main key={h}>{route(h)}</main>
     <RestBar />

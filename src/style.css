@@ -81,7 +81,7 @@ label.f { display:flex; flex-direction:column; gap:4px; font-size: 13px; color: 
 .rings { display:flex; justify-content: space-around; gap: 6px; }
 .ring { display:flex; flex-direction:column; align-items:center; gap: 2px; font-size: 12px; }
 .big { font-size: 28px; font-weight: 800; }
-.kpi { display:grid; grid-template-columns: repeat(3,1fr); gap: 8px; }
+.kpi { display:grid; grid-template-columns: repeat(auto-fit, minmax(70px, 1fr)); gap: 8px; }
 .kpi > div { background: var(--bg3); border-radius: 12px; padding: 10px; text-align:center; }
 .kpi b { display:block; font-size: 18px; }
 .empty { text-align:center; color: var(--mut); padding: 28px 10px; }
@@ -119,3 +119,14 @@ video.scan { width:100%; border-radius: 12px; background:#000; aspect-ratio: 4/3
 label.f.lowconf input, .lowconf-key { border: 2px solid var(--warn) !important; background: #3b2a0b !important; }
 .lowconf-key { padding: 0 4px; border-radius: 4px; }
 label.f.missing input { border: 2px dashed var(--bad) !important; }
+.onboard { min-height: 100vh; display: flex; flex-direction: column; padding: 14px 16px calc(16px + env(safe-area-inset-bottom)); max-width: 560px; margin: 0 auto; }
+.ob-top { display: flex; justify-content: space-between; align-items: center; }
+.ob-dots { display: flex; gap: 6px; } .ob-dots i { width: 22px; height: 6px; border-radius: 9px; background: var(--line); } .ob-dots i.on { background: var(--acc); }
+.ob-body { flex: 1; padding-top: 18px; } .ob-body h1 { font-size: 26px; margin: 4px 0 6px; }
+.ob-hero { font-size: 56px; margin-top: 20px; }
+.ob-opt { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; text-align: left; padding: 16px; border-radius: 14px; border: 2px solid var(--line); background: var(--bg2); color: var(--fg); font: inherit; font-size: 16px; min-height: 56px; width: 100%; }
+.ob-opt.on { border-color: var(--acc); background: #12301f; }
+.ob-burn b { font-size: 30px; color: var(--kcal); display: block; margin: 4px 0; }
+.ob-nav { margin-top: 14px; }
+.burnbar { display: flex; gap: 16px; justify-content: space-between; align-items: center; padding: 8px 12px; margin: 0 0 10px; border-radius: 12px; background: var(--bg2); border: 1px solid var(--line); font-size: 13px; text-decoration: none; color: inherit; }
+.burnbar b { font-size: 16px; } .burnbar .rem b { color: var(--acc); } .burnbar .rem.over b { color: var(--bad); }
