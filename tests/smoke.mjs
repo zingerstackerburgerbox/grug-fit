@@ -131,7 +131,7 @@ try {
   const rememberedChecked = await page.locator('.amount-sheet [role=radio][aria-checked=true]').textContent(); const remQty = await page.inputValue('.amount-sheet input[aria-label=Amount]');
   log('remembered unit/qty:', rememberedChecked, remQty); if (rememberedChecked !== 'grams' || remQty !== '50') fail('last unit/amount not remembered');
   // switch to servings: quantity converts keeping grams
-  const sv = nutella.servings[0]; const svRe = new RegExp('^' + sv.label);
+  const sv = nutella.servings[0]; const svRe = new RegExp('^(1 )?' + sv.label);
   await chip(svRe).click(); await page.waitForTimeout(150);
   const conv = Number(await page.inputValue('.amount-sheet input[aria-label=Amount]')); pv = await preview();
   log(`switched to serving (${sv.grams} g): qty`, conv, 'grams', pv.grams); if (!near(conv, Math.round(50 / sv.grams * 1000) / 1000, 0.01) || !near(pv.grams, 50, 0.2)) fail('unit conversion wrong');
@@ -170,7 +170,8 @@ try {
   await page.waitForSelector('.amount-sheet', { timeout: 8000 }); log('returned to amount screen for new food:', await page.locator('.sheet h2').textContent());
   const u = await page.locator('.amount-sheet [role=radio]').allTextContents(); if (u.length !== 1) fail('no-serving food should be grams only');
   // define a serving on the fly
-  await page.click('[aria-label="Define a serving"]'); await page.fill('.amount-sheet input[placeholder="e.g. slice, cup, scoop"]', 'sausage'); await page.fill('.amount-sheet input[aria-label="Serving size"]', '75'); await page.click('text=Save serving');
+  await page.click('[data-testid=edit-servings]'); await page.click('text=＋ Add serving'); await page.fill('.amount-sheet input[aria-label="Serving name"]', 'sausage'); await page.fill('.amount-sheet input[aria-label="Serving grams"]', '75');
+  await page.check('.amount-sheet input[aria-label="Default: sausage"]'); await page.click('[data-testid=save-servings]');
   await page.waitForTimeout(200); await page.fill('.amount-sheet input[aria-label=Amount]', '2'); const pv2 = await preview(); log('2 sausages:', JSON.stringify(pv2)); if (!near(pv2.grams, 150, 0.01) || !near(pv2.kcal, 375, 1)) fail('defined serving maths');
   await page.click('.amount-sheet >> text=Add to diary'); await page.waitForTimeout(300);
   await page.goto(BASE + `#/food/add/${today}/dinner`); await page.fill('input[type=search]', fake); await page.click('button[aria-label=Search]');

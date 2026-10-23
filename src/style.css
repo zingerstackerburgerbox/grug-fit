@@ -140,3 +140,7 @@ button.exthumb.tap { cursor: pointer; min-height: 0; }
 .srcbadge { margin-left: 6px; font-size: 10px; padding: 1px 6px; border-radius: 999px; border: 1px solid var(--bg3); color: var(--mut); white-space: nowrap; vertical-align: 1px; }
 .focus-ring { position: absolute; width: 64px; height: 64px; margin: -32px 0 0 -32px; border: 2px solid #fcd34d; border-radius: 50%; pointer-events: none; z-index: 3; animation: fr .9s ease-out forwards; }
 @keyframes fr { from { transform: scale(1.4); opacity: 1; } to { transform: scale(1); opacity: 0; } }
+.servings-editor { gap: 8px; }
+.servings-editor input[type=radio] { width: 22px; min-height: 22px; height: 22px; flex: 0 0 22px; padding: 0; margin: 0; accent-color: var(--acc); }
+.servings-editor .sv-name { flex: 1 1 auto; min-width: 0; width: auto; }
+.servings-editor .row { align-items: center; flex-wrap: nowrap; }

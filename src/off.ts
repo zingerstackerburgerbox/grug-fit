@@ -1,7 +1,7 @@
 import type { Food, Nutrients, Serving } from './types';
-import { uid } from './util';
-import { cleanNote } from './servings';
-const FIELDS = 'code,product_name,product_name_en,brands,nutriments,serving_size,serving_quantity,serving_quantity_unit,product_quantity,product_quantity_unit,quantity,nutrition_data_per,countries_tags,image_small_url,image_front_small_url';
+import { r1, uid } from './util';
+import { cleanNote, drainedGrams, packedInLiquid, servingGrams } from './servings';
+const FIELDS = 'code,product_name,product_name_en,brands,nutriments,serving_size,serving_quantity,serving_quantity_unit,product_quantity,product_quantity_unit,quantity,nutrition_data_per,countries_tags,categories_tags,drained_weight,image_small_url,image_front_small_url';
 const g2 = (v: any, f: number) => (v == null || v === '' || isNaN(+v) ? undefined : +v * f);
 
 export function offToFood(p: any): Food | null {
@@ -28,11 +28,18 @@ export function offToFood(p: any): Food | null {
   const unitTxt = `${p.serving_quantity_unit || ''} ${p.product_quantity_unit || ''} ${p.serving_size || ''} ${p.quantity || ''}`.toLowerCase();
   const liquid = /\bml\b|\bcl\b|\bl\b|litre|liter/.test(unitTxt) && !/\bg\b|\bkg\b/.test(`${p.serving_quantity_unit || ''} ${p.product_quantity_unit || ''}`.toLowerCase());
   const servings: Serving[] = [];
-  const sq = +p.serving_quantity;
-  if (sq > 0) servings.push({ label: 'serving', grams: sq, note: cleanNote(p.serving_size), kind: 'serving' });
+  // 1 serving: only what the label/OFF says (serving_quantity, or a g/ml figure in serving_size) — never invented
+  const sq = servingGrams(p);
+  if (sq) servings.push({ label: 'serving', grams: sq, note: cleanNote(p.serving_size), kind: 'serving' });
   let pq = +p.product_quantity; const pu = String(p.product_quantity_unit || '').toLowerCase();
   if (pq > 0 && (pu === 'kg' || pu === 'l')) pq *= 1000;
-  if (pq > 0 && pq !== sq && pq < 20000) servings.push({ label: 'package', grams: pq, note: cleanNote(p.quantity), kind: 'package' });
+  // whole package: the gross/net quantity is only eatable when nothing is drained off. Canned/jarred-in-liquid products
+  // (tuna in spring water, beans in brine, fruit in syrup…) have per-100 g values for the drained food, so offer the drained weight or nothing.
+  const liq = packedInLiquid(p); const dw = drainedGrams(p);
+  const ctx = `${(p.categories_tags || []).join(' ')} ${p.product_name || ''} ${p.quantity || ''}`;
+  const box = /\bjar\b|glass|bocal|en:pickles|en:olives/i.test(ctx) ? 'jar' : liq || /can|tin\b|canned/i.test(ctx) ? 'can' : 'package';
+  if (dw && dw < 20000 && dw !== sq) servings.push({ label: `${box}, drained`, grams: dw, note: pq > 0 ? `${r1(pq)} g incl. liquid` : undefined, kind: 'package' });
+  else if (!liq && pq > 0 && pq !== sq && pq < 20000) servings.push({ label: 'package', grams: pq, note: cleanNote(p.quantity), kind: 'package' });
   const brand = Array.isArray(p.brands) ? p.brands.join(', ') : p.brands;
   return { id: p.code ? 'off_' + p.code : uid(), name: String(name).trim(), brand: brand || undefined, barcode: p.code, source: 'off', unit: liquid ? 'ml' : 'g', per100, servings, image: p.image_front_small_url || p.image_small_url };
 }

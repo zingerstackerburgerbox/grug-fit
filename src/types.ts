@@ -24,6 +24,10 @@ export type Food = {
   unit?: 'g' | 'ml';
   /** last unit + quantity the user logged this food with */
   lastServing?: { label: string; qty: number };
+  /** servings the user edited on the amount screen: replace the source's list and survive OFF/USDA re-fetch */
+  userServings?: Serving[];
+  /** label of the default unit for new entries ('' = grams/ml); undefined = first serving */
+  defaultServing?: string;
 };
 export type Meal = 'breakfast' | 'lunch' | 'dinner' | 'snacks';
 export type DiaryEntry = { id: string; date: string; meal: Meal; foodId: string; name: string; grams: number; qty: number; serving: string; n: Nutrients; created: number };

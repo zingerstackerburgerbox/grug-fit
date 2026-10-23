@@ -37,14 +37,20 @@ const preview = async () => { const v = {}; for (const k of ['kcal', 'protein', 
 const checkTuna = async (label) => {
   const title = await page.locator('.sheet h2').textContent(); const sub = await page.locator('.amount-sheet .mut.sm').first().textContent();
   if (title !== 'No Net Tuna in Spring Water' || !/Safcol/.test(sub)) fail(`${label}: wrong product ${title} / ${sub}`);
-  const units = await page.locator('.amount-sheet [role=radio]').allTextContents();
-  if (!units.some((u) => /package \(185 g\)/.test(u))) fail(`${label}: no 185 g package option (${units.join(' | ')})`);
+  // v1.5.2: label serving 65 g (default) + ~130 g drained tuna per can; the 185 g gross can (incl. water) is never offered
+  const units = await page.locator('.amount-sheet [role=radio]').allTextContents(); log(`${label} units:`, units.join(' | '));
+  if (units.some((u) => /185/.test(u))) fail(`${label}: 185 g can (incl. water) offered as a serving (${units.join(' | ')})`);
+  if (!units.some((u) => /^1 serving \(65 g\)/.test(u)) || !units.some((u) => /^1 can, drained \(130 g\)/.test(u))) fail(`${label}: servings wrong (${units.join(' | ')})`);
+  const def = await page.locator('.amount-sheet [role=radio][aria-checked=true]').textContent(); const dq = await page.inputValue('.amount-sheet input[aria-label=Amount]');
+  const sv = await preview(); log(`${label} default ${def} × ${dq}:`, JSON.stringify({ ...sv, micros: undefined }));
+  if (!/^1 serving/.test(def) || dq !== '1' || !near(sv.grams, 65, 0.01) || !near(sv.kcal, 78, 1) || !near(sv.protein, 16.6, 0.05)) fail(`${label}: default serving wrong`);
   await page.locator('.amount-sheet [role=radio]').filter({ hasText: /^grams$/ }).click(); await page.fill('.amount-sheet input[aria-label=Amount]', '100');
   const g = await preview(); log(`${label} 100 g:`, JSON.stringify(g));
   if (!near(g.kcal, 120, 1) || !near(g.protein, 25.5, 0.05) || !near(g.fat, 1.6, 0.05) || !near(g.carbs, 1, 0.05) || !/Sodium 49\.2 mg/.test(g.micros)) fail(`${label}: per-100 g macros wrong`);
-  await page.locator('.amount-sheet [role=radio]').filter({ hasText: /package/ }).click(); await page.fill('.amount-sheet input[aria-label=Amount]', '1');
-  const p = await preview(); log(`${label} 1 can:`, JSON.stringify({ ...p, micros: undefined }));
-  if (!near(p.grams, 185, 0.01) || !near(p.kcal, 223, 1) || !near(p.protein, 47.2, 0.1)) fail(`${label}: 185 g can maths wrong`);
+  await page.locator('.amount-sheet [role=radio]').filter({ hasText: /can, drained/ }).click(); await page.fill('.amount-sheet input[aria-label=Amount]', '1');
+  const p = await preview(); log(`${label} 1 can drained:`, JSON.stringify({ ...p, micros: undefined }));
+  if (!near(p.grams, 130, 0.01) || !near(p.kcal, 157, 1) || !near(p.protein, 33.2, 0.1)) fail(`${label}: drained can maths wrong`);
+  await page.locator('.amount-sheet [role=radio]').filter({ hasText: /^1 serving/ }).click(); await page.fill('.amount-sheet input[aria-label=Amount]', '1');
 };
 await typeCode(); if (await outcome() !== 'found') fail('mocked OFF: not found'); else { log('OFF request:', calls.join(',')); await checkTuna('mock'); }
 mode = 'v3'; calls = []; await typeCode(); if (await outcome() !== 'found') fail('status "success" not accepted'); else log('status "success" accepted');
@@ -62,9 +68,64 @@ mode = 'html'; await typeCode(); if (await outcome() !== 'notfound') fail('garbl
 mode = 'ok'; await idbPut('foods', { id: 'cfempty', name: 'tuna?', source: 'custom', barcode: CODE, per100: { kcal: 0, protein: 0, carbs: 0, fibre: 0, fat: 0 }, servings: [] });
 await typeCode(); if (await outcome() !== 'found' || (await page.locator('.sheet h2').textContent()) !== 'No Net Tuna in Spring Water') fail('empty local food shadowed OFF'); else log('empty saved food with same barcode → OFF result shown');
 await idbDel('foods', 'cfempty');
+// ---- user-edited servings: persist per barcode, survive OFF re-fetch and removal of the saved food ----
+const idbGet = (store, id) => page.evaluate(([store, id]) => new Promise((res) => { const r = indexedDB.open('grugfit'); r.onsuccess = () => { const q = r.result.transaction(store).objectStore(store).get(id); q.onsuccess = () => { r.result.close(); res(q.result); }; }; }), [store, id]);
+await typeCode(); await outcome(); await page.waitForTimeout(200);
+await page.screenshot({ path: 'screenshots/32-tuna-servings.png' });
+await page.click('[data-testid=edit-servings]'); await page.waitForSelector('[data-testid=servings-editor]');
+await page.screenshot({ path: 'screenshots/33-edit-servings.png' });
+await page.click('text=＋ Add serving'); await page.locator('.amount-sheet input[aria-label="Serving name"]').last().fill('sandwich');
+await page.locator('.amount-sheet input[aria-label="Serving grams"]').last().fill('40'); await page.check('.amount-sheet input[aria-label="Default: sandwich"]');
+await page.locator('.amount-sheet input[aria-label="Serving grams"]').first().fill('70'); // serving 65 → 70
+await page.click('[aria-label="Delete can, drained"]'); await page.click('[data-testid=save-servings]'); await page.waitForTimeout(300);
+let u = await page.locator('.amount-sheet [role=radio]').allTextContents(); let on = await page.locator('.amount-sheet [role=radio][aria-checked=true]').textContent();
+log('after edit:', u.join(' | '), '| default:', on); if (u.join('|') !== 'grams|1 serving (70 g)|1 sandwich (40 g)' || !/sandwich/.test(on)) fail('servings edit not applied');
+const kvo = await idbGet('kv', 'servings:' + CODE); log('stored override:', JSON.stringify(kvo)); if (!kvo || kvo.def !== 'sandwich') fail('override not stored by barcode');
+await page.keyboard.press('Escape');
+// re-fetch from OFF (typeCode deletes the saved food first) — user's servings must win
+await typeCode(); await outcome(); u = await page.locator('.amount-sheet [role=radio]').allTextContents(); on = await page.locator('.amount-sheet [role=radio][aria-checked=true]').textContent();
+log('rescan after edit:', u.join(' | '), '| default:', on); if (u.join('|') !== 'grams|1 serving (70 g)|1 sandwich (40 g)' || !/sandwich/.test(on)) fail('user servings lost on OFF re-fetch');
+await page.keyboard.press('Escape'); await idbDel('kv', 'servings:' + CODE);
+// ---- logged 185 g cans: one-time note, nothing changed without consent ----
+const ent = (id, d) => ({ id, date: d, meal: 'lunch', foodId: 'off_' + CODE, name: 'No Net Tuna in Spring Water (Safcol)', grams: 185, qty: 1, serving: 'package', n: { kcal: 222.7, protein: 47.2, carbs: 1.9, fibre: 0, fat: 3 }, created: 5 });
+const yest = await page.evaluate(() => { const d = new Date(Date.now() - 864e5); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; });
+await idbPut('diary', ent('tunaA', yest)); await idbPut('diary', { ...ent('tunaB', today), qty: 2, grams: 370, n: { kcal: 445.4, protein: 94.4, carbs: 3.7, fibre: 0, fat: 5.9 } });
+await page.goto(BASE + `#/food/${today}`); await page.waitForSelector('[data-testid=fix-note]', { timeout: 8000 }).catch(() => fail('fix note not shown'));
+log('fix note:', (await page.textContent('[data-testid=fix-note]')).replace(/\s+/g, ' '));
+const untouched = await idbGet('diary', 'tunaA'); if (untouched.grams !== 185) fail('history changed before consent');
+await page.screenshot({ path: 'screenshots/34-fix-note.png' });
+await page.click('[data-testid=fix-apply]'); await page.waitForTimeout(400);
+const fa = await idbGet('diary', 'tunaA'), fb = await idbGet('diary', 'tunaB'); log('corrected:', fa.grams, fa.serving, Math.round(fa.n.kcal), '|', fb.qty, '×', fb.grams, Math.round(fb.n.kcal), fb.n.protein.toFixed(1));
+if (!(fa.grams === 130 && near(fa.n.kcal, 156.5, 1) && fb.grams === 260 && near(fb.n.protein, 66.3, 0.2) && fa.serving === 'can, drained')) fail('correction maths');
+await page.reload(); await page.waitForSelector('text=Snacks'); await page.waitForTimeout(500); if (await page.locator('[data-testid=fix-note]').count()) fail('note shown again after fixing');
+// "Keep as logged" leaves history alone and never asks again
+await idbDel('kv', 'fix:' + CODE); await idbPut('diary', ent('tunaC', today)); await page.reload(); await page.waitForSelector('[data-testid=fix-note]');
+await page.click('[data-testid=fix-keep]'); await page.waitForTimeout(300); const fc = await idbGet('diary', 'tunaC'); if (fc.grams !== 185 || fc.n.kcal !== 222.7) fail('keep changed history');
+await page.reload(); await page.waitForSelector('text=Snacks'); await page.waitForTimeout(500); if (await page.locator('[data-testid=fix-note]').count()) fail('note shown again after keep'); else log('keep as logged → unchanged, not asked again');
+for (const id of ['tunaA', 'tunaB', 'tunaC']) await idbDel('diary', id);
 if (LIVE) { mode = 'live'; calls = []; await typeCode(); const o = await outcome(); if (o !== 'found') fail('LIVE OFF: ' + o + ' ' + (await page.locator('[data-testid=lookup-diag]').textContent().catch(() => ''))); else { await checkTuna('live'); await page.screenshot({ path: 'screenshots/31-safcol-tuna.png' }); } }
 await ctx.close();
 
+// ---------- OFF → servings rules (unit) ----------
+{
+  const oj = buildSync({ entryPoints: ['src/off.ts'], bundle: true, format: 'iife', globalName: 'OFFM', write: false }).outputFiles[0].text;
+  const up = await b.newPage(); await up.setContent(`<script>${oj}</script>`);
+  const S = (p) => up.evaluate((p) => OFFM.offToFood(p).servings.map((s) => `${s.label}=${s.grams}${s.note ? ' [' + s.note + ']' : ''}`).join(', '), p);
+  const nm = { 'energy-kcal_100g': 100, proteins_100g: 10 };
+  const cases = [
+    ['Safcol raw OFF (no serving, canned in spring water)', { ...PRODUCT, categories_tags: ['en:canned-fishes', 'en:canned-tunas'], code: '1' }, ''],
+    ['quantity "185 g (130 g drained)"', { product_name: 'Tuna Chunks in Brine', nutriments: nm, quantity: '185 g (130 g drained)', product_quantity: 185, product_quantity_unit: 'g', categories_tags: ['en:canned-tunas'] }, 'can, drained=130 [185 g incl. liquid]'],
+    ['"drained weight 240g" + serving 120 g', { product_name: 'Chickpeas in Brine', nutriments: nm, quantity: '400g, drained weight 240g', product_quantity: 400, serving_quantity: 120, serving_size: '120 g' }, 'serving=120, can, drained=240 [400 g incl. liquid]'],
+    ['"poids égoutté : 140 g"', { product_name: 'Thon au naturel', nutriments: nm, quantity: '200 g - poids égoutté : 140 g', product_quantity: 200, categories_tags: ['en:canned-tunas'] }, 'can, drained=140 [200 g incl. liquid]'],
+    ['drained_weight field', { product_name: 'Peaches in Syrup', nutriments: nm, quantity: '410 g', product_quantity: 410, drained_weight: '245 g', categories_tags: ['en:fruits-in-syrup'] }, 'can, drained=245 [410 g incl. liquid]'],
+    ['beans in brine, no drained info → no can offered', { product_name: 'Red Kidney Beans in Brine', nutriments: nm, quantity: '420 g', product_quantity: 420, serving_quantity: 105, serving_size: '105 g' }, 'serving=105'],
+    ['not packed in liquid → whole package kept', { product_name: 'Hazelnut spread', nutriments: nm, quantity: '400 g', product_quantity: 400, serving_quantity: 15, serving_size: '15 g' }, 'serving=15, package=400'],
+    ['serving_size text only', { product_name: 'Oats', nutriments: nm, serving_size: '40 g (1/2 cup)', quantity: '750 g', product_quantity: 750 }, 'serving=40 [1/2 cup], package=750'],
+    ['no serving data → none invented', { product_name: 'Rice', nutriments: nm }, '']
+  ];
+  for (const [n, p, want] of cases) { const got = await S(p); log(`servings · ${n}: ${got || '(grams only)'}`); if (got !== want) fail(`servings ${n}: got "${got}" want "${want}"`); }
+  await up.close();
+}
 // ---------- decoding (ZXing fallback, same code path as the app) ----------
 const js = buildSync({ entryPoints: ['src/barcode.ts'], bundle: true, format: 'iife', globalName: 'BC', write: false }).outputFiles[0].text;
 const dp = await b.newPage(); await dp.setContent(`<script>${js}</script>`);

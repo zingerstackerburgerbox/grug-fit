@@ -4,7 +4,7 @@ import { useQuery, useSettings } from '../hooks';
 import type { DiaryEntry, Exercise, Workout } from '../types';
 import { Top } from '../ui';
 import { addDays, energy, fmtDate, MONTHS, WD, ymd } from '../util';
-import { dayTotals, MacroSummary } from './Nutrition';
+import { dayTotals, MacroSummary, PackageFixNote } from './Nutrition';
 import { slotsFor } from '../doses';
 import { SlotRow, useDoseData } from './Supps';
 import { startWorkout, useActive, useWorkouts, WorkoutCard } from './Workouts';
@@ -27,6 +27,7 @@ export function Home() {
   return <><Top title="Grug Fit" right={<a class="btn ic" href="#/settings" aria-label="Settings">⚙️</a>} /><div class="page">
     <div class="mut sm" style="margin:-2px 2px 10px">{WD[now.getDay()]} {now.getDate()} {MONTHS[now.getMonth()]}</div>
     <BurnBar date={today} />
+    <PackageFixNote />
     <a class="card" style="display:block;color:inherit;text-decoration:none" href={`#/food/${today}`}>
       <div class="row between" style="margin-bottom:8px"><b>Today's nutrition</b><span class="mut sm">{n ? `${energy(n.kcal, s)} ${s.energyUnit}` : ''} →</span></div>
       {n && <MacroSummary n={n} s={s} compact kcalTarget={en?.target} />}</a>

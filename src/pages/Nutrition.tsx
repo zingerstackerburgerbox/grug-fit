@@ -7,7 +7,7 @@ import { Bar, BarChart, NumInput, Ring, Seg, Sheet, Top, confirmDo, num, toast }
 import { addDays, energy, fmtDay, fmtDM, MICROS, netCarbs, r0, r1, scaleN, sumN, uid, ymd, EMPTY, NKEYS, parseYmd, WD } from '../util';
 import { lookupBarcode, searchOFF } from '../off';
 import { lookupFDC, FdcBusy } from '../fdc';
-import { amountText, baseUnit, convertQty, matchUnit, normaliseServings, unitLabel, unitsFor } from '../servings';
+import { amountText, baseUnit, BUILTIN_SERVINGS, convertQty, defaultServingOf, isBase, matchUnit, normaliseServings, servingsOf, unitLabel, unitsFor, type ServingOverride } from '../servings';
 import { Scanner } from '../scanner';
 
 export const MEALS: [Meal, string][] = [['breakfast', 'Breakfast'], ['lunch', 'Lunch'], ['dinner', 'Dinner'], ['snacks', 'Snacks']];
@@ -58,6 +58,7 @@ export function Diary({ date }: { date: string }) {
         <label class="b" style="position:relative">{fmtDay(date)} <span class="mut sm">{WD[parseYmd(date).getDay()]} {fmtDM(date)}</span><input type="date" value={date} onInput={(e) => e.currentTarget.value && go(`/food/${e.currentTarget.value}`)} style="position:absolute;inset:0;opacity:0" aria-label="Pick date" /></label>
         <button class="btn ic" aria-label="Next day" onClick={() => go(`/food/${addDays(date, 1)}`)}>▶</button></div>
       <BurnBar date={date} />
+      <PackageFixNote />
       <div class="card"><MacroSummary n={total} s={s} kcalTarget={en?.target} />
         <div class="row between sm mut" style="margin-top:8px"><span>Fibre {r1(total.fibre)} g</span><span>Total carbs {r1(total.carbs)} g</span>{d && d.supp.kcal + (d.supp.calcium || 0) + (d.supp.vitD || 0) > 0 && <span class="pill info">incl. supplements</span>}</div></div>
       {MEALS.map(([m, label]) => { const es = (d?.entries || []).filter((e) => e.meal === m); const mt = sumN(es.map((e) => e.n));
@@ -80,10 +81,84 @@ export function Diary({ date }: { date: string }) {
     </Sheet></>;
 }
 
+/** User serving edits for scanned foods are also kept by barcode (kv 'servings:<code>') so they apply to future scans,
+ *  even if the saved food is removed or the product comes back from a different source; they always win over OFF/USDA data. */
+async function applyServingOverride(f: Food): Promise<Food> {
+  if (!f.barcode || f.userServings) return f;
+  const o = await get<ServingOverride & { id: string }>('kv', 'servings:' + f.barcode);
+  return o ? { ...f, userServings: o.servings, defaultServing: o.def } : f;
+}
+export async function saveServings(food: Food, list: Serving[], def: string | undefined): Promise<Food> {
+  const stored = (await get<Food>('foods', food.id)) || food;
+  const clean = list.filter((x) => x.label.trim() && x.grams > 0 && !isBase(x.label.trim())).map((x) => ({ ...x, label: x.label.trim() }));
+  const d = def && clean.some((x) => x.label === def) ? def : def === '' ? '' : undefined;
+  const { lastServing, ...rest } = stored; // a new default should apply to the next entry
+  const nf: Food = stored.source === 'custom' ? { ...rest, servings: clean, userServings: undefined, defaultServing: d } : { ...rest, userServings: clean, defaultServing: d };
+  if (lastServing && (d === undefined ? clean.some((x) => x.label === lastServing.label) : false)) nf.lastServing = lastServing;
+  await put('foods', nf);
+  if (nf.barcode && stored.source !== 'custom') await put('kv', { id: 'servings:' + nf.barcode, servings: clean, def: d, updated: Date.now() });
+  return nf;
+}
+function pickDefault(f: Food, units: Serving[]): [number, number] {
+  const last = f.lastServing; const li = last ? units.findIndex((u) => u.label === last.label) : -1;
+  if (li >= 0) return [li, last!.qty];
+  const def = defaultServingOf(f);
+  if (def === '') return [0, 100];
+  const di = def ? units.findIndex((u, i) => i > 0 && u.label === def) : -1; if (di > 0) return [di, 1];
+  const si = units.findIndex((u, i) => i > 0 && u.kind !== 'package'); // whole packages are rarely eaten: default to a serving, else 100 g
+  return si > 0 ? [si, 1] : [0, 100];
+}
+function ServingsEditor({ food, onDone }: { food: Food; onDone: (f?: Food) => void }) {
+  const base = baseUnit(food);
+  const [rows, setRows] = useState<Serving[]>(() => servingsOf(food).filter((x) => !isBase(x.label)).map((x) => ({ ...x })));
+  const d0 = defaultServingOf(food); const [def, setDef] = useState<string>(d0 ?? (rows.find((r) => r.kind !== 'package')?.label || ''));
+  const set = (i: number, v: Partial<Serving>) => setRows(rows.map((r, j) => (j === i ? { ...r, ...v } : r)));
+  return <div class="card col servings-editor" data-testid="servings-editor" style="margin:0">
+    <div class="row between"><b class="sm">Servings for this food</b><span class="mut xs">default ●</span></div>
+    <label class="row sm" style="gap:8px"><input type="radio" name="defsv" checked={def === ''} onChange={() => setDef('')} aria-label="Default: grams" /><span class="grow">{base === 'ml' ? 'ml' : 'grams'} (always available)</span></label>
+    {rows.map((r, i) => <div class="row" style="gap:6px" data-testid="sv-row">
+      <input type="radio" name="defsv" checked={def === r.label && !!r.label} onChange={() => setDef(r.label)} aria-label={`Default: ${r.label || 'new serving'}`} />
+      <input class="sv-name" value={r.label} placeholder="name, e.g. can, drained" aria-label="Serving name" onInput={(e) => { const v = e.currentTarget.value; if (def === r.label) setDef(v); set(i, { label: v }); }} />
+      <NumInput style="width:72px" value={r.grams || null} onValue={(g) => set(i, { grams: g || 0 })} aria-label="Serving grams" placeholder={base} /><span class="mut xs">{base}</span>
+      <button type="button" class="btn ic" aria-label={`Delete ${r.label || 'serving'}`} onClick={() => { if (def === r.label) setDef(''); setRows(rows.filter((_, j) => j !== i)); }}>✕</button></div>)}
+    <button type="button" class="btn sm" onClick={() => setRows([...rows, { label: '', grams: 0, kind: 'custom' }])}>＋ Add serving</button>
+    <div class="mut xs">Saved on this device{food.barcode ? ` for barcode ${food.barcode} — future scans use these` : ''}. Your servings replace the database's.</div>
+    <div class="grid2"><button type="button" class="btn sm" onClick={() => onDone()}>Cancel</button>
+      <button type="button" class="btn sm p" data-testid="save-servings" onClick={async () => onDone(await saveServings(food, rows, def))}>Save servings</button></div>
+  </div>;
+}
+
+/** One-time note for diary entries logged with a package weight we now know is wrong (e.g. 185 g tuna can incl. water → 130 g drained).
+ *  Logged history is never changed without the user's OK. */
+export function PackageFixNote() {
+  const data = useQuery(async () => {
+    const [entries, foods] = await Promise.all([all<DiaryEntry>('diary'), all<Food>('foods')]);
+    const out: { code: string; name: string; wrong: number; right: number; label: string; es: DiaryEntry[] }[] = [];
+    for (const [code, o] of Object.entries(BUILTIN_SERVINGS)) {
+      const w = o.wrongPackage; if (!w || (await get('kv', 'fix:' + code))) continue;
+      const ids = new Set(['off_' + code, 'fdc_' + code, ...foods.filter((f) => f.barcode === code).map((f) => f.id)]);
+      const es = entries.filter((e) => ids.has(e.foodId) && !isBase(e.serving) && e.qty > 0 && Math.abs(e.grams / e.qty - w.grams) < 0.5);
+      if (es.length) out.push({ code, name: es[0].name, wrong: w.grams, right: w.right, label: w.label, es });
+    }
+    return out;
+  }, []);
+  const [done, setDone] = useState<string[]>([]);
+  const list = (data || []).filter((x) => !done.includes(x.code)); if (!list.length) return null;
+  const x = list[0]; const n = x.es.length;
+  const close = async (fix: boolean) => {
+    if (fix) for (const e of x.es) { const g = e.qty * x.right; await put('diary', { ...e, grams: g, serving: x.label, n: scaleN(e.n, g / e.grams), fixedFrom: { grams: e.grams, serving: e.serving } }); }
+    await put('kv', { id: 'fix:' + x.code, v: fix ? 'fixed' : 'kept', n, at: Date.now() }); setDone([...done, x.code]); toast(fix ? `Corrected ${n} entr${n > 1 ? 'ies' : 'y'}` : 'Kept as logged');
+  };
+  return <div class="card col" data-testid="fix-note" style="border-color:var(--warn)">
+    <div class="sm">⚠️ You logged <b>{x.name}</b> as a whole {x.wrong} g can {n > 1 ? `${n} times` : 'once'} ({x.es.map((e) => fmtDM(e.date)).join(', ')}). That {x.wrong} g includes the liquid — the drained food is about <b>{x.right} g</b>, and the label's per-100 g values are for the drained food.</div>
+    <div class="grid2"><button class="btn sm p" data-testid="fix-apply" onClick={() => close(true)}>Correct to {x.right} g per can</button><button class="btn sm" data-testid="fix-keep" onClick={() => close(false)}>Keep as logged</button></div>
+  </div>;
+}
+
 export function FoodAmountSheet({ open, onClose, food: food0, entry, date, meal, onAdded }: { open: boolean; onClose: () => void; food?: Food; entry?: DiaryEntry; date: string; meal: Meal; onAdded?: () => void }) {
   const s = useSettings(); const [food, setFood] = useState<Food | undefined>(food0);
   const [qty, setQty] = useState<number | null>(1); const [ui, setUi] = useState(0); const [m, setM] = useState<Meal>(meal);
-  const [defOpen, setDefOpen] = useState(false); const [defLabel, setDefLabel] = useState('serving'); const [defG, setDefG] = useState<number | null>(null);
+  const [defOpen, setDefOpen] = useState(false);
   useEffect(() => {
     if (!open) return; setM(entry?.meal || meal); setDefOpen(false);
     if (entry) {
@@ -94,23 +169,18 @@ export function FoodAmountSheet({ open, onClose, food: food0, entry, date, meal,
         setFood(ff); setUi(i); setQty(i === 0 ? r1(entry.grams) : Math.round((entry.grams / units[i].grams) * 100) / 100);
       });
     } else if (food0) {
-      const units = unitsFor(food0); setFood(food0);
-      const last = food0.lastServing; const li = last ? units.findIndex((u) => u.label === last.label) : -1;
-      if (li >= 0) { setUi(li); setQty(last!.qty); }
-      else { const si = units.findIndex((u, i) => i > 0 && u.kind !== 'package'); if (si > 0) { setUi(si); setQty(1); } else { setUi(0); setQty(100); } } // whole packages are rarely eaten: default to a serving, else 100 g
+      const units = unitsFor(food0); setFood(food0); const [i, qq] = pickDefault(food0, units); setUi(i); setQty(qq);
     }
   }, [open, entry?.id, food0?.id]);
   if (!open || !food) return null;
   const units = unitsFor(food); const unit = units[Math.min(ui, units.length - 1)]; const base = baseUnit(food);
   const q = qty || 0; const grams = q * unit.grams; const n = scaleN(food.per100, grams / 100);
   const switchUnit = (i: number) => { if (i === ui) return; setQty(qty == null ? null : i === 0 ? r1(convertQty(qty, unit, units[i])) : convertQty(qty, unit, units[i])); setUi(i); };
-  const defineServing = async () => {
-    if (!defG || defG <= 0) return;
-    const sv: Serving = { label: defLabel.trim() || 'serving', grams: defG, kind: 'custom' };
-    const stored = (await get<Food>('foods', food.id)) || food;
-    const nf = { ...stored, servings: [...normaliseServings(stored.servings).filter((x) => x.label !== sv.label), sv] };
-    await put('foods', nf); setFood(nf);
-    const ni = unitsFor(nf).findIndex((u) => u.label === sv.label); setQty(convertQty(q, unit, sv)); setUi(ni); setDefOpen(false); toast('Serving saved');
+  const servingsSaved = (nf?: Food) => {
+    setDefOpen(false); if (!nf) return; setFood(nf); toast('Servings saved');
+    const nu = unitsFor(nf);
+    if (entry) { const k = nu.findIndex((u) => u.label === unit.label); if (k >= 0) setUi(k); else { setUi(0); setQty(r1(grams)); } return; } // keep the logged amount
+    const [i, qq] = pickDefault(nf, nu); setUi(i); setQty(qq); // new entry: jump to the (new) default
   };
   const save = async () => {
     if (grams <= 0) return;
@@ -126,11 +196,9 @@ export function FoodAmountSheet({ open, onClose, food: food0, entry, date, meal,
       {(food.brand || food.barcode) && <div class="mut sm" style="margin-top:-8px">{food.brand}{food.brand && food.barcode ? ' · ' : ''}{food.barcode ? `▥ ${food.barcode}` : ''}{food.source === 'usda' && <span class="srcbadge" data-testid="src-usda" title="USDA FoodData Central (Branded Foods), public domain">Source: USDA</span>}</div>}
       <label class="f">Unit
         <div class="unitchips" role="radiogroup" aria-label="Unit">{units.map((u, i) => <button type="button" role="radio" aria-checked={i === ui} class={'chip ' + (i === ui ? 'on' : '')} onClick={() => switchUnit(i)}>{i === 0 ? (base === 'ml' ? 'ml' : 'grams') : unitLabel(u, food)}</button>)}
-          <button type="button" class="chip" onClick={() => { setDefOpen(!defOpen); setDefG(null); }} aria-label="Define a serving">＋ serving</button></div></label>
-      {units.length === 1 && !defOpen && <div class="mut xs">No serving size for this product — logging in {base}. Tap “＋ serving” to define one (e.g. 1 slice = 35 {base}).</div>}
-      {defOpen && <div class="card col" style="margin:0"><div class="grid2"><label class="f">Serving name<input value={defLabel} onInput={(e) => setDefLabel(e.currentTarget.value)} placeholder="e.g. slice, cup, scoop" /></label>
-        <label class="f">Size ({base})<NumInput value={defG} onValue={setDefG} placeholder="e.g. 35" aria-label="Serving size" /></label></div>
-        <button class="btn sm b2" disabled={!defG} onClick={defineServing}>Save serving</button></div>}
+          <button type="button" class="chip" data-testid="edit-servings" onClick={() => setDefOpen(!defOpen)} aria-label="Edit servings">✎ Edit servings</button></div></label>
+      {units.length === 1 && !defOpen && <div class="mut xs">No serving size for this product — logging in {base}. Tap “Edit servings” to add one (e.g. slice = 35 {base}).</div>}
+      {defOpen && <ServingsEditor food={food} onDone={servingsSaved} />}
       <label class="f">Amount ({ui === 0 ? base : `× ${unit.label}`})
         <div class="row"><button type="button" class="btn" aria-label="Decrease" onClick={() => setQty(Math.max(0, r1(q - (ui === 0 ? 10 : 0.5))))}>−</button>
           <NumInput value={qty} onValue={setQty} aria-label="Amount" style="text-align:center;font-size:20px;font-weight:700" />
@@ -182,9 +250,9 @@ export function AddFood({ date, meal }: { date: string; meal: Meal }) {
     const local = await byBarcode(code);
     // a saved food with no nutrition at all (e.g. an abandoned manual entry) shouldn't hide a real online match
     const empty = local && !(local.per100.kcal || local.per100.protein || local.per100.fat || local.per100.carbs);
-    if (local && !empty) { setScan(false); setPick(local); return; }
+    if (local && !empty) { setScan(false); setPick(await applyServingOverride(local)); return; }
     const remember = async (f: Food) => { // cache as a saved food so the next scan is instant and works offline
-      const ex = await get<Food>('foods', f.id); const keep = ex ? { ...f, lastServing: ex.lastServing, useCount: ex.useCount, lastUsed: ex.lastUsed, servings: [...f.servings, ...(ex.servings || []).filter((x) => x.kind === 'custom')] } : f;
+      const ex = await get<Food>('foods', f.id); const keep = await applyServingOverride(ex ? { ...f, lastServing: ex.lastServing, useCount: ex.useCount, lastUsed: ex.lastUsed, servings: [...f.servings, ...(ex.servings || []).filter((x) => x.kind === 'custom')], userServings: ex.userServings, defaultServing: ex.defaultServing } : f);
       await put('foods', keep); setLookup(''); setScan(false); setPartialName(''); setPick(keep);
     };
     setLookup(`Looking up ${code} on Open Food Facts…`);
