@@ -26,7 +26,7 @@ export function Scanner({ open, onClose, onCode, busy }: { open: boolean; onClos
       } catch (e: any) {
         if (stop) return;
         const n = e?.name || '';
-        if (n === 'NotAllowedError' || n === 'SecurityError') { setStatus('denied'); setMsg('Camera permission was denied. To scan, allow camera access: tap the lock/ⓘ icon by the address bar (or Android Settings → Apps → Chrome/Grug Fit → Permissions → Camera), then try again. You can type the barcode below meanwhile.'); }
+        if (n === 'NotAllowedError' || n === 'SecurityError') { setStatus('denied'); setMsg('Camera permission was denied. To scan, allow camera access: tap the lock/ⓘ icon by the address bar (or Android Settings → Apps → Chrome/Lunk → Permissions → Camera), then try again. You can type the barcode below meanwhile.'); }
         else if (n === 'NotFoundError' || n === 'OverconstrainedError') { setStatus('nocamera'); setMsg('No camera found on this device. Type the barcode number below.'); }
         else { setStatus('error'); setMsg('Couldn\'t start the camera (' + (e?.message || n || 'unknown error') + '). Close other apps using the camera, or type the barcode below.'); }
         return;

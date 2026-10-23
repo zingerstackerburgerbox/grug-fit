@@ -53,7 +53,7 @@ export function CoachPage() {
         <div class="sm">The AI coach will be available here soon — nothing to do on your end. If you have your own xAI API key you can use it now in <a href="#/settings" style="color:var(--acc2)">Settings › Coach</a>.</div></div>}
       {mode !== 'setup' && !consent && <div class="card col" data-testid="coach-consent">
         <b>🔒 Before you chat</b>
-        <div class="sm">To give personal advice, each message sends a <b>summary of your Grug Fit data</b> to xAI (the company behind Grok) through Grug Fit's small relay server:</div>
+        <div class="sm">To give personal advice, each message sends a <b>summary of your Lunk data</b> to xAI (the company behind Grok) through Lunk's small relay server:</div>
         <ul class="sm" style="margin:0;padding-left:18px"><li>profile (age, sex, height, goal) and targets</li><li>daily nutrition totals for the last 14 days</li><li>your last 10 workouts, PRs and body-weight trend</li><li>supplements/medications by name and how often you've taken them</li></ul>
         <div class="xs mut">Your chat history stays on this device. The relay only counts messages per anonymous device ID (to cap daily use) and doesn't store what you send. xAI processes the request under its own privacy policy. The coach isn't a doctor — check medications and supplement doses with yours.</div>
         <button class="btn p" data-testid="coach-accept" onClick={async () => { const cur = await getSettings(); await put('kv', { ...cur, coachConsent: Date.now() }); }}>I understand — start chatting</button></div>}

@@ -1,4 +1,4 @@
-# Every push to main rebuilds Grug Fit and publishes it to GitHub Pages.
+# Every push to main rebuilds Lunk and publishes it to GitHub Pages.
 # One-time setup: repo Settings → Pages → Source: "GitHub Actions".
 name: Deploy to GitHub Pages
 on:

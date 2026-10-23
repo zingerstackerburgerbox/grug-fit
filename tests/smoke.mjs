@@ -23,6 +23,11 @@ const sw = await page.evaluate(async () => { const r = await navigator.serviceWo
 log('service worker', JSON.stringify(sw));
 const man = await page.evaluate(async () => { const l = document.querySelector('link[rel=manifest]'); const r = await fetch(l.href); return r.json(); });
 log('manifest', man.name, man.display, man.icons.map((i) => i.sizes).join(','));
+// v1.9.4 rename: user-facing name is Lunk; install identity (id/scope/start_url) unchanged so existing installs update in place
+const title = await page.title(); log('title', title, '| short_name', man.short_name, '| id', man.id, '| scope', man.scope, '| start_url', man.start_url);
+if (title !== 'Lunk' || man.name !== 'Lunk' || man.short_name !== 'Lunk') fail('app name should be Lunk');
+if (man.id !== '/grug-fit/' || man.scope !== './' || man.start_url !== './') fail('manifest id/scope/start_url must not change');
+if (/Grug Fit/.test(await page.content())) fail('old app name still shown');
 const cdp = await ctx.newCDPSession(page);
 const inst = await cdp.send('Page.getInstallabilityErrors').catch((e) => ({ err: e.message }));
 log('installability errors:', JSON.stringify(inst));
@@ -268,7 +273,7 @@ await page.goto(BASE); await page.waitForSelector('text=Last workout'); await pa
 // settings + export
 await page.goto(BASE + '#/settings'); await page.waitForSelector('text=Daily targets'); await shot('10-settings');
 const [dl] = await Promise.all([page.waitForEvent('download', { timeout: 5000 }).catch(() => null), page.click('text=Export all data')]);
-if (dl) { const p = await dl.path(); const j = JSON.parse(await (await import('fs')).promises.readFile(p, 'utf8')); log('export stores:', Object.entries(j.data).map(([k, v]) => k + ':' + v.length).join(' ')); } else fail('no export download');
+if (dl) { const p = await dl.path(); const j = JSON.parse(await (await import('fs')).promises.readFile(p, 'utf8')); log('backup file', dl.suggestedFilename(), 'app', j.app); if (!/^lunk-backup-\d{4}-\d{2}-\d{2}\.json$/.test(dl.suggestedFilename())) fail('backup file name'); if (j.app !== 'grugfit') fail('backup app marker must stay grugfit (import compatibility)'); log('export stores:', Object.entries(j.data).map(([k, v]) => k + ':' + v.length).join(' ')); } else fail('no export download');
 // offline reload
 await ctx.setOffline(true); await page.reload(); const offOk = await page.waitForSelector('text=Daily targets', { timeout: 8000 }).then(() => true).catch(() => false); log('works offline after reload:', offOk); if (!offOk) fail('offline'); await ctx.setOffline(false);
 log('errors:', errors.length ? errors : 'none');

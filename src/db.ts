@@ -142,7 +142,7 @@ export async function exportAll() {
   return out;
 }
 export async function importAll(json: any, mode: 'replace' | 'merge' = 'replace') {
-  if (!json || json.app !== 'grugfit' || !json.data) throw new Error('Not a Grug Fit backup file');
+  if (!json || json.app !== 'grugfit' || !json.data) throw new Error('Not a Lunk backup file');
   const d = await db(); const tx = d.transaction(STORES as any, 'readwrite');
   for (const s of STORES) {
     const st = tx.objectStore(s);

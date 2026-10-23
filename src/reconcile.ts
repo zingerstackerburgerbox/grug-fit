@@ -1,5 +1,5 @@
 /**
- * v1.8.3: make imported history indistinguishable from history logged in Grug Fit. Pure (no DB) so it is unit-testable;
+ * v1.8.3: make imported history indistinguishable from history logged in Lunk. Pure (no DB) so it is unit-testable;
  * db.ts runs it as schema migration 5 (existing installs, also after restoring a backup) and history.ts after every import / merge / edit / delete.
  *  1. Imported Hevy workouts: normalised structure (ids, set types, done, numbers, end > start, rest).
  *  2. Imported custom Hevy exercises that now match a built-in exercise (better aliases) are folded into it: workouts, routines and the

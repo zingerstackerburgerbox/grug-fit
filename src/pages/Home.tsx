@@ -27,7 +27,7 @@ export function Home() {
   let doseStreak = 0; if (doses) { let day = addDays(today, -1); for (let i = 0; i < 365; i++) { const sl = slotsFor(day, doses.schedules, doses.supps, doses.logs); if (!sl.length || sl.some((x) => !x.log)) break; doseStreak++; day = addDays(day, -1); } if (slots.length && slots.every((x) => x.log)) doseStreak++; }
   const weekWorkouts = ws.filter((w) => weekStart(w.start) === weekStart(Date.now())).length;
   const now = new Date();
-  return <><Top title="Grug Fit" right={<a class="btn ic" href="#/settings" aria-label="Settings">⚙️</a>} /><div class="page">
+  return <><Top title="Lunk" right={<a class="btn ic" href="#/settings" aria-label="Settings">⚙️</a>} /><div class="page">
     <div class="mut sm" style="margin:-2px 2px 10px" data-testid="home-date">{s.username ? <><b style="color:var(--fg)" data-testid="greeting">{greeting(now)}, {s.username}</b> · </> : null}{WD[now.getDay()]} {now.getDate()} {MONTHS[now.getMonth()]}</div>
     <InstallBanner />
     <BurnBar date={today} />

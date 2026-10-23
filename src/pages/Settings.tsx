@@ -65,7 +65,7 @@ export function SettingsPage() {
   const saveTargets = async () => { const targets: any = { ...s.targets }; for (const k in t) { const v = num(t[k]); if (v != null) targets[k] = v; } await save({ targets }); toast('Targets saved'); };
   const doExport = async () => {
     const data = await exportAll(); const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
-    const name = `grugfit-backup-${ymd()}.json`; const file = new File([blob], name, { type: 'application/json' });
+    const name = `lunk-backup-${ymd()}.json`; const file = new File([blob], name, { type: 'application/json' });
     if ((navigator as any).canShare?.({ files: [file] }) && confirmDo('Share the backup file (e.g. to Google Drive)? Cancel to download instead.')) { try { await navigator.share({ files: [file], title: name }); localStorage.setItem('lastBackup', String(Date.now())); return; } catch {} }
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 5000);
     localStorage.setItem('lastBackup', String(Date.now())); toast('Backup downloaded');
@@ -117,8 +117,8 @@ export function SettingsPage() {
     <h2>Dose reminders</h2>
     <div class="card col"><label class="row sm"><input type="checkbox" style="width:24px;min-height:24px" checked={s.reminders} onChange={async (e) => { const on = e.currentTarget.checked; if (on && typeof Notification !== 'undefined' && Notification.permission !== 'granted') setPerm(await Notification.requestPermission()); await save({ reminders: on }); setTimeout(scheduleReminders, 50); }} /> Enable reminder notifications</label>
       <div class="mut xs">Permission: {perm}. {'TimestampTrigger' in window ? 'This browser supports Notification Triggers, so reminders are scheduled with the system.' : ''}</div>
-      <div class="sm mut">⚠️ Honest limitation: web apps can't yet schedule reliable alarms on Android. Reminders fire while Grug Fit (or Chrome) is open or recently used in the background; if Android has closed the app, a reminder may be late or not appear. Notification Triggers would fix this but aren't broadly available in Chrome. For critical medications, also set a phone alarm. Opening the app always shows what's due.</div>
-      <button class="btn sm" disabled={perm !== 'granted'} onClick={async () => { const r = await navigator.serviceWorker.ready; r.showNotification('Grug Fit test', { body: 'Notifications are working ✅', icon: 'icon-192.png' }); }}>Send test notification</button></div>
+      <div class="sm mut">⚠️ Honest limitation: web apps can't yet schedule reliable alarms on Android. Reminders fire while Lunk (or Chrome) is open or recently used in the background; if Android has closed the app, a reminder may be late or not appear. Notification Triggers would fix this but aren't broadly available in Chrome. For critical medications, also set a phone alarm. Opening the app always shows what's due.</div>
+      <button class="btn sm" disabled={perm !== 'granted'} onClick={async () => { const r = await navigator.serviceWorker.ready; r.showNotification('Lunk test', { body: 'Notifications are working ✅', icon: 'icon-192.png' }); }}>Send test notification</button></div>
     <h2>Import data</h2>
     <ImportSection />
     <h2>Backup (important!)</h2>
@@ -130,7 +130,7 @@ export function SettingsPage() {
     <h2>Danger zone</h2>
     <button class="btn d" onClick={async () => { if (confirmDo('Delete ALL data (workouts, diary, supplements, settings)? This cannot be undone.') && confirmDo('Really? Export a backup first if unsure.')) { await clearAll(); localStorage.removeItem('rest'); toast('All data cleared'); } }}>Clear all data</button>
     <h2>About</h2>
-    <div class="card col" data-testid="about"><div class="row between"><b>Grug Fit v<span data-testid="app-version">{APP_VERSION}</span></b><span class="mut sm">built {fmtDate(BUILD_TIME)} {fmtTime(+new Date(BUILD_TIME))}</span></div>
+    <div class="card col" data-testid="about"><div class="row between"><b>Lunk v<span data-testid="app-version">{APP_VERSION}</span></b><span class="mut sm">built {fmtDate(BUILD_TIME)} {fmtTime(+new Date(BUILD_TIME))}</span></div>
       <div class="mut xs">Build <span data-testid="build-id">{BUILD_ID}</span> · updates install automatically (checked on launch, when you return to the app, and every 30 min). Your data stays on the device across updates.</div>
       <button class="btn sm" onClick={async () => { const r = await navigator.serviceWorker?.getRegistration(); if (!r) { toast('Updates unavailable (no service worker)'); return; } await r.update().catch(() => {}); toast(r.installing || r.waiting ? 'Update found – installing…' : 'You have the latest version'); }}>Check for updates</button></div>
       <button class="btn sm" data-testid="ocr-offline" onClick={async () => { toast('Downloading label scanner (~6 MB)…'); try { const m = await import('../ocr/ocr'); await m.prefetchOcr(); toast('Label scanning is ready offline'); } catch (e: any) { toast('Download failed: ' + (e?.message || e)); } }}>📷 Make label scanning available offline</button>
@@ -146,7 +146,7 @@ function CoachSettings() {
   const commit = async (p: Partial<Settings>, msg: string) => { const cur = await getSettings(); const n = { ...cur, ...p }; await put('kv', n); setS0(n); toast(msg); fetchStatus(); };
   const mode = coachMode({ ...s0, coachKey: key || undefined });
   return <div class="card col" data-testid="coach-settings">
-    <div class="sm">Status: <b data-testid="coach-mode">{mode === 'own' ? 'Using your own xAI key' : mode === 'proxy' ? 'Using the Grug Fit coach service' : 'Coach is being set up'}</b>{mode === 'proxy' && q && <> · <span data-testid="coach-remaining">{quotaText(q)}</span></>}</div>
+    <div class="sm">Status: <b data-testid="coach-mode">{mode === 'own' ? 'Using your own xAI key' : mode === 'proxy' ? 'Using the Lunk coach service' : 'Coach is being set up'}</b>{mode === 'proxy' && q && <> · <span data-testid="coach-remaining">{quotaText(q)}</span></>}</div>
     <label class="f">Use my own xAI API key (optional)<div class="row"><input type={(showKey ? 'text' : 'password') as any} autocomplete="off" spellcheck={false} value={key} placeholder="xai-…" data-testid="coach-key" onInput={(e) => setKey(e.currentTarget.value.trim())} />
       <button class="btn sm" type="button" onClick={() => setShowKey(!showKey)}>{showKey ? 'Hide' : 'Show'}</button></div></label>
     <div class="grid2"><button class="btn sm p" data-testid="coach-key-save" onClick={() => commit({ coachKey: key || undefined }, key ? 'xAI key saved on this device' : 'Own key cleared')}>Save key</button>{s0.coachKey && <button class="btn sm" onClick={() => { setKey(''); commit({ coachKey: undefined }, 'Own key cleared'); }}>Remove key</button>}</div>

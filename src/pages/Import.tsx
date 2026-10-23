@@ -107,17 +107,17 @@ export function ImportSection() {
         {hasCronEx && <span>🔥 <b>{plan.activities.length}</b> activities</span>}<span>🆕 <b>{plan.exercises.length}</b> new exercises</span></div>
       {!!plan.created.length && <div class="xs mut" data-testid="import-created"><b>New custom exercises:</b> {plan.created.join(', ')}</div>}
       {!!plan.matched.length && <details class="xs mut"><summary>Matched to existing exercises ({plan.matched.length})</summary>{plan.matched.join(', ')}</details>}
-      {!!skipped && <div class="xs" data-testid="import-skipped" style="color:var(--warn)">Skipped – already in Grug Fit: {[sk!.workouts && pl(sk!.workouts, 'workouts'), sk!.diary && pl(sk!.diary, 'food entries'), sk!.weighIns && `${pl(sk!.weighIns, 'weigh-ins')} (that day already has a weight)`, sk!.activities && pl(sk!.activities, 'activities')].filter(Boolean).join(', ')}</div>}
+      {!!skipped && <div class="xs" data-testid="import-skipped" style="color:var(--warn)">Skipped – already in Lunk: {[sk!.workouts && pl(sk!.workouts, 'workouts'), sk!.diary && pl(sk!.diary, 'food entries'), sk!.weighIns && `${pl(sk!.weighIns, 'weigh-ins')} (that day already has a weight)`, sk!.activities && pl(sk!.activities, 'activities')].filter(Boolean).join(', ')}</div>}
       {!!sk?.days && <div class="xs mut">{sk.days} daily total(s) skipped because those days have individual food entries.</div>}
       {hasCronEx && <label class="row xs"><input type="checkbox" style="width:22px;min-height:22px" data-testid="import-cronex" checked={cronEx} onChange={async (e) => { const v = e.currentTarget.checked; setCronEx(v); if (files) await preview(files, v); }} /> Import Cronometer exercises as calorie-only activities (skip if you also logged these workouts in Hevy – they'd count twice)</label>}
       {plan.warnings.map((w) => <div class="xs" style="color:var(--warn)">{w}</div>)}
-      <div class="mut xs">Workout calories are estimated from the sets with Grug Fit's per-set method; personal records are recalculated.</div>
+      <div class="mut xs">Workout calories are estimated from the sets with Lunk's per-set method; personal records are recalculated.</div>
       <div class="grid2"><button class="btn" onClick={() => { setPlan(null); setFiles(null); }}>Cancel</button>
         <button class="btn p" data-testid="import-go" disabled={busy || !total} onClick={doImport}>{total ? 'Import' : 'Nothing new'}</button></div>
     </div>}
     {counts?.range && <div class="xs mut" data-testid="import-range">Imported Hevy workouts: {counts.hevy.workouts} · {fmtDate(counts.range.from)} – {fmtDate(counts.range.to)} · <a href={WORKOUT_LIST}>View on Workout tab</a></div>}
     {counts && (['hevy', 'cronometer'] as ImportSource[]).map((src) => { const c = counts[src]; const n = c.workouts + c.diary + c.weighIns; if (!n) return null;
-      return <button class="btn d sm" data-testid={`import-undo-${src}`} onClick={async () => { if (!confirmDo(`Remove all data imported from ${src === 'hevy' ? 'Hevy' : 'Cronometer'}? (${[c.workouts && `${c.workouts} workouts`, c.diary && `${c.diary} food entries`, c.weighIns && `${c.weighIns} weigh-ins`].filter(Boolean).join(', ')}) Things you logged in Grug Fit are not affected.`)) return; const k = await removeImported(src); setDone(''); toast(`Removed ${k} imported items`); }}>
+      return <button class="btn d sm" data-testid={`import-undo-${src}`} onClick={async () => { if (!confirmDo(`Remove all data imported from ${src === 'hevy' ? 'Hevy' : 'Cronometer'}? (${[c.workouts && `${c.workouts} workouts`, c.diary && `${c.diary} food entries`, c.weighIns && `${c.weighIns} weigh-ins`].filter(Boolean).join(', ')}) Things you logged in Lunk are not affected.`)) return; const k = await removeImported(src); setDone(''); toast(`Removed ${k} imported items`); }}>
         🗑 Remove imported {src === 'hevy' ? 'Hevy' : 'Cronometer'} data ({[c.workouts && `${c.workouts} workouts`, c.diary && `${c.diary} food`, c.weighIns && `${c.weighIns} weigh-ins`].filter(Boolean).join(', ')})</button>; })}
   </div>;
 }

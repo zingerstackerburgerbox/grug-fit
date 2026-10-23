@@ -55,6 +55,7 @@ if (!/not a doctor/.test(sys.content) || !data.targets || data.workouts?.recent?
 log('steps in context:', JSON.stringify(data.steps14d)); if (data.steps14d?.days?.length !== 2 || data.steps14d.avgPerLoggedDay !== 8000 || data.steps14d.goal !== 8000) fail('steps in coach context');
 if (/grug_tester/.test(JSON.stringify(rq.body)) || /grug_tester/.test(JSON.stringify(rq.h))) fail('username sent to the coach'); else log('username not in the coach request');
 if (sys.content.length > 16000) fail('system prompt too big: ' + sys.content.length);
+if (!sys.content.startsWith('You are Grug') || !sys.content.includes('inside Lunk') || sys.content.includes('Grug Fit')) fail('coach persona: Grug, the coach inside Lunk');
 const html = await page.innerHTML('[data-testid=coach-reply]');
 if (!/<strong>4-day PPL<\/strong>/.test(html) || !/<li>Push: chest/.test(html)) fail('markdown not rendered'); if (/grug-action/.test(await page.textContent('[data-testid=coach-reply]'))) fail('raw action block shown');
 if (await page.evaluate(() => window.__xss) || /<img/.test(html)) fail('HTML not escaped'); else log('markdown rendered, HTML escaped');

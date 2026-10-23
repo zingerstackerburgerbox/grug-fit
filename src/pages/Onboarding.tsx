@@ -80,13 +80,13 @@ export function Onboarding({ onDone }: { onDone?: () => void }) {
     <div class="ob-body col">
       {step === 'username' && <>
         <div class="ob-hero">💪</div><h1>Pick a username</h1>
-        <p class="mut">This is how Grug Fit greets you. It's only stored on this device.</p>
+        <p class="mut">This is how Lunk greets you. It's only stored on this device.</p>
         <UsernameField value={uname} onInput={(v) => { setUname(v); setErr(''); }} onEnter={next} autoFocus tid="ob-username" />
         <div class="mut xs">{USERNAME_HINT}</div>
       </>}
       {step === 'welcome' && <>
-        <div class="ob-hero">💪🍗</div><h1>Welcome{existing ? ' back' : ''} to Grug Fit</h1>
-        <p class="mut">{existing ? 'New: Grug Fit can now estimate how many calories you burn each day — including workouts — and suggest targets for your goal. Takes 30 seconds. Your existing data and targets stay untouched unless you choose otherwise.' : 'A few quick questions so Grug Fit can estimate your daily calorie burn and suggest calorie and protein targets. Takes about 30 seconds — you can change everything later in Settings.'}</p>
+        <div class="ob-hero">💪🍗</div><h1>Welcome{existing ? ' back' : ''} to Lunk</h1>
+        <p class="mut">{existing ? 'New: Lunk can now estimate how many calories you burn each day — including workouts — and suggest targets for your goal. Takes 30 seconds. Your existing data and targets stay untouched unless you choose otherwise.' : 'A few quick questions so Lunk can estimate your daily calorie burn and suggest calorie and protein targets. Takes about 30 seconds — you can change everything later in Settings.'}</p>
         {!existing && <InstallBanner compact />}
       </>}
       {step === 'body' && <>

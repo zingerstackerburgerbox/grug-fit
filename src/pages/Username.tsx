@@ -22,7 +22,7 @@ export function UsernameGate() {
   return <div class="modal-bg" data-testid="username-modal" role="dialog" aria-modal="true" aria-labelledby="un-h">
     <div class="modal col">
       <h2 id="un-h" style="margin:0">Add a username</h2>
-      <div class="mut sm">Grug Fit now uses a username. It's only stored on this device.</div>
+      <div class="mut sm">Lunk now uses a username. It's only stored on this device.</div>
       <UsernameField value={v} onInput={(x) => { setV(x); setErr(''); }} onEnter={save} autoFocus />
       <div class={err ? 'sm' : 'mut xs'} style={err ? 'color:var(--bad)' : ''} data-testid="username-err">{err || USERNAME_HINT}</div>
       <button class="btn p full" onClick={save} data-testid="username-save">Save</button>

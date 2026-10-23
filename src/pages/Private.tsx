@@ -17,12 +17,12 @@ export function PrivateBlock({ onContinue }: { onContinue: () => void }) {
       <h1 id="pb-t" style="margin:0">Private/incognito window detected</h1>
       <div class="card col" style="border-color:var(--warn)">
         <b>Anything you log here is erased when this window closes.</b>
-        <div class="sm mut">Grug Fit keeps your workouts, food diary and doses only on this device. Private windows throw that storage away, so you'd lose everything.</div>
+        <div class="sm mut">Lunk keeps your workouts, food diary and doses only on this device. Private windows throw that storage away, so you'd lose everything.</div>
       </div>
       <ol class="col sm" style="gap:6px;padding-left:20px;margin:0">
         <li>Tap <b>Copy link</b> below.</li>
         <li>Open a <b>normal</b> (not incognito) Chrome window and paste the link.</li>
-        <li><b>Install</b> Grug Fit from there so it opens like an app.</li>
+        <li><b>Install</b> Lunk from there so it opens like an app.</li>
       </ol>
       <input id="private-link" class="inp" readOnly value={link()} onFocus={(e) => (e.target as HTMLInputElement).select()} data-testid="private-url" />
       <button class="btn p" data-testid="private-copy" onClick={copyLink}>📋 Copy link</button>
@@ -44,8 +44,8 @@ export function StorageCard() {
   const prot = st === 'protected';
   return <div class="card col" data-testid="storage-status" data-state={st}>
     <div class="row between"><b>{prot ? '🔒 Storage: Protected' : st === 'unknown' ? '❔ Storage: Unknown' : '⚠️ Storage: Not protected'}</b></div>
-    <div class="sm mut">{prot ? 'The browser has agreed not to clear Grug Fit\'s data automatically. Uninstalling or clearing site data still deletes it.'
-      : 'The browser may clear Grug Fit\'s data if the phone runs low on space. Installing the app usually fixes this (and private windows always lose data).'}</div>
+    <div class="sm mut">{prot ? 'The browser has agreed not to clear Lunk\'s data automatically. Uninstalling or clearing site data still deletes it.'
+      : 'The browser may clear Lunk\'s data if the phone runs low on space. Installing the app usually fixes this (and private windows always lose data).'}</div>
     <div class="sm" data-testid="backup-reminder">💾 Either way, export a backup regularly (Backup below).</div>
   </div>;
 }

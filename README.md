@@ -1,4 +1,4 @@
-# Grug Fit
+# Lunk
 
 Installable offline-first PWA combining a Hevy-style workout tracker, a Cronometer-style nutrition diary,
 supplement/medication tracking and a dose calendar. Preact + TypeScript + Vite, all data in IndexedDB on the device.
@@ -24,5 +24,12 @@ Deploy `dist/` to any static HTTPS host (GitHub Pages, Netlify, Cloudflare Pages
 ## Steps (v1.9.1)
 Steps are typed in per day (Workout tab › Steps, any date; optional goal in Settings › Steps). Calories above the first
 2,000 steps a day are added to burned-today (stride from height, 0.5 kcal per kg per km); see `src/steps.ts`.
+
+## Name (v1.9.4)
+The app is called **Lunk** (formerly "Grug Fit"); the AI Coach persona is still **Grug**. Renamed only where users see it.
+Kept as `grug-fit` / `grugfit` on purpose so existing installs update in place and keep their data: the URL/base path
+`/grug-fit/`, the repo name, the manifest `id` (`/grug-fit/`), scope/start_url, the IndexedDB name `grugfit`,
+localStorage/settings keys, service-worker cache names (`grugfit-*`), the backup `app: "grugfit"` marker (old and new
+backups import both ways) and the coach-proxy Worker (`grug-coach-proxy`). Backups are now downloaded as `lunk-backup-YYYY-MM-DD.json`.
 
 Roadmap / parked work: [docs/ROADMAP.md](docs/ROADMAP.md).

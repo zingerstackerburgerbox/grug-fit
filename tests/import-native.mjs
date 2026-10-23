@@ -1,4 +1,4 @@
-// v1.8.3: imported Hevy/Cronometer data behaves exactly like data logged in Grug Fit – history list/detail, PREVIOUS column, exercise
+// v1.8.3: imported Hevy/Cronometer data behaves exactly like data logged in Lunk – history list/detail, PREVIOUS column, exercise
 // chart/PRs, week streak, burned calories, Coach context, repeat/save-as-routine/edit/delete, merge, Cronometer diary/edit; + migration.
 import { chromium, devices } from 'playwright';
 const BASE = process.env.BASE || 'http://127.0.0.1:4173/';
@@ -25,7 +25,7 @@ const S = (kg, reps, x = {}) => ({ id: Math.random().toString(36).slice(2), type
 // ---------------------------------------------------------------- A. fresh import next to native workouts
 {
   const { ctx, page, idb } = await fresh();
-  // native workouts logged in Grug Fit + body weight + profile (for calories)
+  // native workouts logged in Lunk + body weight + profile (for calories)
   await idb(`const s = await p(tx('kv').get('settings'));
     await p(tx('kv','readwrite').put({ ...s, profile: { heightCm: 180, sex: 'male', birthYear: 1990, goal: 'maintain' } }));
     for (const w of arg.ws) await p(tx('workouts','readwrite').put(w)); await p(tx('bodyweight','readwrite').put({ id: 'bw2026-10-01', date: '2026-10-01', kg: 84 }));`, { ws: [

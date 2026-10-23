@@ -20,8 +20,8 @@ export default defineConfig({
       filename: 'sw.ts',
       injectRegister: false,
       manifest: {
-        name: 'Grug Fit',
-        short_name: 'Grug Fit',
+        name: 'Lunk',
+        short_name: 'Lunk',
         description: 'Workouts, nutrition, supplements and dose calendar — all on your device.',
         id: '/grug-fit/', // absolute: a relative id resolves against the origin root (github.io/), not the app path
         start_url: './',

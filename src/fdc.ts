@@ -58,7 +58,7 @@ export function fdcNutrients(list: any[]): Partial<Nutrients> {
   return o;
 }
 const titleCase = (s: string) => (s === s.toUpperCase() ? s.toLowerCase().replace(/\b([a-z])/g, (m) => m.toUpperCase()) : s);
-/** FDC branded food → Grug Fit Food. Carbs from FDC are total carbohydrate (US labels), so they're stored as-is (net = carbs − fibre). */
+/** FDC branded food → Lunk Food. Carbs from FDC are total carbohydrate (US labels), so they're stored as-is (net = carbs − fibre). */
 export function fdcToFood(f: any, scanned: string): Food | null {
   const n = fdcNutrients(f.foodNutrients || []);
   if (!f.description || !(n.kcal || n.protein || n.fat || n.carbs)) return null;

@@ -1,4 +1,4 @@
-# Grug Fit roadmap
+# Lunk roadmap
 
 ## Planned: accounts + sharing + paid tier
 User accounts / login (sharing workouts, meals and recipes; a paid tier). Not built yet. Data model kept ready for it:

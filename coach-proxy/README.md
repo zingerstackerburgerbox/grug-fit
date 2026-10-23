@@ -1,6 +1,6 @@
 # Grug Coach proxy (Cloudflare Worker)
 
-A small proxy that lets the Grug Fit app talk to xAI without shipping an API key to the browser.
+A small proxy that lets the Lunk app talk to xAI without shipping an API key to the browser.
 
 - `POST /chat` forwards `{ messages, model?, stream? }` to `UPSTREAM_URL` (default `https://api.x.ai/v1/chat/completions`). All other fields are dropped, `max_tokens` is forced to `MAX_TOKENS`, and the model must be in `ALLOWED_MODELS` (it defaults to `MODEL`). SSE streams are passed straight through.
 - `GET /status` returns `{ enabled, owner, remaining, cap, used, resetAt, model }` for the calling device.
