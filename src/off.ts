@@ -64,7 +64,7 @@ export async function lookupBarcode(code: string): Promise<Food | null | { parti
   let partial = '';
   const tries = [code]; if (code.length === 12) tries.push('0' + code); if (code.length === 13 && code.startsWith('0')) tries.push(code.slice(1));
   for (const c of tries) {
-    const j = await fetchJson(`https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(c)}.json?fields=${FIELDS}`);
+    const j = await fetchJson(`https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(c)}.json?fields=${FIELDS}`, 6000);
     if (j.status === 1 && j.product) {
       const f = offToFood({ ...j.product, code: j.product.code || c });
       if (f && (f.per100.kcal > 0 || f.per100.protein > 0 || f.per100.fat > 0 || f.per100.carbs > 0)) return { ...f, barcode: code };

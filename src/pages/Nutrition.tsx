@@ -1,11 +1,12 @@
 import { BurnBar, useDayEnergy } from './Burn';
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
-import { all, byBarcode, byDate, del, get, put } from '../db';
+import { all, byBarcode, byDate, del, get, getSettings, put } from '../db';
 import { go, useQuery, useSettings } from '../hooks';
 import type { DiaryEntry, DoseLog, Food, Meal, Nutrients, Serving, Settings, Supplement } from '../types';
 import { Bar, BarChart, NumInput, Ring, Seg, Sheet, Top, confirmDo, num, toast } from '../ui';
 import { addDays, energy, fmtDay, fmtDM, MICROS, netCarbs, r0, r1, scaleN, sumN, uid, ymd, EMPTY, NKEYS, parseYmd, WD } from '../util';
 import { lookupBarcode, searchOFF } from '../off';
+import { lookupFDC, FdcBusy } from '../fdc';
 import { amountText, baseUnit, convertQty, matchUnit, normaliseServings, unitLabel, unitsFor } from '../servings';
 import { Scanner } from '../scanner';
 
@@ -122,7 +123,7 @@ export function FoodAmountSheet({ open, onClose, food: food0, entry, date, meal,
   };
   return <Sheet open={open} onClose={onClose} title={food.name}>
     <div class="col amount-sheet">
-      {(food.brand || food.barcode) && <div class="mut sm" style="margin-top:-8px">{food.brand}{food.brand && food.barcode ? ' · ' : ''}{food.barcode ? `▥ ${food.barcode}` : ''}</div>}
+      {(food.brand || food.barcode) && <div class="mut sm" style="margin-top:-8px">{food.brand}{food.brand && food.barcode ? ' · ' : ''}{food.barcode ? `▥ ${food.barcode}` : ''}{food.source === 'usda' && <span class="srcbadge" data-testid="src-usda" title="USDA FoodData Central (Branded Foods), public domain">Source: USDA</span>}</div>}
       <label class="f">Unit
         <div class="unitchips" role="radiogroup" aria-label="Unit">{units.map((u, i) => <button type="button" role="radio" aria-checked={i === ui} class={'chip ' + (i === ui ? 'on' : '')} onClick={() => switchUnit(i)}>{i === 0 ? (base === 'ml' ? 'ml' : 'grams') : unitLabel(u, food)}</button>)}
           <button type="button" class="chip" onClick={() => { setDefOpen(!defOpen); setDefG(null); }} aria-label="Define a serving">＋ serving</button></div></label>
@@ -141,7 +142,7 @@ export function FoodAmountSheet({ open, onClose, food: food0, entry, date, meal,
       <div class="mut xs" data-testid="grams">= {r1(grams)} {base} · fibre {r1(n.fibre)} g{MICROS.filter((x) => n[x.key] != null && (n[x.key] as number) > 0).map((x) => ` · ${x.label} ${r1(n[x.key] as number)} ${x.unit}`).join('')}</div>
       <button class="btn p" disabled={grams <= 0} onClick={save}>{entry ? 'Save changes' : 'Add to diary'}</button>
       {entry && <button class="btn d" onClick={async () => { await del('diary', entry.id); onClose(); }}>Remove from diary</button>}
-      {(food.source !== 'off') && <a class="btn g" href={food.source === 'recipe' ? `#/recipe/${food.id}` : `#/food/edit/${food.id}`} onClick={onClose}>Edit {food.source === 'recipe' ? 'recipe' : 'food'}</a>}
+      {(food.source !== 'off' && food.source !== 'usda') && <a class="btn g" href={food.source === 'recipe' ? `#/recipe/${food.id}` : `#/food/edit/${food.id}`} onClick={onClose}>Edit {food.source === 'recipe' ? 'recipe' : 'food'}</a>}
     </div></Sheet>;
 }
 
@@ -149,7 +150,7 @@ function FoodRow({ f, onPick, s }: { f: Food; onPick: () => void; s: Settings })
   const sv = unitsFor(f)[1]; const n = scaleN(f.per100, (sv ? sv.grams : 100) / 100);
   return <button class="item" onClick={onPick}>
     {f.image ? <img class="thumb" src={f.image} loading="lazy" alt="" /> : <div class="thumb" style="display:flex;align-items:center;justify-content:center">{f.source === 'recipe' ? '🍲' : f.source === 'custom' ? '✏️' : '🛒'}</div>}
-    <div class="grow"><div class="ell">{f.name}</div><div class="mut xs ell">{f.brand ? f.brand + ' · ' : ''}{sv ? unitLabel(sv, f) : `100 ${baseUnit(f)}`} · P{r0(n.protein)} C{r0(netCarbs(n))} F{r0(n.fat)}</div></div>
+    <div class="grow"><div class="ell">{f.name}</div><div class="mut xs ell">{f.source === 'usda' ? 'USDA · ' : ''}{f.brand ? f.brand + ' · ' : ''}{sv ? unitLabel(sv, f) : `100 ${baseUnit(f)}`} · P{r0(n.protein)} C{r0(netCarbs(n))} F{r0(n.fat)}</div></div>
     <div class="sm">{energy(n.kcal, s)}<span class="mut xs"> {eu(s)}</span></div></button>;
 }
 
@@ -161,7 +162,7 @@ export function AddFood({ date, meal }: { date: string; meal: Meal }) {
   const [tab, setTab] = useState<'search' | 'recent' | 'frequent' | 'mine'>('recent');
   const [q, setQ] = useState(''); const [res, setRes] = useState<Food[] | null>(null); const [busy, setBusy] = useState(false); const [err, setErr] = useState('');
   const [pick, setPick] = useState<Food | undefined>(); const [scan, setScan] = useState(false);
-  const [lookup, setLookup] = useState(''); const [notFound, setNotFound] = useState<string | null>(null); const [partialName, setPartialName] = useState('');
+  const [lookup, setLookup] = useState(''); const [notFound, setNotFound] = useState<string | null>(null); const [partialName, setPartialName] = useState(''); const [usdaNote, setUsdaNote] = useState('');
   useEffect(() => {
     const hp = hashParams();
     if (hp.get('scan') === '1') setScan(true);
@@ -175,30 +176,42 @@ export function AddFood({ date, meal }: { date: string; meal: Meal }) {
     try { setRes(await searchOFF(q.trim())); } catch (e: any) { setErr(navigator.onLine ? 'Open Food Facts search failed (' + (e?.message || 'error') + '). Try again shortly.' : 'You are offline — showing your saved foods only.'); setRes([]); }
     setBusy(false);
   };
+  /** Lookup order: 1) saved/custom foods  2) Open Food Facts  3) USDA FoodData Central (Branded)  4) not-found card. */
   const barcode = async (code: string) => {
-    setErr(''); setNotFound(null);
+    setErr(''); setNotFound(null); setUsdaNote('');
     const local = await byBarcode(code); if (local) { setScan(false); setPick(local); return; }
+    const remember = async (f: Food) => { // cache as a saved food so the next scan is instant and works offline
+      const ex = await get<Food>('foods', f.id); const keep = ex ? { ...f, lastServing: ex.lastServing, useCount: ex.useCount, lastUsed: ex.lastUsed, servings: [...f.servings, ...(ex.servings || []).filter((x) => x.kind === 'custom')] } : f;
+      await put('foods', keep); setLookup(''); setScan(false); setPartialName(''); setPick(keep);
+    };
     setLookup(`Looking up ${code} on Open Food Facts…`);
-    try {
-      const f = await lookupBarcode(code); setLookup(''); setScan(false); setPartialName('');
-      if (f && 'partial' in f) { setPartialName(f.partial); setNotFound(code); }
-      else if (f) { const ex = await get<Food>('foods', f.id); const keep = ex ? { ...f, lastServing: ex.lastServing, useCount: ex.useCount, lastUsed: ex.lastUsed, servings: [...f.servings, ...(ex.servings || []).filter((x) => x.kind === 'custom')] } : f; await put('foods', keep); setPick(keep); }
-      else setNotFound(code);
-    } catch (e: any) { setLookup(''); setScan(false); setErr(`Couldn't look up ${code}: ${navigator.onLine ? e?.message || 'network error' : 'you are offline'}. Try again, or create it as a custom food.`); setNotFound(code); }
+    let partial = '', offErr = '';
+    try { const f = await lookupBarcode(code); if (f && 'partial' in f) partial = f.partial; else if (f) { await remember(f); return; } }
+    catch (e: any) { offErr = e?.message || 'network error'; }
+    const finish = (note: string, e = '') => { setLookup(''); setScan(false); setPartialName(partial); setUsdaNote(note); setErr(e); setNotFound(code); };
+    if (!navigator.onLine) { finish('', `Couldn't look up ${code}: you are offline. Try again, or create it as a custom food.`); return; }
+    setLookup(`${partial ? 'No nutrition data on Open Food Facts' : 'Not in Open Food Facts'} — checking USDA FoodData Central…`);
+    let note = '';
+    const key = (await getSettings()).usdaKey; // read fresh: the hook's value may still be loading right after navigation
+    try { const u = await lookupFDC(code, key); if (u) { await remember(u); return; } }
+    catch (e: any) { note = e instanceof FdcBusy ? (/key rejected/.test(e.message) ? 'USDA rejected the API key in Settings — check it, or clear it to use the shared DEMO_KEY.' : `USDA busy, try again in a minute (${e.message}).${key ? '' : ' A free personal API key in Settings avoids the shared limit.'}`) : `USDA lookup failed (${e?.message || 'error'}).`; }
+    finish(note, offErr ? `Open Food Facts lookup failed (${offErr}).` : '');
   };
   const ql = q.toLowerCase().trim();
   const localMatch = ql ? foods.filter((f) => (f.name + ' ' + (f.brand || '') + ' ' + (f.barcode || '')).toLowerCase().includes(ql)) : [];
   const list = tab === 'search' ? [...localMatch, ...(res || []).filter((r) => !localMatch.some((l) => l.id === r.id))]
     : tab === 'recent' ? foods.filter((f) => f.lastUsed).sort((a, b) => (b.lastUsed || 0) - (a.lastUsed || 0)).slice(0, 40)
       : tab === 'frequent' ? foods.filter((f) => f.useCount).sort((a, b) => (b.useCount || 0) - (a.useCount || 0)).slice(0, 40)
-        : foods.filter((f) => f.source !== 'off').sort((a, b) => a.name.localeCompare(b.name));
+        : foods.filter((f) => f.source !== 'off' && f.source !== 'usda').sort((a, b) => a.name.localeCompare(b.name));
   return <><Top title={`Add to ${MEALS.find((m) => m[0] === meal)?.[1]}`} backBtn /><div class="page">
     <button class="btn b2 full" style="min-height:56px;font-size:17px;margin-bottom:10px" data-scan-open onClick={() => { setNotFound(null); setScan(true); }}>▥ Scan barcode</button>
     <form class="row" onSubmit={(e) => { e.preventDefault(); doSearch(); }}><input type="search" placeholder="Search foods or type a barcode" value={q} onInput={(e) => { setQ(e.currentTarget.value); if (e.currentTarget.value) setTab('search'); }} enterKeyHint="search" />
       <button class="btn p" type="submit" aria-label="Search">🔍</button><button class="btn b2" type="button" onClick={() => setScan(true)} aria-label="Scan barcode">▥</button></form>
     {lookup && !scan && <div class="card sm" style="margin-top:10px">⏳ {lookup}</div>}
     {notFound && <div class="card col" style="border-color:var(--warn);margin-top:10px" data-testid="notfound">
-      <div class="sm">{partialName ? <>Open Food Facts knows <b>{partialName}</b> ({notFound}) but has no nutrition data for it.</> : <><b>Barcode {notFound}</b> isn't in Open Food Facts{err ? ' (or lookup failed)' : ''}.</>} Create it as a custom food from the label — next time you scan it, Grug Fit will find it instantly.</div>
+      <div class="sm">{partialName ? <>Open Food Facts knows <b>{partialName}</b> ({notFound}) but has no nutrition data for it.</> : <><b>Barcode {notFound}</b> isn't in Open Food Facts{usdaNote ? '' : ' or USDA FoodData Central'}{err ? ' (or lookup failed)' : ''}.</>} Create it as a custom food from the label — next time you scan it, Grug Fit will find it instantly.</div>
+      {usdaNote && <div class="xs" data-testid="usda-note" style="color:var(--warn)">⚠️ {usdaNote}</div>}
+      {err && <div class="xs mut">{err}</div>}
       <a class="btn p" data-testid="scan-label-notfound" href={`#/food/label?barcode=${notFound}&ret=${date}/${meal}${partialName ? `&name=${encodeURIComponent(partialName)}` : ''}`}>📷 Scan nutrition label</a>
       <a class="btn" href={`#/food/edit/new?barcode=${notFound}&ret=${date}/${meal}${partialName ? `&name=${encodeURIComponent(partialName)}` : ''}`}>Type it in manually</a>
       <button class="btn sm" onClick={() => setScan(true)}>Scan again</button></div>}
@@ -301,9 +314,9 @@ export function RecipeEdit({ id }: { id: string }) {
 
 export function MyFoods() {
   const s = useSettings(); const foods = useLocalFoods(); const [tab, setTab] = useState<'custom' | 'recipe' | 'off'>('custom');
-  const l = foods.filter((f) => f.source === tab).sort((a, b) => a.name.localeCompare(b.name));
+  const l = foods.filter((f) => f.source === tab || (tab === 'off' && f.source === 'usda')).sort((a, b) => a.name.localeCompare(b.name));
   return <><Top title="My foods" backBtn /><div class="page">
-    <Seg value={tab} onChange={setTab} options={[['custom', 'Custom'], ['recipe', 'Recipes'], ['off', 'Saved (OFF)']]} />
+    <Seg value={tab} onChange={setTab} options={[['custom', 'Custom'], ['recipe', 'Recipes'], ['off', 'Saved scans']]} />
     <div class="grid2" style="margin-top:10px"><a class="btn sm" href="#/food/edit/new">+ Custom food</a><a class="btn sm" href="#/recipe/new">+ Recipe</a></div>
     <div class="list" style="margin-top:6px">{l.map((f) => <FoodRow f={f} s={s} onPick={() => f.source === 'recipe' ? go(`/recipe/${f.id}`) : f.source === 'custom' ? go(`/food/edit/${f.id}`) : (confirmDo(`Remove "${f.name}" from saved foods?`) && del('foods', f.id))} />)}</div>
     {!l.length && <div class="empty">Nothing here yet.</div>}

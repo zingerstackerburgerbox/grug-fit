@@ -74,6 +74,9 @@ export function SettingsPage() {
       <label class="f">Default rest timer (seconds)<NumInput int value={s.defaultRest} onValue={(n) => n != null && save({ defaultRest: n })} /></label>
       <label class="row sm"><input type="checkbox" style="width:24px;min-height:24px" checked={s.vibrate} onChange={(e) => { save({ vibrate: e.currentTarget.checked }); localStorage.setItem('vibrate', e.currentTarget.checked ? '1' : '0'); }} /> Vibrate on set complete & rest end</label>
       <div class="mut xs">Dates are shown as DD/MM/YYYY. Food quantities in grams.</div></div>
+    <h2>Food lookup</h2>
+    <div class="card col"><label class="f">USDA API key (optional)<input data-testid="usda-key" aria-label="USDA API key" autocomplete="off" spellcheck={false} placeholder="Blank = shared DEMO_KEY" value={s.usdaKey || ''} onChange={(e) => { save({ usdaKey: e.currentTarget.value.trim() || undefined }); toast('USDA key saved'); }} /></label>
+      <div class="mut xs">Barcodes Open Food Facts doesn't know are checked in USDA FoodData Central (US branded foods). The shared DEMO_KEY allows only ~30 lookups an hour; a <a href="https://fdc.nal.usda.gov/api-key-signup" target="_blank" rel="noopener">free personal key</a> raises that to 1,000.</div></div>
     <h2>Dose reminders</h2>
     <div class="card col"><label class="row sm"><input type="checkbox" style="width:24px;min-height:24px" checked={s.reminders} onChange={async (e) => { const on = e.currentTarget.checked; if (on && typeof Notification !== 'undefined' && Notification.permission !== 'granted') setPerm(await Notification.requestPermission()); await save({ reminders: on }); setTimeout(scheduleReminders, 50); }} /> Enable reminder notifications</label>
       <div class="mut xs">Permission: {perm}. {'TimestampTrigger' in window ? 'This browser supports Notification Triggers, so reminders are scheduled with the system.' : ''}</div>

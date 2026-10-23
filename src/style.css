@@ -137,3 +137,4 @@ button.exthumb.tap { cursor: pointer; min-height: 0; }
 .iconpick { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
 .iconpick button { padding: 2px; border-radius: 10px; border: 2px solid var(--line); background: #171a21; min-height: 0; color: var(--mut); font-size: 10px; }
 .iconpick button.on { border-color: var(--acc); }
+.srcbadge { margin-left: 6px; font-size: 10px; padding: 1px 6px; border-radius: 999px; border: 1px solid var(--bg3); color: var(--mut); white-space: nowrap; vertical-align: 1px; }

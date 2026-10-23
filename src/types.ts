@@ -17,7 +17,7 @@ export type BodyWeight = { id: string; date: string; kg: number };
 /** A unit of a food. `grams` = grams (or ml for liquids) in ONE of this unit. Base units 'g'/'ml' are implicit and not stored. */
 export type Serving = { label: string; grams: number; note?: string; kind?: 'serving' | 'package' | 'custom' };
 export type Food = {
-  id: string; name: string; brand?: string; barcode?: string; source: 'off' | 'custom' | 'recipe';
+  id: string; name: string; brand?: string; barcode?: string; source: 'off' | 'usda' | 'custom' | 'recipe'; /** USDA FoodData Central id (source 'usda') */ fdcId?: number;
   per100: Nutrients; servings: Serving[]; lastUsed?: number; useCount?: number;
   ingredients?: { foodId: string; name: string; grams: number }[]; recipeServings?: number; image?: string;
   /** base unit: grams (default) or ml for liquids (OFF per-100ml values treated as per-100g, density ≈ 1) */
@@ -41,6 +41,8 @@ export type Settings = {
   vibrate: boolean; reminders: boolean;
   /** body profile for BMR (weight comes from the latest body-weight log) */
   profile?: Profile;
+  /** optional personal api.data.gov key for USDA FoodData Central (falls back to the shared DEMO_KEY) */
+  usdaKey?: string;
   /** add today's workout calories to the calorie target ("eat back"); undefined = default for goal */
   eatBack?: boolean;
   /** onboarding finished/skipped (timestamp) */
