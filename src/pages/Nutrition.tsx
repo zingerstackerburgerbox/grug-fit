@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { all, byBarcode, byDate, del, get, put } from '../db';
 import { go, useQuery, useSettings } from '../hooks';
-import type { DiaryEntry, DoseLog, Food, Meal, Nutrients, Settings, Supplement } from '../types';
+import type { DiaryEntry, DoseLog, Food, Meal, Nutrients, Serving, Settings, Supplement } from '../types';
 import { Bar, BarChart, NumInput, Ring, Seg, Sheet, Top, confirmDo, num, toast } from '../ui';
 import { addDays, energy, fmtDay, fmtDM, MICROS, netCarbs, r0, r1, scaleN, sumN, uid, ymd, EMPTY, NKEYS, parseYmd, WD } from '../util';
 import { lookupBarcode, searchOFF } from '../off';
+import { amountText, baseUnit, convertQty, matchUnit, normaliseServings, unitLabel, unitsFor } from '../servings';
+import { Scanner } from '../scanner';
 
 export const MEALS: [Meal, string][] = [['breakfast', 'Breakfast'], ['lunch', 'Lunch'], ['dinner', 'Dinner'], ['snacks', 'Snacks']];
 const eu = (s: Settings) => s.energyUnit;
@@ -60,9 +62,9 @@ export function Diary({ date }: { date: string }) {
           <div class="row between"><div><b>{label}</b> <span class="mut sm">{energy(mt.kcal, s)} {eu(s)} · P {r0(mt.protein)} · C {r0(netCarbs(mt))} · F {r0(mt.fat)}</span></div>
             <button class="btn ic" aria-label={`${label} menu`} onClick={() => setMenu(m)}>⋮</button></div>
           <div class="list">{es.map((e) => <button class="item" style="min-height:48px;padding:8px 0" onClick={() => setEdit(e)}>
-            <div class="grow"><div class="ell">{e.name}</div><div class="mut xs">{e.qty !== 1 || !e.serving.startsWith('g') ? `${r1(e.qty)} × ${e.serving} · ` : ''}{r0(e.grams)} g</div></div>
+            <div class="grow"><div class="ell">{e.name}</div><div class="mut xs">{amountText(e)}</div></div>
             <div class="sm" style="text-align:right">{energy(e.n.kcal, s)}<div class="mut xs">P{r0(e.n.protein)} C{r0(netCarbs(e.n))} F{r0(e.n.fat)}</div></div></button>)}</div>
-          <a class="btn g sm" style="width:100%;margin-top:4px" href={`#/food/add/${date}/${m}`}>+ Add food</a>
+          <div class="row" style="margin-top:4px;gap:6px"><a class="btn g sm grow" href={`#/food/add/${date}/${m}`}>+ Add food</a><a class="btn sm b2" href={`#/food/add/${date}/${m}?scan=1`} aria-label={`Scan barcode into ${label}`}>▥ Scan</a></div>
         </div>; })}
       <h2>Nutrients</h2>
       <div class="card"><Micros n={total} s={s} /></div>
@@ -77,31 +79,64 @@ export function Diary({ date }: { date: string }) {
 
 export function FoodAmountSheet({ open, onClose, food: food0, entry, date, meal, onAdded }: { open: boolean; onClose: () => void; food?: Food; entry?: DiaryEntry; date: string; meal: Meal; onAdded?: () => void }) {
   const s = useSettings(); const [food, setFood] = useState<Food | undefined>(food0);
-  const [qty, setQty] = useState('1'); const [sv, setSv] = useState(0); const [m, setM] = useState<Meal>(meal);
+  const [qty, setQty] = useState<number | null>(1); const [ui, setUi] = useState(0); const [m, setM] = useState<Meal>(meal);
+  const [defOpen, setDefOpen] = useState(false); const [defLabel, setDefLabel] = useState('serving'); const [defG, setDefG] = useState<number | null>(null);
   useEffect(() => {
-    if (!open) return; setM(entry?.meal || meal);
-    if (entry) { get<Food>('foods', entry.foodId).then((f) => { const ff = f || { id: entry.foodId, name: entry.name, source: 'custom', per100: scaleN(entry.n, 100 / Math.max(entry.grams, 0.001)), servings: [{ label: 'g', grams: 1 }] } as Food; setFood(ff); const i = ff.servings.findIndex((x) => x.label === entry.serving); setSv(Math.max(0, i)); setQty(String(r1(entry.qty))); }); }
-    else if (food0) { setFood(food0); setSv(0); setQty(food0.servings[0]?.grams === 1 ? '100' : '1'); }
+    if (!open) return; setM(entry?.meal || meal); setDefOpen(false);
+    if (entry) {
+      get<Food>('foods', entry.foodId).then((f) => {
+        // food may have been deleted: rebuild a grams-only food from the entry's snapshot so it stays editable
+        const ff: Food = f || { id: entry.foodId, name: entry.name, source: 'custom', per100: scaleN(entry.n, 100 / Math.max(entry.grams, 0.001)), servings: [] };
+        const units = unitsFor(ff); const i = matchUnit(units, entry);
+        setFood(ff); setUi(i); setQty(i === 0 ? r1(entry.grams) : Math.round((entry.grams / units[i].grams) * 100) / 100);
+      });
+    } else if (food0) {
+      const units = unitsFor(food0); setFood(food0);
+      const last = food0.lastServing; const li = last ? units.findIndex((u) => u.label === last.label) : -1;
+      if (li >= 0) { setUi(li); setQty(last!.qty); }
+      else { const si = units.findIndex((u, i) => i > 0 && u.kind !== 'package'); if (si > 0) { setUi(si); setQty(1); } else { setUi(0); setQty(100); } } // whole packages are rarely eaten: default to a serving, else 100 g
+    }
   }, [open, entry?.id, food0?.id]);
   if (!open || !food) return null;
-  const serving = food.servings[sv] || { label: 'g', grams: 1 }; const q = num(qty) || 0; const grams = q * serving.grams;
-  const n = scaleN(food.per100, grams / 100);
+  const units = unitsFor(food); const unit = units[Math.min(ui, units.length - 1)]; const base = baseUnit(food);
+  const q = qty || 0; const grams = q * unit.grams; const n = scaleN(food.per100, grams / 100);
+  const switchUnit = (i: number) => { if (i === ui) return; setQty(qty == null ? null : i === 0 ? r1(convertQty(qty, unit, units[i])) : convertQty(qty, unit, units[i])); setUi(i); };
+  const defineServing = async () => {
+    if (!defG || defG <= 0) return;
+    const sv: Serving = { label: defLabel.trim() || 'serving', grams: defG, kind: 'custom' };
+    const stored = (await get<Food>('foods', food.id)) || food;
+    const nf = { ...stored, servings: [...normaliseServings(stored.servings).filter((x) => x.label !== sv.label), sv] };
+    await put('foods', nf); setFood(nf);
+    const ni = unitsFor(nf).findIndex((u) => u.label === sv.label); setQty(convertQty(q, unit, sv)); setUi(ni); setDefOpen(false); toast('Serving saved');
+  };
   const save = async () => {
     if (grams <= 0) return;
-    const e: DiaryEntry = { id: entry?.id || uid(), date: entry?.date || date, meal: m, foodId: food.id, name: food.brand ? `${food.name} (${food.brand})` : food.name, grams, qty: q, serving: serving.label, n, created: entry?.created || Date.now() };
+    const label = ui === 0 ? base : unit.label;
+    const e: DiaryEntry = { id: entry?.id || uid(), date: entry?.date || date, meal: m, foodId: food.id, name: food.brand ? `${food.name} (${food.brand})` : food.name, grams, qty: q, serving: label, n, created: entry?.created || Date.now() };
     await put('diary', e);
     const stored = (await get<Food>('foods', food.id)) || food;
-    if (!entry) await put('foods', { ...stored, lastUsed: Date.now(), useCount: (stored.useCount || 0) + 1 });
+    await put('foods', { ...stored, servings: stored.servings, lastServing: { label, qty: q }, ...(entry ? {} : { lastUsed: Date.now(), useCount: (stored.useCount || 0) + 1 }) });
     toast(entry ? 'Updated' : `Added to ${m}`); onClose(); onAdded?.();
   };
   return <Sheet open={open} onClose={onClose} title={food.name}>
-    <div class="col">
-      {food.brand && <div class="mut sm" style="margin-top:-8px">{food.brand}</div>}
-      <div class="grid2"><label class="f">Amount<input inputMode="decimal" value={qty} onInput={(e) => setQty(e.currentTarget.value)} autoFocus /></label>
-        <label class="f">Serving<select value={sv} onChange={(e) => { const i = +e.currentTarget.value; const ns = food.servings[i]; setSv(i); if (ns.grams === 1 && serving.grams !== 1) setQty(String(r1(grams))); else if (ns.grams !== 1 && serving.grams === 1) setQty('1'); }}>{food.servings.map((x, i) => <option value={i}>{x.label}{x.grams !== 1 && !x.label.includes(' g') ? ` (${r1(x.grams)} g)` : ''}</option>)}</select></label></div>
+    <div class="col amount-sheet">
+      {(food.brand || food.barcode) && <div class="mut sm" style="margin-top:-8px">{food.brand}{food.brand && food.barcode ? ' · ' : ''}{food.barcode ? `▥ ${food.barcode}` : ''}</div>}
+      <label class="f">Unit
+        <div class="unitchips" role="radiogroup" aria-label="Unit">{units.map((u, i) => <button type="button" role="radio" aria-checked={i === ui} class={'chip ' + (i === ui ? 'on' : '')} onClick={() => switchUnit(i)}>{i === 0 ? (base === 'ml' ? 'ml' : 'grams') : unitLabel(u, food)}</button>)}
+          <button type="button" class="chip" onClick={() => { setDefOpen(!defOpen); setDefG(null); }} aria-label="Define a serving">＋ serving</button></div></label>
+      {units.length === 1 && !defOpen && <div class="mut xs">No serving size for this product — logging in {base}. Tap “＋ serving” to define one (e.g. 1 slice = 35 {base}).</div>}
+      {defOpen && <div class="card col" style="margin:0"><div class="grid2"><label class="f">Serving name<input value={defLabel} onInput={(e) => setDefLabel(e.currentTarget.value)} placeholder="e.g. slice, cup, scoop" /></label>
+        <label class="f">Size ({base})<NumInput value={defG} onValue={setDefG} placeholder="e.g. 35" aria-label="Serving size" /></label></div>
+        <button class="btn sm b2" disabled={!defG} onClick={defineServing}>Save serving</button></div>}
+      <label class="f">Amount ({ui === 0 ? base : `× ${unit.label}`})
+        <div class="row"><button type="button" class="btn" aria-label="Decrease" onClick={() => setQty(Math.max(0, r1(q - (ui === 0 ? 10 : 0.5))))}>−</button>
+          <NumInput value={qty} onValue={setQty} aria-label="Amount" style="text-align:center;font-size:20px;font-weight:700" />
+          <button type="button" class="btn" aria-label="Increase" onClick={() => setQty(r1(q + (ui === 0 ? 10 : 0.5)))}>＋</button></div></label>
+      {ui === 0 ? <div class="chips">{[25, 50, 100, 150, 200, 250].map((g) => <button class="chip" onClick={() => setQty(g)}>{g} {base}</button>)}</div>
+        : <div class="chips">{[0.5, 1, 1.5, 2, 3].map((g) => <button class="chip" onClick={() => setQty(g)}>{g}×</button>)}</div>}
       <Seg value={m} onChange={setM} options={MEALS.map(([k, l]) => [k, l.slice(0, 5)] as [Meal, string])} />
-      <div class="kpi" style="grid-template-columns:repeat(4,1fr)"><div><span class="mut xs">{eu(s)}</span><b>{energy(n.kcal, s)}</b></div><div><span class="mut xs">Protein</span><b>{r1(n.protein)}</b></div><div><span class="mut xs">Net C</span><b>{r1(netCarbs(n))}</b></div><div><span class="mut xs">Fat</span><b>{r1(n.fat)}</b></div></div>
-      <div class="mut xs">{r0(grams)} g · fibre {r1(n.fibre)} g{MICROS.filter((x) => n[x.key] != null && (n[x.key] as number) > 0).map((x) => ` · ${x.label} ${r1(n[x.key] as number)} ${x.unit}`).join('')}</div>
+      <div class="kpi" style="grid-template-columns:repeat(4,1fr)" data-testid="preview"><div><span class="mut xs">{eu(s)}</span><b data-k="kcal">{energy(n.kcal, s)}</b></div><div><span class="mut xs">Protein</span><b data-k="protein">{r1(n.protein)}</b></div><div><span class="mut xs">Net C</span><b data-k="carbs">{r1(netCarbs(n))}</b></div><div><span class="mut xs">Fat</span><b data-k="fat">{r1(n.fat)}</b></div></div>
+      <div class="mut xs" data-testid="grams">= {r1(grams)} {base} · fibre {r1(n.fibre)} g{MICROS.filter((x) => n[x.key] != null && (n[x.key] as number) > 0).map((x) => ` · ${x.label} ${r1(n[x.key] as number)} ${x.unit}`).join('')}</div>
       <button class="btn p" disabled={grams <= 0} onClick={save}>{entry ? 'Save changes' : 'Add to diary'}</button>
       {entry && <button class="btn d" onClick={async () => { await del('diary', entry.id); onClose(); }}>Remove from diary</button>}
       {(food.source !== 'off') && <a class="btn g" href={food.source === 'recipe' ? `#/recipe/${food.id}` : `#/food/edit/${food.id}`} onClick={onClose}>Edit {food.source === 'recipe' ? 'recipe' : 'food'}</a>}
@@ -109,75 +144,71 @@ export function FoodAmountSheet({ open, onClose, food: food0, entry, date, meal,
 }
 
 function FoodRow({ f, onPick, s }: { f: Food; onPick: () => void; s: Settings }) {
-  const sv = f.servings[0]; const n = scaleN(f.per100, (sv?.grams === 1 ? 100 : sv?.grams || 100) / 100);
+  const sv = unitsFor(f)[1]; const n = scaleN(f.per100, (sv ? sv.grams : 100) / 100);
   return <button class="item" onClick={onPick}>
     {f.image ? <img class="thumb" src={f.image} loading="lazy" alt="" /> : <div class="thumb" style="display:flex;align-items:center;justify-content:center">{f.source === 'recipe' ? '🍲' : f.source === 'custom' ? '✏️' : '🛒'}</div>}
-    <div class="grow"><div class="ell">{f.name}</div><div class="mut xs ell">{f.brand ? f.brand + ' · ' : ''}{sv?.grams === 1 ? '100 g' : sv?.label} · P{r0(n.protein)} C{r0(netCarbs(n))} F{r0(n.fat)}</div></div>
+    <div class="grow"><div class="ell">{f.name}</div><div class="mut xs ell">{f.brand ? f.brand + ' · ' : ''}{sv ? unitLabel(sv, f) : `100 ${baseUnit(f)}`} · P{r0(n.protein)} C{r0(netCarbs(n))} F{r0(n.fat)}</div></div>
     <div class="sm">{energy(n.kcal, s)}<span class="mut xs"> {eu(s)}</span></div></button>;
 }
 
 export function useLocalFoods() { return (useQuery(() => all<Food>('foods'), [], []) || []) as Food[]; }
+const hashParams = () => new URLSearchParams(location.hash.split('?')[1] || '');
 
 export function AddFood({ date, meal }: { date: string; meal: Meal }) {
   const s = useSettings(); const foods = useLocalFoods();
   const [tab, setTab] = useState<'search' | 'recent' | 'frequent' | 'mine'>('recent');
   const [q, setQ] = useState(''); const [res, setRes] = useState<Food[] | null>(null); const [busy, setBusy] = useState(false); const [err, setErr] = useState('');
   const [pick, setPick] = useState<Food | undefined>(); const [scan, setScan] = useState(false);
+  const [lookup, setLookup] = useState(''); const [notFound, setNotFound] = useState<string | null>(null); const [partialName, setPartialName] = useState('');
+  useEffect(() => {
+    const hp = hashParams();
+    if (hp.get('scan') === '1') setScan(true);
+    const pid = hp.get('pick'); if (pid) get<Food>('foods', pid).then((f) => f && setPick(f));
+    if (hp.get('scan') || pid) history.replaceState(null, '', `#/food/add/${date}/${meal}`);
+  }, []);
   const doSearch = async () => {
-    if (!q.trim()) return; setTab('search'); setBusy(true); setErr(''); setRes(null);
-    if (/^\d{8,14}$/.test(q.trim())) { await barcode(q.trim()); setBusy(false); return; }
+    if (!q.trim()) return; setTab('search'); setErr(''); setNotFound(null);
+    if (/^\d{8,14}$/.test(q.trim())) { await barcode(q.trim()); return; }
+    setBusy(true); setRes(null);
     try { setRes(await searchOFF(q.trim())); } catch (e: any) { setErr(navigator.onLine ? 'Open Food Facts search failed (' + (e?.message || 'error') + '). Try again shortly.' : 'You are offline — showing your saved foods only.'); setRes([]); }
     setBusy(false);
   };
   const barcode = async (code: string) => {
-    setScan(false);
-    const local = await byBarcode(code); if (local) { setPick(local); return; }
-    try { setBusy(true); const f = await lookupBarcode(code); setBusy(false); if (f) { await put('foods', f); setPick(f); } else { setErr(`Barcode ${code} not found in Open Food Facts. You can create it as a custom food.`); setTab('search'); setRes([]); } }
-    catch (e: any) { setBusy(false); setErr('Barcode lookup failed: ' + (e?.message || 'network error')); }
+    setErr(''); setNotFound(null);
+    const local = await byBarcode(code); if (local) { setScan(false); setPick(local); return; }
+    setLookup(`Looking up ${code} on Open Food Facts…`);
+    try {
+      const f = await lookupBarcode(code); setLookup(''); setScan(false); setPartialName('');
+      if (f && 'partial' in f) { setPartialName(f.partial); setNotFound(code); }
+      else if (f) { const ex = await get<Food>('foods', f.id); const keep = ex ? { ...f, lastServing: ex.lastServing, useCount: ex.useCount, lastUsed: ex.lastUsed, servings: [...f.servings, ...(ex.servings || []).filter((x) => x.kind === 'custom')] } : f; await put('foods', keep); setPick(keep); }
+      else setNotFound(code);
+    } catch (e: any) { setLookup(''); setScan(false); setErr(`Couldn't look up ${code}: ${navigator.onLine ? e?.message || 'network error' : 'you are offline'}. Try again, or create it as a custom food.`); setNotFound(code); }
   };
   const ql = q.toLowerCase().trim();
-  const localMatch = ql ? foods.filter((f) => (f.name + ' ' + (f.brand || '')).toLowerCase().includes(ql)) : [];
+  const localMatch = ql ? foods.filter((f) => (f.name + ' ' + (f.brand || '') + ' ' + (f.barcode || '')).toLowerCase().includes(ql)) : [];
   const list = tab === 'search' ? [...localMatch, ...(res || []).filter((r) => !localMatch.some((l) => l.id === r.id))]
     : tab === 'recent' ? foods.filter((f) => f.lastUsed).sort((a, b) => (b.lastUsed || 0) - (a.lastUsed || 0)).slice(0, 40)
       : tab === 'frequent' ? foods.filter((f) => f.useCount).sort((a, b) => (b.useCount || 0) - (a.useCount || 0)).slice(0, 40)
         : foods.filter((f) => f.source !== 'off').sort((a, b) => a.name.localeCompare(b.name));
   return <><Top title={`Add to ${MEALS.find((m) => m[0] === meal)?.[1]}`} backBtn /><div class="page">
-    <form class="row" onSubmit={(e) => { e.preventDefault(); doSearch(); }}><input type="search" placeholder="Search foods or enter barcode" value={q} onInput={(e) => { setQ(e.currentTarget.value); if (e.currentTarget.value) setTab('search'); }} enterKeyHint="search" />
+    <button class="btn b2 full" style="min-height:56px;font-size:17px;margin-bottom:10px" data-scan-open onClick={() => { setNotFound(null); setScan(true); }}>▥ Scan barcode</button>
+    <form class="row" onSubmit={(e) => { e.preventDefault(); doSearch(); }}><input type="search" placeholder="Search foods or type a barcode" value={q} onInput={(e) => { setQ(e.currentTarget.value); if (e.currentTarget.value) setTab('search'); }} enterKeyHint="search" />
       <button class="btn p" type="submit" aria-label="Search">🔍</button><button class="btn b2" type="button" onClick={() => setScan(true)} aria-label="Scan barcode">▥</button></form>
+    {lookup && !scan && <div class="card sm" style="margin-top:10px">⏳ {lookup}</div>}
+    {notFound && <div class="card col" style="border-color:var(--warn);margin-top:10px" data-testid="notfound">
+      <div class="sm">{partialName ? <>Open Food Facts knows <b>{partialName}</b> ({notFound}) but has no nutrition data for it.</> : <><b>Barcode {notFound}</b> isn't in Open Food Facts{err ? ' (or lookup failed)' : ''}.</>} Create it as a custom food from the label — next time you scan it, Grug Fit will find it instantly.</div>
+      <a class="btn p" href={`#/food/edit/new?barcode=${notFound}&ret=${date}/${meal}${partialName ? `&name=${encodeURIComponent(partialName)}` : ''}`}>Create custom food with this barcode</a>
+      <button class="btn sm" onClick={() => setScan(true)}>Scan again</button></div>}
     <div class="chips" style="margin:10px 0">{([['search', 'Search'], ['recent', 'Recent'], ['frequent', 'Frequent'], ['mine', 'My foods & recipes']] as const).map(([k, l]) => <button class={'chip ' + (tab === k ? 'on' : '')} onClick={() => setTab(k)}>{l}</button>)}</div>
-    <div class="grid2"><a class="btn sm" href={`#/food/edit/new`}>+ Custom food</a><a class="btn sm" href="#/recipe/new">+ Recipe</a></div>
+    <div class="grid2"><a class="btn sm" href={`#/food/edit/new?ret=${date}/${meal}`}>+ Custom food</a><a class="btn sm" href="#/recipe/new">+ Recipe</a></div>
     {busy && <div class="empty">Searching Open Food Facts…</div>}
-    {err && <div class="card sm" style="border-color:var(--warn);margin-top:10px">{err}</div>}
+    {err && !notFound && <div class="card sm" style="border-color:var(--warn);margin-top:10px">{err}</div>}
     <div class="list" style="margin-top:6px">{list.map((f) => <FoodRow f={f} s={s} onPick={() => setPick(f)} />)}</div>
     {!busy && !list.length && <div class="empty">{tab === 'search' ? (res ? 'No results. Try fewer words, or add a custom food.' : 'Type a food name and press search.') : tab === 'mine' ? 'No custom foods or recipes yet.' : 'Foods you log will appear here.'}</div>}
     {tab === 'search' && res && <div class="mut xs center" style="margin-top:8px">Data © Open Food Facts contributors (ODbL). Check values against the label.</div>}
     <FoodAmountSheet open={!!pick} food={pick} onClose={() => setPick(undefined)} date={date} meal={meal} />
-    <ScanSheet open={scan} onClose={() => setScan(false)} onCode={barcode} />
+    <Scanner open={scan} onClose={() => { setScan(false); setLookup(''); }} onCode={barcode} busy={lookup} />
   </div></>;
-}
-
-export function ScanSheet({ open, onClose, onCode }: { open: boolean; onClose: () => void; onCode: (c: string) => void }) {
-  const vid = useRef<HTMLVideoElement>(null); const [msg, setMsg] = useState(''); const [manual, setManual] = useState('');
-  const supported = typeof window !== 'undefined' && 'BarcodeDetector' in window;
-  useEffect(() => {
-    if (!open || !supported) return;
-    let stream: MediaStream | null = null; let stop = false; let t: any;
-    (async () => {
-      try {
-        const BD = (window as any).BarcodeDetector; const fmts = await BD.getSupportedFormats?.().catch(() => null);
-        const det = new BD({ formats: (fmts || ['ean_13', 'ean_8', 'upc_a', 'upc_e']).filter((f: string) => ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128'].includes(f)) });
-        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
-        if (stop) return; const v = vid.current!; v.srcObject = stream; await v.play(); setMsg('Point the camera at a barcode');
-        const loop = async () => { if (stop) return; try { const r = await det.detect(v); if (r[0]?.rawValue) { navigator.vibrate?.(60); onCode(r[0].rawValue); return; } } catch {} t = setTimeout(loop, 250); };
-        loop();
-      } catch (e: any) { setMsg('Camera unavailable: ' + (e?.message || e) + '. Enter the barcode manually.'); }
-    })();
-    return () => { stop = true; clearTimeout(t); stream?.getTracks().forEach((x) => x.stop()); };
-  }, [open]);
-  return <Sheet open={open} onClose={onClose} title="Scan barcode"><div class="col">
-    {supported ? <><video ref={vid} class="scan" playsInline muted /><div class="mut sm">{msg || 'Starting camera…'}</div></> : <div class="card sm">Camera barcode scanning isn't supported in this browser (needs BarcodeDetector, available in Chrome on Android). Enter the number under the barcode instead.</div>}
-    <form class="row" onSubmit={(e) => { e.preventDefault(); if (manual.trim()) onCode(manual.trim()); }}><input inputMode="numeric" placeholder="Barcode number e.g. 9300633..." value={manual} onInput={(e) => setManual(e.currentTarget.value.replace(/\D/g, ''))} /><button class="btn p" type="submit">Look up</button></form>
-  </div></Sheet>;
 }
 
 const NFIELDS: { key: keyof Nutrients; label: string }[] = [
@@ -193,8 +224,8 @@ export function FoodEdit({ id }: { id: string }) {
   const [f, setF] = useState<Food | null>(null); const [basis, setBasis] = useState('100'); const [vals, setVals] = useState<Record<string, string>>({});
   const [svLabel, setSvLabel] = useState('serving'); const [svG, setSvG] = useState('');
   useEffect(() => {
-    if (id === 'new') { setF({ id: 'cf' + uid(), name: '', source: 'custom', per100: { ...EMPTY }, servings: [] }); return; }
-    get<Food>('foods', id).then((x) => { if (!x) return; setF(x); const sv = x.servings.find((v) => v.grams !== 1 && v.grams !== 100 || v.label !== '100 g' && v.label !== 'g'); if (sv) { setSvLabel(sv.label); setSvG(String(sv.grams)); }
+    if (id === 'new') { setF({ id: 'cf' + uid(), name: hashParams().get('name') || '', source: 'custom', per100: { ...EMPTY }, servings: [], barcode: hashParams().get('barcode') || undefined }); return; }
+    get<Food>('foods', id).then((x) => { if (!x) return; setF(x); const sv = unitsFor(x)[1]; if (sv) { setSvLabel(sv.label); setSvG(String(sv.grams)); }
       const v: Record<string, string> = {}; for (const k of NKEYS) if (x.per100[k] != null) v[k] = String(r1(k === 'kcal' && s.energyUnit === 'kJ' ? (x.per100[k] as number) * 4.184 : (x.per100[k] as number))); setVals(v); });
   }, [id]);
   if (!f) return <Top title="Food" backBtn />;
@@ -202,16 +233,22 @@ export function FoodEdit({ id }: { id: string }) {
     const b = num(basis) || 100; const per100: any = {};
     for (const k of NKEYS) { const v = num(vals[k] ?? ''); if (v != null) per100[k] = (k === 'kcal' && s.energyUnit === 'kJ' ? v / 4.184 : v) * (100 / b); }
     for (const k of ['kcal', 'protein', 'carbs', 'fibre', 'fat']) per100[k] ??= 0;
-    const servings = [] as Food['servings']; const g = num(svG); if (g && g > 0) servings.push({ label: svLabel.trim() || 'serving', grams: g });
-    servings.push({ label: '100 g', grams: 100 }, { label: 'g', grams: 1 });
-    await put('foods', { ...f, name: f.name.trim() || 'Custom food', per100, servings }); toast('Food saved'); history.back();
+    const g = num(svG); const first: Serving | null = g && g > 0 ? { label: svLabel.trim() || 'serving', grams: g, kind: 'custom' } : null;
+    const others = unitsFor(f).slice(1).filter((x, i) => i > 0 || !first); // keep extra servings defined on the amount screen
+    const servings = [...(first ? [first] : []), ...others.filter((x) => !first || x.label !== first.label)];
+    const code = f.barcode?.trim() || undefined;
+    if (code) { const dup = await byBarcode(code); if (dup && dup.id !== f.id && !confirmDo(`Barcode ${code} is already used by "${dup.name}". Use it for this food too?`)) return; }
+    const saved = { ...f, barcode: code, name: f.name.trim() || 'Custom food', per100, servings };
+    await put('foods', saved); toast('Food saved');
+    const ret = hashParams().get('ret');
+    if (ret) go(`/food/add/${ret}?pick=${saved.id}`); else history.back();
   };
   return <><Top title={id === 'new' ? 'New custom food' : 'Edit food'} backBtn right={<button class="btn p sm" onClick={save}>Save</button>} /><div class="page col">
     <label class="f">Name<input value={f.name} onInput={(e) => setF({ ...f, name: e.currentTarget.value })} placeholder="e.g. Homemade protein oats" /></label>
     <div class="grid2"><label class="f">Brand (optional)<input value={f.brand || ''} onInput={(e) => setF({ ...f, brand: e.currentTarget.value })} /></label>
       <label class="f">Barcode (optional)<input inputMode="numeric" value={f.barcode || ''} onInput={(e) => setF({ ...f, barcode: e.currentTarget.value || undefined })} /></label></div>
     <div class="grid2"><label class="f">Serving name<input value={svLabel} onInput={(e) => setSvLabel(e.currentTarget.value)} placeholder="e.g. 1 scoop" /></label>
-      <label class="f">Serving size (g or ml)<input inputMode="decimal" value={svG} onInput={(e) => setSvG(e.currentTarget.value)} placeholder="e.g. 30" /></label></div>
+      <label class="f">Serving size (g or ml, optional)<input inputMode="decimal" value={svG} onInput={(e) => setSvG(e.currentTarget.value)} placeholder="e.g. 30" /></label></div>
     <label class="f">Nutrition values below are per … g<input inputMode="decimal" value={basis} onInput={(e) => setBasis(e.currentTarget.value)} /></label>
     <NutrientInputs vals={vals} set={(k, v) => setVals({ ...vals, [k]: v })} energyUnit={s.energyUnit} />
     <button class="btn p" onClick={save}>Save food</button>
@@ -231,12 +268,12 @@ export function RecipeEdit({ id }: { id: string }) {
   const save = async () => {
     if (!ing.length || totalG <= 0) { toast('Add at least one ingredient'); return; }
     const per100 = scaleN(tot, 100 / totalG);
-    await put('foods', { ...r, name: r.name.trim() || 'Recipe', per100, servings: [{ label: `serving (1/${nServ} recipe)`, grams: totalG / nServ }, { label: 'whole recipe', grams: totalG }, { label: '100 g', grams: 100 }, { label: 'g', grams: 1 }] });
+    await put('foods', { ...r, name: r.name.trim() || 'Recipe', per100, servings: [{ label: 'serving', note: `1/${nServ} recipe`, grams: totalG / nServ, kind: 'serving' }, { label: 'whole recipe', grams: totalG, kind: 'package' }] });
     toast('Recipe saved'); history.back();
   };
   const ql = q.toLowerCase();
   const local = ql ? foods.filter((f) => f.id !== r.id && f.name.toLowerCase().includes(ql)) : foods.filter((f) => f.id !== r.id && f.lastUsed).sort((a, b) => (b.lastUsed || 0) - (a.lastUsed || 0)).slice(0, 15);
-  const pickIng = async (f: Food) => { if (!fm.has(f.id)) await put('foods', f); const g = num(prompt(`Grams of ${f.name}?`, String(f.servings[0]?.grams !== 1 ? f.servings[0]?.grams : 100)) || ''); if (!g) return; setR({ ...r, ingredients: [...ing, { foodId: f.id, name: f.name, grams: g }] }); setAdd(false); setQ(''); setRes([]); };
+  const pickIng = async (f: Food) => { if (!fm.has(f.id)) await put('foods', f); const g = num(prompt(`Grams of ${f.name}?`, String(r1(unitsFor(f)[1]?.grams || 100))) || ''); if (!g) return; setR({ ...r, ingredients: [...ing, { foodId: f.id, name: f.name, grams: g }] }); setAdd(false); setQ(''); setRes([]); };
   return <><Top title={id === 'new' ? 'New recipe' : 'Edit recipe'} backBtn right={<button class="btn p sm" onClick={save}>Save</button>} /><div class="page col">
     <label class="f">Recipe name<input value={r.name} onInput={(e) => setR({ ...r, name: e.currentTarget.value })} placeholder="e.g. Chicken burrito bowl" /></label>
     <label class="f">Number of servings<NumInput int value={nServ} onValue={(n) => setR((o) => o && { ...o, recipeServings: Math.max(1, n || 1) })} /></label>

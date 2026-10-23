@@ -11,6 +11,7 @@ import { AddFood, Diary, FoodEdit, MyFoods, RecipeEdit, Trends } from './pages/N
 import { CalendarPage, SuppEdit, SuppsPage } from './pages/Supps';
 import { SettingsPage } from './pages/Settings';
 import { scheduleReminders } from './doses';
+import { registerSW, showUpdatedToast } from './update';
 import type { Meal } from './types';
 
 addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); (window as any).__installPrompt = e; dispatchEvent(new Event('installprompt')); });
@@ -52,9 +53,15 @@ const TABS: [string, string, keyof typeof I, string[]][] = [
   ['/', 'Home', 'home', ['']], ['/workouts', 'Workout', 'lift', ['workouts', 'workout', 'routine', 'history', 'exercises', 'exercise', 'body']],
   ['/food', 'Food', 'food', ['food', 'foods', 'recipe']], ['/supps', 'Doses', 'pill', ['supps', 'supp', 'calendar']], ['/settings', 'Settings', 'gear', ['settings']]
 ];
+function UpdateBanner() {
+  const [show, setShow] = useState(false);
+  useEffect(() => { const f = () => setShow(true); addEventListener('grug-update-ready', f); return () => removeEventListener('grug-update-ready', f); }, []);
+  if (!show) return null;
+  return <button class="update-banner" onClick={() => location.reload()} data-testid="update-banner">⬆️ Update ready – tap to refresh<span class="xs mut"> (finish your workout/edit first; nothing is lost)</span></button>;
+}
 function App() {
   const [ready, setReady] = useState(false); const h = useHash();
-  useEffect(() => { init().then(() => { setReady(true); scheduleReminders(); }); const v = () => document.visibilityState === 'visible' && scheduleReminders(); document.addEventListener('visibilitychange', v); return () => document.removeEventListener('visibilitychange', v); }, []);
+  useEffect(() => { init().then(() => { setReady(true); scheduleReminders(); showUpdatedToast(); }); const v = () => document.visibilityState === 'visible' && scheduleReminders(); document.addEventListener('visibilitychange', v); return () => document.removeEventListener('visibilitychange', v); }, []);
   useEffect(() => { window.scrollTo(0, 0); }, [h.split('?')[0]]);
   if (!ready) return <div class="empty">Loading…</div>;
   const seg = h.split('/').filter(Boolean)[0] || '';
@@ -62,11 +69,10 @@ function App() {
     <main key={h}>{route(h)}</main>
     <RestBar />
     <nav class="tabs">{TABS.map(([href, label, ic, segs]) => <a href={'#' + href} class={segs.includes(seg) ? 'on' : ''}>{I[ic]}<span>{label}</span></a>)}</nav>
+    <UpdateBanner />
     <Toaster />
   </>;
 }
 render(<App />, document.getElementById('app')!);
 
-if ('serviceWorker' in navigator && import.meta.env.PROD) {
-  navigator.serviceWorker.register('./sw.js', { scope: './' }).catch((e) => console.warn('SW failed', e));
-}
+registerSW();

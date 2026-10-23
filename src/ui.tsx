@@ -1,5 +1,5 @@
 import type { ComponentChildren } from 'preact';
-import { useEffect, useRef, useState } from 'preact/hooks';
+import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
 import { back } from './hooks';
 
 export function Top({ title, backBtn, right }: { title: ComponentChildren; backBtn?: boolean | (() => void); right?: ComponentChildren }) {
@@ -85,7 +85,7 @@ export function confirmDo(msg: string) { return window.confirm(msg); }
 export function NumInput({ value, onValue, int, ...rest }: { value: number | string | null | undefined; onValue: (n: number | null) => void; int?: boolean; [k: string]: any }) {
   const str = (v: any) => (v == null || v === '' ? '' : String(v));
   const [t, setT] = useState(str(value)); const focused = useRef(false);
-  useEffect(() => { if (!focused.current) setT(str(value)); }, [value]);
+  useLayoutEffect(() => { if (!focused.current) setT(str(value)); }, [value]);
   return <input {...rest} inputMode={int ? 'numeric' : 'decimal'} value={t} onFocus={() => { focused.current = true; }} onBlur={() => { focused.current = false; setT(str(value)); }}
     onInput={(e) => { const v = e.currentTarget.value; setT(v); const n = num(v); onValue(n != null && isNaN(n) ? null : n); }} />;
 }

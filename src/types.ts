@@ -12,11 +12,16 @@ export type PR = { exerciseId: string; kind: '1rm' | 'weight' | 'volume' | 'reps
 export type RoutineEx = { exerciseId: string; sets: number; reps?: number; kg?: number; restSec: number };
 export type Routine = { id: string; name: string; exercises: RoutineEx[]; notes?: string; updated: number };
 export type BodyWeight = { id: string; date: string; kg: number };
-export type Serving = { label: string; grams: number };
+/** A unit of a food. `grams` = grams (or ml for liquids) in ONE of this unit. Base units 'g'/'ml' are implicit and not stored. */
+export type Serving = { label: string; grams: number; note?: string; kind?: 'serving' | 'package' | 'custom' };
 export type Food = {
   id: string; name: string; brand?: string; barcode?: string; source: 'off' | 'custom' | 'recipe';
   per100: Nutrients; servings: Serving[]; lastUsed?: number; useCount?: number;
   ingredients?: { foodId: string; name: string; grams: number }[]; recipeServings?: number; image?: string;
+  /** base unit: grams (default) or ml for liquids (OFF per-100ml values treated as per-100g, density ≈ 1) */
+  unit?: 'g' | 'ml';
+  /** last unit + quantity the user logged this food with */
+  lastServing?: { label: string; qty: number };
 };
 export type Meal = 'breakfast' | 'lunch' | 'dinner' | 'snacks';
 export type DiaryEntry = { id: string; date: string; meal: Meal; foodId: string; name: string; grams: number; qty: number; serving: string; n: Nutrients; created: number };

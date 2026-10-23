@@ -1,21 +1,27 @@
 {
-  "name": "fitapp",
-  "version": "1.0.0",
+  "name": "grug-fit",
+  "version": "1.1.0",
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "node tests/serve.mjs dist 4173",
+    "test": "node tests/smoke.mjs && node tests/update.mjs"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
+    "@zxing/browser": "^0.2.1",
+    "@zxing/library": "^0.23.0",
     "idb": "^8.0.4",
     "preact": "^11.0.1"
   },
   "devDependencies": {
     "@preact/preset-vite": "^2.10.6",
+    "bwip-js": "^4.11.4",
     "playwright": "^1.64.1",
     "sharp": "^0.35.5",
     "typescript": "^7.0.2",
@@ -25,5 +31,6 @@
     "workbox-precaching": "^7.4.1",
     "workbox-routing": "^7.4.1",
     "workbox-strategies": "^7.4.1"
-  }
+  },
+  "private": true
 }

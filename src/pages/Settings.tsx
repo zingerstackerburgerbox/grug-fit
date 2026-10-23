@@ -3,7 +3,8 @@ import { clearAll, exportAll, importAll, put } from '../db';
 import { useSettings } from '../hooks';
 import type { Settings } from '../types';
 import { NumInput, Seg, Top, confirmDo, num, toast } from '../ui';
-import { DEFAULT_SETTINGS, MICROS, r1, ymd } from '../util';
+import { DEFAULT_SETTINGS, MICROS, fmtDate, fmtTime, r1, ymd } from '../util';
+import { APP_VERSION, BUILD_ID, BUILD_TIME } from '../update';
 import { scheduleReminders } from '../doses';
 
 export function SettingsPage() {
@@ -52,6 +53,10 @@ export function SettingsPage() {
       <div class="mut xs">Last backup: {localStorage.getItem('lastBackup') ? new Date(+localStorage.getItem('lastBackup')!).toLocaleString('en-AU') : 'never'}</div></div>
     <h2>Danger zone</h2>
     <button class="btn d" onClick={async () => { if (confirmDo('Delete ALL data (workouts, diary, supplements, settings)? This cannot be undone.') && confirmDo('Really? Export a backup first if unsure.')) { await clearAll(); localStorage.removeItem('rest'); toast('All data cleared'); } }}>Clear all data</button>
-    <div class="mut xs center" style="margin-top:10px">Grug Fit v1.0 · Food data from Open Food Facts (ODbL)</div>
+    <h2>About</h2>
+    <div class="card col" data-testid="about"><div class="row between"><b>Grug Fit v<span data-testid="app-version">{APP_VERSION}</span></b><span class="mut sm">built {fmtDate(BUILD_TIME)} {fmtTime(+new Date(BUILD_TIME))}</span></div>
+      <div class="mut xs">Build <span data-testid="build-id">{BUILD_ID}</span> · updates install automatically (checked on launch, when you return to the app, and every 30 min). Your data stays on the device across updates.</div>
+      <button class="btn sm" onClick={async () => { const r = await navigator.serviceWorker?.getRegistration(); if (!r) { toast('Updates unavailable (no service worker)'); return; } await r.update().catch(() => {}); toast(r.installing || r.waiting ? 'Update found – installing…' : 'You have the latest version'); }}>Check for updates</button></div>
+    <div class="mut xs center" style="margin-top:10px">Food data from Open Food Facts (ODbL)</div>
   </div></>;
 }

@@ -1,15 +1,25 @@
 import { openDB, type IDBPDatabase } from 'idb';
 import { SEED_EXERCISES } from './seed';
 import { DEFAULT_SETTINGS } from './util';
+import { normaliseServings, isBase } from './servings';
 import type { Settings } from './types';
 
 export const STORES = ['exercises', 'routines', 'workouts', 'bodyweight', 'foods', 'diary', 'supplements', 'schedules', 'doselogs', 'kv'] as const;
 export type StoreName = (typeof STORES)[number];
+/**
+ * Two kinds of versioning, both forward-only so data survives app updates:
+ *  - DB_VERSION: IndexedDB structural version (object stores / indexes). Add `if (oldVersion < N) {...}` blocks in upgrade().
+ *  - SCHEMA_VERSION: data-shape version stored in kv 'schema'; MIGRATIONS[n] transforms records from n-1 to n (see migrate()).
+ */
+export const DB_VERSION = 1;
+export const SCHEMA_VERSION = 2;
 let dbp: Promise<IDBPDatabase> | null = null;
 export function db() {
-  if (!dbp) dbp = openDB('grugfit', 1, {
-    upgrade(d) {
-      for (const s of STORES) {
+  if (!dbp) dbp = openDB('grugfit', DB_VERSION, {
+    // another tab/app version needs a newer DB: close ours and reload so the upgrade can proceed
+    blocking() { dbp?.then((d) => d.close()); location.reload(); },
+    upgrade(d, oldVersion) {
+      if (oldVersion < 1) for (const s of STORES) {
         const st = d.createObjectStore(s, { keyPath: 'id' });
         if (s === 'diary' || s === 'bodyweight' || s === 'doselogs') st.createIndex('date', 'date');
         if (s === 'workouts') st.createIndex('start', 'start');
@@ -42,14 +52,39 @@ export async function init() {
     tx.objectStore('kv').put(DEFAULT_SETTINGS);
     await tx.done;
   }
+  await migrate();
   try { await navigator.storage?.persist?.(); } catch {}
+}
+type Tx = any;
+/** Data migrations, keyed by the schema version they produce. Each must be idempotent and must never drop user data. */
+const MIGRATIONS: Record<number, (tx: Tx) => Promise<void>> = {
+  // v2: normalise food servings (implicit g/ml base unit, serving notes) and legacy diary unit labels. Nutrient snapshots untouched.
+  2: async (tx) => {
+    for (const f of await tx.objectStore('foods').getAll()) await tx.objectStore('foods').put({ ...f, servings: normaliseServings(f.servings || []), unit: f.unit || 'g' });
+    for (const e of await tx.objectStore('diary').getAll()) {
+      let { serving, qty } = e;
+      if (isBase(serving)) { serving = 'g'; qty = e.grams; }
+      else if (/^serving \((.*)\)$/.test(serving)) serving = 'serving';
+      if (serving !== e.serving || qty !== e.qty) await tx.objectStore('diary').put({ ...e, serving, qty, legacyServing: e.legacyServing || e.serving });
+    }
+  }
+};
+/** Bring stored data up to SCHEMA_VERSION. `force` re-runs all (idempotent) migrations, e.g. after importing an old backup. */
+export async function migrate(force = false) {
+  const d = await db();
+  const cur = force ? 1 : (await d.get('kv', 'schema'))?.v || 1;
+  if (cur >= SCHEMA_VERSION) return;
+  const tx = d.transaction(STORES as any, 'readwrite');
+  for (let v = cur + 1; v <= SCHEMA_VERSION; v++) if (MIGRATIONS[v]) await MIGRATIONS[v](tx);
+  await tx.objectStore('kv').put({ id: 'schema', v: SCHEMA_VERSION });
+  await tx.done;
 }
 export async function getSettings(): Promise<Settings> {
   const s = await get<Settings>('kv', 'settings');
   return { ...DEFAULT_SETTINGS, ...(s || {}), targets: { ...DEFAULT_SETTINGS.targets, ...(s?.targets || {}) } };
 }
 export async function exportAll() {
-  const d = await db(); const out: any = { app: 'grugfit', version: 1, exported: new Date().toISOString(), data: {} };
+  const d = await db(); const out: any = { app: 'grugfit', version: 1, schema: SCHEMA_VERSION, exported: new Date().toISOString(), data: {} };
   for (const s of STORES) out.data[s] = await d.getAll(s);
   return out;
 }
@@ -61,7 +96,7 @@ export async function importAll(json: any, mode: 'replace' | 'merge' = 'replace'
     if (mode === 'replace') await st.clear();
     for (const v of json.data[s] || []) await st.put(v);
   }
-  await tx.done; bump();
+  await tx.done; await migrate(true); bump();
 }
 export async function clearAll() {
   const d = await db(); const tx = d.transaction(STORES as any, 'readwrite');
