@@ -9,6 +9,7 @@ import { CustomExerciseForm, ExerciseFilter, ExercisePicker, useExercises } from
 import { rest } from '../rest';
 import { ExAnim, ExThumb } from '../exviz/ExViz';
 import { MET, weightAt, workoutKcal, type Intensity } from '../energy';
+import { checkStale } from '../autoend';
 
 const useBW = () => useQuery(() => all<BodyWeight>('bodyweight'), [], []) as BodyWeight[];
 const kgFor = (bws: BodyWeight[], w: Workout) => weightAt(bws, ymd(new Date(w.start)));
@@ -37,7 +38,7 @@ export async function startWorkout(routine?: Routine) {
   if (cur && !confirmDo('A workout is already in progress. Discard it and start a new one?')) { go('/workout/active'); return; }
   const set = (await get<Settings>('kv', 'settings'))?.defaultRest ?? 90;
   const w: Workout = {
-    id: uid(), name: routine?.name || 'Workout', start: Date.now(), routineId: routine?.id,
+    id: uid(), name: routine?.name || 'Workout', start: Date.now(), lastActivityAt: Date.now(), routineId: routine?.id,
     exercises: (routine?.exercises || []).map((re) => ({ id: uid(), exerciseId: re.exerciseId, restSec: re.restSec || set, sets: Array.from({ length: Math.max(1, re.sets) }, () => newSet({ reps: re.reps ?? null, kg: re.kg ?? null })) }))
   };
   await put('kv', { id: 'active', w });
@@ -47,9 +48,13 @@ export async function startWorkout(routine?: Routine) {
 export function WorkoutsHome() {
   const routines = (useQuery(() => all<Routine>('routines').then((l) => l.sort((a, b) => b.updated - a.updated)), [], []) || []) as Routine[];
   const exs = exMap(useExercises()); const active = useActive(); const ws = useWorkouts();
+  // Opening the Workout tab (nav tap, launch, deep link) goes straight to a workout in progress; "Minimize" comes back here with ?list=1
+  const listOnly = /[?&]list=1/.test(location.hash); const [checked, setChecked] = useState(listOnly);
+  useEffect(() => { if (listOnly) { checkStale(); return; } checkStale().then(() => get<{ w: Workout | null }>('kv', 'active')).then((a) => { if (a?.w) location.replace('#/workout/active'); else setChecked(true); }); }, []);
+  if (!checked) return <Top title="Workout" />;
   return <><Top title="Workout" />
     <div class="page">
-      {active && <div class="card" style="border-color:var(--acc)"><div class="row between"><div><div class="b">{active.name} in progress</div><div class="mut sm">Started {fmtTime(active.start)}</div></div><a class="btn p" href="#/workout/active">Resume</a></div></div>}
+      {active && <div class="card" style="border-color:var(--acc)"><div class="row between"><div><div class="b">{active.name} in progress</div><div class="mut sm">Started {fmtTime(active.start)}</div></div><a class="btn p" href="#/workout/active" data-testid="resume-active">Resume</a></div></div>}
       <button class="btn p full" onClick={() => startWorkout()}>+ Start empty workout</button>
       <div class="grid3" style="margin-top:10px">
         <a class="btn sm" href="#/history">History</a><a class="btn sm" href="#/exercises">Exercises</a><a class="btn sm" href="#/body">Body weight</a>
@@ -70,7 +75,7 @@ export function WorkoutCard({ w, exs }: { w: Workout; exs: Map<string, Exercise>
   const s = useSettings(); const bws = useBW();
   return <a class="card" style="display:block;color:inherit;text-decoration:none" href={`#/history/${w.id}`}>
     <div class="row between"><div class="b">{w.name}</div><div class="mut sm">{fmtDate(w.start)}</div></div>
-    <div class="row mut sm wrap" style="gap:14px;margin:6px 0"><span>⏱ {fmtDur((w.end || w.start) - w.start)}</span><span>🏋️ {Math.round(Number(wDisp(workoutVolume(w), s)))} {s.weightUnit}</span><span>{workoutSetCount(w)} sets</span><span data-testid="card-kcal">🔥 {workoutKcal(w, kgFor(bws, w))} kcal{w.kcalOverride != null ? '*' : ''}</span>{!!w.prs?.length && <span class="pill warn">🏆 {w.prs.length} PR</span>}</div>
+    <div class="row mut sm wrap" style="gap:14px;margin:6px 0"><span>⏱ {fmtDur((w.end || w.start) - w.start)}</span><span>🏋️ {Math.round(Number(wDisp(workoutVolume(w), s)))} {s.weightUnit}</span><span>{workoutSetCount(w)} sets</span><span data-testid="card-kcal">🔥 {workoutKcal(w, kgFor(bws, w))} kcal{w.kcalOverride != null ? '*' : ''}</span>{!!w.prs?.length && <span class="pill warn">🏆 {w.prs.length} PR</span>}{w.needsReview && <span class="pill info" data-testid="autoended-badge" title="Ended automatically after 2 h without activity — tap to review">⏹ Auto-ended</span>}</div>
     <div class="sm">{w.exercises.slice(0, 5).map((e) => <div class="row ell" style="gap:8px;margin-top:3px"><ExThumb ex={exs.get(e.exerciseId)} size={28} /><span class="ell">{e.sets.filter((x) => x.done).length} × {exs.get(e.exerciseId)?.name || 'Unknown'}</span></div>)}{w.exercises.length > 5 && <div class="mut">+{w.exercises.length - 5} more</div>}</div>
   </a>;
 }
@@ -117,11 +122,21 @@ export function ActiveWorkout() {
   const [w, setW] = useState<Workout | null | undefined>(undefined);
   const [pick, setPick] = useState(false); const [setMenu, setSetMenu] = useState<{ ei: number; si: number } | null>(null);
   const [exMenu, setExMenu] = useState<number | null>(null); const [finish, setFinish] = useState(false); const [summary, setSummary] = useState<Workout | null>(null); const [demo, setDemo] = useState<string | null>(null);
-  const now = useNow(1000); const bwsA = useBW(); const liveKg = weightAt(bwsA, ymd());
-  useEffect(() => { get<{ w: Workout }>('kv', 'active').then((x) => { wRef.current = x?.w || null; setW(x?.w || null); }); }, []);
+  const now = useNow(1000); const bwsA = useBW(); const liveKg = weightAt(bwsA, ymd()); const restoring = useRef(true);
+  useEffect(() => {
+    checkStale().then(() => get<{ w: Workout }>('kv', 'active')).then((x) => { wRef.current = x?.w || null; setW(x?.w || null);
+      const y = +(sessionStorage.getItem('activeScroll:' + x?.w?.id) || 0); if (!y) setTimeout(() => { restoring.current = false; }, 150);
+      if (y) { restoring.current = true; let n = 0; const step = () => { window.scrollTo(0, y); if (Math.abs(window.scrollY - y) > 2 && ++n < 30) requestAnimationFrame(step); else setTimeout(() => { restoring.current = false; }, 150); }; requestAnimationFrame(step); } });
+    const ended = () => { wRef.current = null; setW(null); rest.stop(); location.replace('#/workouts?list=1'); };
+    addEventListener('grug-autoended', ended); return () => removeEventListener('grug-autoended', ended);
+  }, []);
+  useEffect(() => { // keep the scroll position so leaving and re-opening the workout lands where you were
+    if (!w) return; const id = w.id; const f = () => { if (!restoring.current && location.hash.startsWith('#/workout/active')) sessionStorage.setItem('activeScroll:' + id, String(window.scrollY)); };
+    addEventListener('scroll', f, { passive: true }); return () => removeEventListener('scroll', f);
+  }, [w?.id]);
   const wRef = useRef<Workout | null | undefined>(undefined); wRef.current = wRef.current === undefined ? w : wRef.current;
   const cur = () => wRef.current as Workout;
-  const save = (nw: Workout) => { wRef.current = nw; setW(nw); put('kv', { id: 'active', w: nw }); };
+  const save = (nw: Workout) => { if (!wRef.current) return; nw = { ...nw, lastActivityAt: Date.now() }; wRef.current = nw; setW(nw); put('kv', { id: 'active', w: nw }); };
   // all updates read the latest workout from the ref so rapid successive edits never clobber each other
   const updEx = (ei: number, p: Partial<WExercise> | ((e: WExercise) => Partial<WExercise>)) => { const c = cur(); if (!c) return; save({ ...c, exercises: c.exercises.map((e, i) => (i === ei ? { ...e, ...(typeof p === 'function' ? p(e) : p) } : e)) }); };
   const updSet = (ei: number, si: number, p: Partial<WSet>) => updEx(ei, (e) => ({ sets: e.sets.map((x, j) => (j === si ? { ...x, ...p } : x)) }));
@@ -137,14 +152,14 @@ export function ActiveWorkout() {
     const st = cur().exercises[ei].sets[si];
     if (!st.done) {
       const prev = prevMap.get(w.exercises[ei].exerciseId)?.[si];
-      const p: Partial<WSet> = { done: true };
+      const p: Partial<WSet> = { done: true, doneAt: Date.now() };
       if (st.reps == null && prev?.reps) p.reps = prev.reps; // Hevy-style: tick fills from previous
       if (st.kg == null && prev?.kg != null) p.kg = prev.kg;
       if (st.reps == null && p.reps == null) { toast('Enter reps first'); return; }
       updSet(ei, si, p);
       if (s.vibrate) vibrate(40);
       if (w.exercises[ei].restSec > 0) rest.start(w.exercises[ei].restSec);
-    } else updSet(ei, si, { done: false });
+    } else updSet(ei, si, { done: false, doneAt: undefined });
   };
   const doFinish = async (dropIncomplete: boolean) => {
     const fw: Workout = { ...w, end: Date.now(), exercises: w.exercises.map((e) => ({ ...e, sets: dropIncomplete ? e.sets.filter((x) => x.done) : e.sets.map((x) => x) })).filter((e) => e.sets.length) };
@@ -152,7 +167,7 @@ export function ActiveWorkout() {
     await put('workouts', fw); await put('kv', { id: 'active', w: null }); await del('kv', 'active'); rest.stop();
     setFinish(false); setSummary(fw);
   };
-  return <><Top title={<input value={w.name} onInput={(e) => save({ ...cur(), name: e.currentTarget.value })} style="font-size:18px;font-weight:700;background:transparent;border:0;padding:0;min-height:40px" aria-label="Workout name" />} backBtn={() => go('/workouts')}
+  return <><Top title={<input value={w.name} onInput={(e) => save({ ...cur(), name: e.currentTarget.value })} style="font-size:18px;font-weight:700;background:transparent;border:0;padding:0;min-height:40px" aria-label="Workout name" />} backBtn={() => go('/workouts?list=1')}
     right={<button class="btn p sm" onClick={() => setFinish(true)}>Finish</button>} />
     <div class="page">
       <div class="kpi"><div><span class="mut xs">Duration</span><b>{fmtDur(now - w.start)}</b></div><div><span class="mut xs">Volume</span><b>{Math.round(Number(wDisp(vol, s)))} {s.weightUnit}</b></div><div><span class="mut xs">Sets</span><b>{doneSets}</b></div><div><span class="mut xs">🔥 Est.</span><b data-testid="live-kcal">{workoutKcal(w, liveKg, now)}</b></div></div>
@@ -178,7 +193,8 @@ export function ActiveWorkout() {
         </div>;
       })}
       <button class="btn b2 full" style="margin-top:14px" onClick={() => setPick(true)}>+ Add exercise</button>
-      <button class="btn d full" style="margin-top:24px" onClick={async () => { if (confirmDo('Discard this workout? Logged sets will be lost.')) { await del('kv', 'active'); rest.stop(); go('/workouts'); } }}>Discard workout</button>
+      <button class="btn full" style="margin-top:24px" data-testid="minimize" onClick={() => go('/workouts?list=1')}>▾ Minimize — back to workouts (keeps running)</button>
+      <button class="btn d full" style="margin-top:10px" onClick={async () => { if (confirmDo('Discard this workout? Logged sets will be lost.')) { await del('kv', 'active'); rest.stop(); go('/workouts?list=1'); } }}>Discard workout</button>
       <div style="height:60px" />
     </div>
     <ExercisePicker open={pick} onClose={() => setPick(false)} onAdd={(ids) => save({ ...cur(), exercises: [...w.exercises, ...ids.map((x) => ({ id: uid(), exerciseId: x, restSec: s.defaultRest, sets: [newSet()] }))] })} />
@@ -233,18 +249,43 @@ export function HistoryPage() {
   </div></>;
 }
 
+const pad2 = (n: number) => String(n).padStart(2, '0');
+const toLocalInput = (t: number) => { const d = new Date(t); return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}T${pad2(d.getHours())}:${pad2(d.getMinutes())}`; };
+const fromLocalInput = (v: string) => { const t = new Date(v).getTime(); return isNaN(t) ? null : t; };
 export function WorkoutDetail({ id }: { id: string }) {
-  const w = useQuery(() => get<Workout>('workouts', id), [id]); const exs = exMap(useExercises()); const s = useSettings();
+  const w0 = useQuery(() => get<Workout>('workouts', id), [id]); const exs = exMap(useExercises()); const s = useSettings(); const hist = useWorkouts();
+  const [edit, setEdit] = useState(/[?&]edit=1/.test(location.hash)); const [d, setD] = useState<Workout | null>(null);
+  useEffect(() => { if (edit && w0 && !d) setD(structuredClone(w0)); }, [edit, w0]);
+  const w = edit && d ? d : w0;
   if (!w) return <Top title="Workout" backBtn />;
-  return <><Top title={w.name} backBtn right={<button class="btn sm" onClick={() => saveAsRoutine(w)}>Save as routine</button>} /><div class="page">
-    <div class="mut sm">{fmtDate(w.start)} · {fmtTime(w.start)}–{fmtTime(w.end || w.start)}</div>
-    <div class="kpi" style="margin-top:8px"><div><span class="mut xs">Duration</span><b>{fmtDur((w.end || 0) - w.start)}</b></div><div><span class="mut xs">Volume</span><b>{Math.round(Number(wDisp(workoutVolume(w), s)))} {s.weightUnit}</b></div><div><span class="mut xs">Sets</span><b>{workoutSetCount(w)}</b></div></div>
-    {!!w.prs?.length && <div class="card" style="margin-top:12px;border-color:var(--warn)"><h3>🏆 Personal records</h3>{w.prs.map((p) => <div class="row between sm"><span>{exs.get(p.exerciseId)?.name}</span><span class="pill warn">{PR_LABEL[p.kind]}: {p.kind === 'reps' ? p.value : `${wDisp(p.value, s)} ${s.weightUnit}`}</span></div>)}</div>}
-    <WorkoutKcalCard w={w} onChange={() => {}} />
-    {w.exercises.map((e) => { let n = 0; return <div class="card" style="margin-top:12px"><div class="row" style="gap:8px"><ExThumb ex={exs.get(e.exerciseId)} size={40} /><a class="b" style="color:var(--acc2);text-decoration:none" href={`#/exercise/${e.exerciseId}`}>{exs.get(e.exerciseId)?.name}</a></div>
+  const updSet = (ei: number, si: number, p: Partial<WSet>) => setD((o) => o && { ...o, exercises: o.exercises.map((e, i) => (i === ei ? { ...e, sets: e.sets.map((x, j) => (j === si ? { ...x, ...p } : x)) } : e)) });
+  const saveEdit = async () => {
+    if (!d) return; if (!d.end || d.end <= d.start) { toast('End time must be after the start time'); return; }
+    const nw: Workout = { ...d, exercises: d.exercises.map((e) => ({ ...e, sets: e.sets.filter((x) => x.done || x.kg != null || x.reps != null) })).filter((e) => e.sets.length), needsReview: false };
+    nw.prs = detectPRs(nw, hist); await put('workouts', nw); toast('Workout updated');
+    setEdit(false); setD(null); history.replaceState(null, '', `#/history/${id}`);
+  };
+  return <><Top title={edit ? 'Edit workout' : w.name} backBtn right={edit ? <button class="btn p sm" data-testid="save-workout" onClick={saveEdit}>Save</button> : <><button class="btn sm" data-testid="edit-workout" onClick={() => setEdit(true)}>Edit</button><button class="btn sm" onClick={() => saveAsRoutine(w)}>Save as routine</button></>} /><div class="page" data-editing={edit ? '1' : undefined}>
+    {w.needsReview && !edit && <div class="card sm" data-testid="autoended-note" style="border-color:var(--acc2)">⏹ Ended automatically at the last completed set after 2 h without activity. <button class="btn g sm" onClick={async () => { await put('workouts', { ...w, needsReview: false }); toast('Marked as reviewed'); }}>Looks right</button></div>}
+    {edit && d ? <div class="card col">
+      <label class="f">Name<input value={d.name} onInput={(e) => setD({ ...d, name: e.currentTarget.value })} /></label>
+      <div class="grid2"><label class="f">Start<input type="datetime-local" data-testid="edit-start" value={toLocalInput(d.start)} onInput={(e) => { const t = fromLocalInput(e.currentTarget.value); if (t) setD({ ...d, start: t }); }} /></label>
+        <label class="f">End<input type="datetime-local" data-testid="edit-end" value={toLocalInput(d.end || d.start)} onInput={(e) => { const t = fromLocalInput(e.currentTarget.value); if (t) setD({ ...d, end: t }); }} /></label></div>
+      <div class="mut xs">Duration {fmtDur(Math.max(0, (d.end || d.start) - d.start))} · the calorie estimate follows the duration.</div></div>
+      : <div class="mut sm">{fmtDate(w.start)} · {fmtTime(w.start)}–{fmtTime(w.end || w.start)}{w.autoEnded ? ' · auto-ended' : ''}</div>}
+    <div class="kpi" style="margin-top:8px"><div><span class="mut xs">Duration</span><b data-testid="detail-duration">{fmtDur((w.end || 0) - w.start)}</b></div><div><span class="mut xs">Volume</span><b>{Math.round(Number(wDisp(workoutVolume(w), s)))} {s.weightUnit}</b></div><div><span class="mut xs">Sets</span><b>{workoutSetCount(w)}</b></div></div>
+    {!edit && !!w.prs?.length && <div class="card" style="margin-top:12px;border-color:var(--warn)"><h3>🏆 Personal records</h3>{w.prs.map((p) => <div class="row between sm"><span>{exs.get(p.exerciseId)?.name}</span><span class="pill warn">{PR_LABEL[p.kind]}: {p.kind === 'reps' ? p.value : `${wDisp(p.value, s)} ${s.weightUnit}`}</span></div>)}</div>}
+    {!edit && <WorkoutKcalCard key={String(w.end) + w.start} w={w} onChange={() => {}} />}
+    {w.exercises.map((e, ei) => { let n = 0; return <div class="card" style="margin-top:12px"><div class="row" style="gap:8px"><ExThumb ex={exs.get(e.exerciseId)} size={40} /><a class="b" style="color:var(--acc2);text-decoration:none" href={`#/exercise/${e.exerciseId}`}>{exs.get(e.exerciseId)?.name}</a></div>
       {e.notes && <div class="mut sm">{e.notes}</div>}
-      {e.sets.map((st) => <div class="row between sm" style="padding:4px 0"><span class={'stype ' + st.type} style="min-height:0">{st.type === 'N' ? ++n : st.type}</span><span class="grow">{wDisp(st.kg, s) || 0} {s.weightUnit} × {st.reps}{st.rpe ? ` @ RPE ${st.rpe}` : ''}</span><span class="mut">1RM {r1(Number(wDisp(e1rm(st.kg || 0, st.reps || 0), s)))}</span></div>)}</div>; })}
-    <button class="btn d full" style="margin-top:20px" onClick={async () => { if (confirmDo('Delete this workout from history?')) { await del('workouts', w.id); history.back(); } }}>Delete workout</button>
+      {e.sets.map((st, si) => edit ? <div class="row sm" style="padding:4px 0;gap:6px"><span class={'stype ' + st.type} style="min-height:0">{st.type === 'N' ? ++n : st.type}</span>
+          <NumInput style="width:70px" value={st.kg != null ? wDisp(st.kg, s) : null} onValue={(v) => updSet(ei, si, { kg: v == null ? null : wIn(v, s) })} aria-label="Weight" /><span class="mut">×</span>
+          <NumInput int style="width:60px" value={st.reps} onValue={(v) => updSet(ei, si, { reps: v })} aria-label="Reps" />
+          <button class={'check ' + (st.done ? 'on' : '')} onClick={() => updSet(ei, si, { done: !st.done })} aria-label="Completed">✓</button>
+          <button class="btn ic" aria-label="Delete set" onClick={() => setD((o) => o && { ...o, exercises: o.exercises.map((x, i) => (i === ei ? { ...x, sets: x.sets.filter((_, j) => j !== si) } : x)) })}>✕</button></div>
+        : <div class={'row between sm' + (st.done ? '' : ' unticked')} style="padding:4px 0"><span class={'stype ' + st.type} style="min-height:0">{st.type === 'N' ? ++n : st.type}</span><span class="grow">{wDisp(st.kg, s) || 0} {s.weightUnit} × {st.reps ?? '—'}{st.rpe ? ` @ RPE ${st.rpe}` : ''}{!st.done && <span class="pill" style="margin-left:6px">not ticked</span>}</span><span class="mut">{st.done ? `1RM ${r1(Number(wDisp(e1rm(st.kg || 0, st.reps || 0), s)))}` : ''}</span></div>)}</div>; })}
+    {edit ? <button class="btn full" style="margin-top:20px" onClick={() => { setEdit(false); setD(null); history.replaceState(null, '', `#/history/${id}`); }}>Cancel editing</button>
+      : <button class="btn d full" style="margin-top:20px" onClick={async () => { if (confirmDo('Delete this workout from history?')) { await del('workouts', w.id); history.back(); } }}>Delete workout</button>}
   </div></>;
 }
 

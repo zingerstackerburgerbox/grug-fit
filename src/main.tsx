@@ -16,6 +16,8 @@ import { getSettings } from './db';
 import { scheduleReminders } from './doses';
 import { registerSW, showUpdatedToast } from './update';
 import type { Meal } from './types';
+import { checkStale } from './autoend';
+import { AutoEndReview, WorkoutMiniBar } from './pages/AutoEndReview';
 
 addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); (window as any).__installPrompt = e; dispatchEvent(new Event('installprompt')); });
 
@@ -66,7 +68,13 @@ function UpdateBanner() {
 }
 function App() {
   const [ready, setReady] = useState(false); const h = useHash(); const [onboard, setOnboard] = useState(false);
-  useEffect(() => { init().then(async () => { setOnboard(!(await getSettings()).onboarded); setReady(true); scheduleReminders(); showUpdatedToast(); }); const v = () => document.visibilityState === 'visible' && scheduleReminders(); document.addEventListener('visibilitychange', v); return () => document.removeEventListener('visibilitychange', v); }, []);
+  useEffect(() => {
+    // stale-workout check before first render, so an abandoned workout is already ended (and its review shown) on launch
+    init().then(() => checkStale()).catch(() => null).then(async () => { setOnboard(!(await getSettings()).onboarded); setReady(true); scheduleReminders(); showUpdatedToast(); });
+    const v = () => { if (document.visibilityState === 'visible') { scheduleReminders(); checkStale(); } };
+    document.addEventListener('visibilitychange', v); const t = setInterval(() => checkStale(), 60e3);
+    return () => { document.removeEventListener('visibilitychange', v); clearInterval(t); };
+  }, []);
   useEffect(() => { window.scrollTo(0, 0); }, [h.split('?')[0]]);
   if (!ready) return <div class="empty">Loading…</div>;
   const seg = h.split('/').filter(Boolean)[0] || '';
@@ -74,8 +82,9 @@ function App() {
   if (onboard && seg !== 'workout') return <><main key="onboarding"><Onboarding onDone={() => setOnboard(false)} /></main><UpdateBanner /><Toaster /></>;
   return <>
     <main key={h}>{route(h)}</main>
-    <RestBar />
+    <div class="dock"><RestBar /><WorkoutMiniBar hidden={seg === 'workout'} /></div>
     <nav class="tabs">{TABS.map(([href, label, ic, segs]) => <a href={'#' + href} class={segs.includes(seg) ? 'on' : ''}>{I[ic]}<span>{label}</span></a>)}</nav>
+    <AutoEndReview />
     <UpdateBanner />
     <Toaster />
   </>;

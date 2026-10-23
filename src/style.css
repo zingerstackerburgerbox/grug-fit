@@ -149,3 +149,13 @@ button.exthumb.tap { cursor: pointer; min-height: 0; }
 .fact-ic { color: var(--warn); flex: 0 0 auto; }
 .fact-t { margin-top: 6px; line-height: 1.45; font-size: 15px; }
 .fact.collapsed { padding-top: 8px; padding-bottom: 8px; }
+.dock { position: fixed; left: 0; right: 0; bottom: calc(62px + env(safe-area-inset-bottom)); z-index: 11; display: flex; flex-direction: column; }
+.dock .rest { position: static; }
+.minibar { display: flex; align-items: center; gap: 8px; padding: 10px 14px; background: #12321f; border-top: 1px solid var(--acc); color: var(--fg); text-decoration: none; font-size: 14px; min-height: 44px; }
+.minibar b { font-variant-numeric: tabular-nums; color: #86efac; }
+.minibar .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--acc); animation: pulse 1.6s infinite; flex: 0 0 auto; }
+@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .35; } }
+.modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,.65); z-index: 120; display: flex; align-items: center; justify-content: center; padding: 18px; animation: fade .15s; }
+.modal { background: var(--bg2); border: 1px solid var(--line); border-radius: 18px; padding: 18px; width: 100%; max-width: 420px; gap: 10px; box-shadow: 0 12px 40px rgba(0,0,0,.6); }
+.unticked { opacity: .55; }
+body:has(.minibar) .page { padding-bottom: calc(146px + env(safe-area-inset-bottom)); }

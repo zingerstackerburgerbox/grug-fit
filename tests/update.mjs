@@ -44,7 +44,7 @@ try {
   const nav2 = page.waitForEvent('framenavigated'); await page.click('[data-testid=update-banner]'); await nav2;
   await page.waitForSelector('text=+ Add exercise'); log('after tapping banner: workout screen restored');
   const idC = await buildId(); log('build now:', idC); if (!/buildC/.test(idC)) fail('not on build C');
-  await page.goto(BASE + '#/workouts'); await page.waitForSelector('text=in progress', { timeout: 5000 }).catch(() => {}); const resume = await page.locator('text=in progress').count(); log('workout still in progress after update:', resume > 0); if (!resume) fail('workout lost');
+  await page.goto(BASE + '#/workouts?list=1'); await page.waitForSelector('text=in progress', { timeout: 5000 }).catch(() => {}); const resume = await page.locator('text=in progress').count(); log('workout still in progress after update:', resume > 0); if (!resume) fail('workout lost');
   const caches2 = await page.evaluate(() => caches.keys()); log('caches:', caches2.join(', ')); if (caches2.filter((k) => k.startsWith('grugfit-precache-')).length > 2) fail('old caches not cleaned');
 } catch (e) { fail(e.message); }
 await browser.close(); srv.kill();

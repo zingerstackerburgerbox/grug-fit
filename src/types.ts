@@ -5,11 +5,13 @@ export type Nutrients = {
 };
 export type Exercise = { id: string; name: string; muscle: string; equipment: string; custom?: boolean; /** built-ins: short how-to text */ how?: string; /** custom exercises: generic visual 'g:<Muscle>' (default: from muscle group) */ icon?: string };
 export type SetType = 'W' | 'N' | 'D' | 'F';
-export type WSet = { id: string; type: SetType; kg: number | null; reps: number | null; rpe?: number | null; done: boolean };
+export type WSet = { id: string; type: SetType; kg: number | null; reps: number | null; rpe?: number | null; done: boolean; /** when it was ticked complete */ doneAt?: number };
 export type WExercise = { id: string; exerciseId: string; sets: WSet[]; restSec: number; notes?: string };
 export type Workout = { id: string; name: string; start: number; end?: number; routineId?: string; exercises: WExercise[]; prs?: PR[]; notes?: string;
   /** calorie estimate inputs: MET intensity (default moderate) and optional manual kcal override */
-  intensity?: 'light' | 'moderate' | 'vigorous'; kcalOverride?: number | null };
+  intensity?: 'light' | 'moderate' | 'vigorous'; kcalOverride?: number | null;
+  /** last edit while in progress (auto-end after 2 h idle) */ lastActivityAt?: number;
+  /** ended automatically at the last completed set; needsReview until the user confirms/edits/resumes */ autoEnded?: boolean; needsReview?: boolean; autoEndedAt?: number };
 export type PR = { exerciseId: string; kind: '1rm' | 'weight' | 'volume' | 'reps'; value: number };
 export type RoutineEx = { exerciseId: string; sets: number; reps?: number; kg?: number; restSec: number };
 export type Routine = { id: string; name: string; exercises: RoutineEx[]; notes?: string; updated: number };

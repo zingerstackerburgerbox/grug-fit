@@ -11,7 +11,7 @@ addEventListener('hashchange', () => { dirty = false; if (pending) maybeReload()
 export async function safeToReload() {
   const route = location.hash.slice(1).split('?')[0] || '/';
   if (EDIT_ROUTES.some((r) => r.test(route))) return false;
-  if (document.querySelector('.sheet-bg, .scanner')) return false;
+  if (document.querySelector('.sheet-bg, .scanner, .modal-bg, [data-editing]')) return false; // open sheet/scanner, auto-end review, history edit
   if (dirty) return false;
   const active = await get('kv', 'active').catch(() => null);
   if (active?.w) return false; // workout in progress
