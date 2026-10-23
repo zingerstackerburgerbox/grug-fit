@@ -81,6 +81,7 @@ export function SettingsPage() {
       <label class="f">Lifting weight<Seg value={s.weightUnit} onChange={(weightUnit) => save({ weightUnit })} options={[['kg', 'kg'], ['lb', 'lb']]} /></label>
       <label class="f">Default rest timer (seconds)<NumInput int value={s.defaultRest} onValue={(n) => n != null && save({ defaultRest: n })} /></label>
       <label class="row sm"><input type="checkbox" style="width:24px;min-height:24px" checked={s.vibrate} onChange={(e) => { save({ vibrate: e.currentTarget.checked }); localStorage.setItem('vibrate', e.currentTarget.checked ? '1' : '0'); }} /> Vibrate on set complete & rest end</label>
+      <label class="row sm"><input type="checkbox" style="width:24px;min-height:24px" data-testid="fact-setting" checked={(s.factCard || 'open') !== 'off'} onChange={(e) => save({ factCard: e.currentTarget.checked ? 'open' : 'off' })} /> Show “Fitness fact of the day” on Home</label>
       <div class="mut xs">Dates are shown as DD/MM/YYYY. Food quantities in grams.</div></div>
     <h2>Food lookup</h2>
     <div class="card col"><UsdaKeyField />

@@ -144,3 +144,8 @@ button.exthumb.tap { cursor: pointer; min-height: 0; }
 .servings-editor input[type=radio] { width: 22px; min-height: 22px; height: 22px; flex: 0 0 22px; padding: 0; margin: 0; accent-color: var(--acc); }
 .servings-editor .sv-name { flex: 1 1 auto; min-width: 0; width: auto; }
 .servings-editor .row { align-items: center; flex-wrap: nowrap; }
+.fact { padding: 12px 14px; background: linear-gradient(180deg, #14201a 0%, var(--bg2) 70%); }
+.fact-h { all: unset; display: flex; align-items: center; gap: 8px; cursor: pointer; min-height: 32px; flex: 1; }
+.fact-ic { color: var(--warn); flex: 0 0 auto; }
+.fact-t { margin-top: 6px; line-height: 1.45; font-size: 15px; }
+.fact.collapsed { padding-top: 8px; padding-bottom: 8px; }
