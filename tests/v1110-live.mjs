@@ -30,7 +30,7 @@ await page.goto(BASE + '#/settings'); await page.click('[data-testid=admin-open]
 await page.fill('[data-testid=admin-code]', 'NOT-THE-CODE-1'); await page.click('[data-testid=admin-unlock]'); await page.waitForSelector('[data-testid=admin-msg]');
 const wm = (await page.textContent('[data-testid=admin-msg]')).trim(); if (wm !== 'Code not recognised') fail('wrong code message: ' + wm); else log('live wrong code → "' + wm + '"');
 await page.fill('[data-testid=admin-code]', fs.readFileSync('/home/box/.lunk-admin-code', 'utf8').trim()); await page.click('[data-testid=admin-unlock]');
-await page.waitForSelector('[data-testid=admin-on]'); log('live real code →', (await page.textContent('[data-testid=admin-on]')).trim());
+await page.waitForSelector('[data-testid=admin-on]'); await page.waitForSelector('.toast', { state: 'detached', timeout: 8000 }).catch(() => {}); log('live real code →', (await page.textContent('[data-testid=admin-on]')).trim());
 await page.locator('[data-testid=admin-box]').scrollIntoViewIfNeeded(); await page.evaluate(() => scrollBy(0, 120)); await shot(page, 'settings-admin');
 
 // one real review with the admin token
@@ -55,7 +55,8 @@ await page.goto(BASE + '#/settings'); await page.click('[data-testid=admin-remov
 // chat remaining count on a normal (non-admin) device: one real message
 const c2 = await mk(); const p2 = c2.page; await p2.goto(BASE + '#/coach'); await p2.waitForSelector('textarea[aria-label="Message the coach"]');
 await p2.fill('textarea[aria-label="Message the coach"]', 'How was my week? One line.'); await p2.click('[data-testid=coach-send]');
-await p2.waitForSelector('[data-testid=coach-quota]:has-text("4/5")', { timeout: 90000 }); await p2.waitForTimeout(4000);
+await p2.waitForSelector('[data-testid=coach-quota]:has-text("4/5")', { timeout: 90000 }); await p2.waitForSelector('[data-testid=coach-reply]', { timeout: 90000 });
+await p2.waitForSelector('[data-testid=coach-typing]', { state: 'detached', timeout: 90000 }).catch(() => {}); await p2.waitForSelector('[data-testid=coach-send]', { timeout: 90000 }); await p2.waitForTimeout(1500);
 log('chat pill:', await p2.textContent('[data-testid=coach-quota]')); await shot(p2, 'chat');
 if (failed) { console.error(failed, 'failure(s)'); process.exitCode = 1; } else console.log('V1.11.0 LIVE OK');
 await b.close();

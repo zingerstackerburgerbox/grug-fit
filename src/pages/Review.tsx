@@ -107,7 +107,7 @@ function NewReview() {
       <div class="row" style="gap:10px;align-items:flex-start"><GrugAv /><div class="sm grow">{err.message}{err.kind === 'limit' && <div class="premium xs" style="margin-top:6px">Want more? <b>Lunk Premium</b> (coming soon)</div>}</div></div>
       <a class="btn" href="#/">Back to Home</a></div>
     : <><div class="rv-load" data-testid="review-loading"><div class="cave"><span class="spark" style="left:18px;top:52px">✦</span><span class="spark" style="right:22px;top:40px;font-size:14px">✦</span><span class="club">🦴</span><span class="rock">🪨</span><div class="ground" /></div>
-      <h2 style="margin:16px 0 4px;font-size:20px">Grug is looking at your week…</h2><div class="mut sm">Grug count lifts, food and steps. Few seconds.</div>
+      <h2 style="margin:16px 0 4px;font-size:20px">Grug is looking at your week…</h2><div class="mut sm">Grug count lifts, food and steps. Can take up to a minute.</div>
       <div class="steps">{st(0, t ? `${t.workouts} workout${t.workouts === 1 ? '' : 's'} found` : 'Counting workouts', t ? range : '')}{st(1, t ? `${t.foodDays} day${t.foodDays === 1 ? '' : 's'} of food logged` : 'Reading your food diary', t ? `${t.entries} entries` : '')}
         {st(2, 'Steps and doses')}{st(3, 'Grug thinking hard')}</div></div>
       <div class="card" style="margin-top:22px;opacity:.55"><div class="row" style="gap:14px"><div style="width:64px;height:64px;border-radius:50%;border:8px solid var(--bg3);flex:none" /><div class="grow col"><div class="skel" style="width:70%" /><div class="skel" style="width:90%" /><div class="skel" style="width:55%" /></div></div></div>
