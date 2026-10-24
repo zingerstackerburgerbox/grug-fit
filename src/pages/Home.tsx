@@ -13,6 +13,7 @@ import { startWorkout, useActive, useWorkouts, WorkoutCard, WORKOUT_LIST } from 
 import { sumN } from '../util';
 import { useExercises } from './ExercisePicker';
 import { FactCard } from './Fact';
+import { ReviewCard } from './Review';
 
 const weekStart = (t: number) => { const d = new Date(t); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); return ymd(d); };
 export function Home() {
@@ -35,6 +36,7 @@ export function Home() {
     <a class="card" style="display:block;color:inherit;text-decoration:none" href={`#/food/${today}`}>
       <div class="row between" style="margin-bottom:8px"><b>Today's nutrition</b><span class="mut sm">{n ? `${energy(n.kcal, s)} ${s.energyUnit}` : ''} →</span></div>
       {n && <MacroSummary n={n} s={s} compact kcalTarget={en?.target} />}</a>
+    <ReviewCard />
     <FactCard />
     <div class="kpi" style="margin-bottom:12px"><div><span class="mut xs">🏋️ Week streak</span><b>{wkStreak}</b><span class="mut xs">{weekWorkouts} this week</span></div><div><span class="mut xs">🍽 Logging streak</span><b>{foodStreak} d</b></div><div><span class="mut xs">💊 Dose streak</span><b>{doseStreak} d</b></div></div>
     <div class="card"><div class="row between"><b>Doses today</b><a class="btn g sm" href="#/calendar">Calendar →</a></div>

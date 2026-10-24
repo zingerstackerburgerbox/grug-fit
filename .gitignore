@@ -4,3 +4,4 @@ screenshots
 .netlify-state
 tests/barcode.y4m
 public/tesseract
+tmp/

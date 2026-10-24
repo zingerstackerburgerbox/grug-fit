@@ -17,14 +17,14 @@ let mode = 'ok', reqs = [], reply = 'Hello';
 let realHits = 0; await ctx.route('https://grug-coach-proxy.grug-fitgrug-fitgrug-fit.workers.dev/**', (r) => { realHits++; return r.fulfill({ status: 200, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify({ enabled: true, owner: false, remaining: 30, cap: 30, used: 0, resetAt: '2026-10-24T00:00:00.000Z' }) }); });
 await ctx.route('https://coach.test/**', async (r) => {
   const u = r.request().url(); const h = r.request().headers(); const cors = { 'access-control-allow-origin': '*', 'access-control-expose-headers': 'X-Coach-Remaining, X-Coach-Cap, X-Coach-Reset' };
-  if (u.endsWith('/status')) return r.fulfill({ status: 200, contentType: 'application/json', headers: cors, body: JSON.stringify({ enabled: true, owner: false, remaining: 30, cap: 30, used: 0, resetAt: '2026-10-24T00:00:00.000Z' }) });
+  if (u.endsWith('/status')) return r.fulfill({ status: 200, contentType: 'application/json', headers: cors, body: JSON.stringify({ enabled: true, owner: false, remaining: 5, cap: 5, used: 0, resetAt: '2026-10-24T00:00:00.000Z' }) });
   reqs.push({ h, body: JSON.parse(r.request().postData() || '{}') });
   if (mode === 'abort') return r.abort('failed');
-  if (mode === 'limit') return r.fulfill({ status: 429, contentType: 'application/json', headers: { ...cors, 'X-Coach-Remaining': '0' }, body: JSON.stringify({ error: 'device_limit', message: 'Daily limit', remaining: 0, cap: 30, resetAt: '2026-10-24T00:00:00.000Z' }) });
-  if (mode === 'iplimit') return r.fulfill({ status: 429, contentType: 'application/json', headers: cors, body: JSON.stringify({ error: 'ip_limit', message: 'net', remaining: 0, cap: 60, resetAt: '2026-10-24T00:00:00.000Z' }) });
+  if (mode === 'limit') return r.fulfill({ status: 429, contentType: 'application/json', headers: { ...cors, 'X-Coach-Remaining': '0' }, body: JSON.stringify({ error: 'device_limit', message: 'Daily limit', remaining: 0, cap: 5, resetAt: '2026-10-24T00:00:00.000Z' }) });
+  if (mode === 'iplimit') return r.fulfill({ status: 429, contentType: 'application/json', headers: cors, body: JSON.stringify({ error: 'ip_limit', message: 'net', remaining: 0, cap: 15, resetAt: '2026-10-24T00:00:00.000Z' }) });
   if (mode === 'rl') return r.fulfill({ status: 429, contentType: 'application/json', headers: cors, body: JSON.stringify({ error: 'rate_limited', message: 'slow', retryAfter: 60 }) });
   if (mode === 'disabled') return r.fulfill({ status: 503, contentType: 'application/json', headers: cors, body: JSON.stringify({ error: 'disabled', message: 'off' }) });
-  return r.fulfill({ status: 200, headers: { ...cors, 'content-type': 'text/event-stream', 'X-Coach-Remaining': String(30 - reqs.length), 'X-Coach-Cap': '30' }, body: sse(reply) });
+  return r.fulfill({ status: 200, headers: { ...cors, 'content-type': 'text/event-stream', 'X-Coach-Remaining': String(5 - reqs.length), 'X-Coach-Cap': '5' }, body: sse(reply) });
 });
 await page.goto(BASE); await page.fill('[data-testid=ob-username]', 'grug_tester').then(() => page.click('[data-testid=ob-next]')).then(() => page.click('[data-testid=ob-skip]')); await page.waitForSelector("text=Today's nutrition");
 // some data for the context
@@ -61,7 +61,7 @@ if (!/<strong>4-day PPL<\/strong>/.test(html) || !/<li>Push: chest/.test(html)) 
 if (await page.evaluate(() => window.__xss) || /<img/.test(html)) fail('HTML not escaped'); else log('markdown rendered, HTML escaped');
 const card = await page.textContent('[data-testid=coach-action][data-type=create_routine]'); log('routine card:', card.replace(/\s+/g, ' '));
 if (!/new/.test(card)) fail('unknown exercise not flagged as new');
-await page.waitForTimeout(300); log('quota pill:', await page.textContent('[data-testid=coach-quota]')); if (!/29\/30/.test(await page.textContent('[data-testid=coach-quota]'))) fail('remaining messages');
+await page.waitForTimeout(300); log('quota pill:', await page.textContent('[data-testid=coach-quota]')); if (!/^4\/5 messages left today$/.test(await page.textContent('[data-testid=coach-quota]'))) fail('remaining messages');
 await page.screenshot({ path: 'screenshots/39-coach-chat.png' });
 const before = await idb(`return (await p(tx('kv').get('settings'))).targets.protein;`);
 await page.locator('[data-testid=coach-action][data-type=update_targets] [data-testid=action-dismiss]').click();
@@ -78,7 +78,7 @@ if (reqs[1].body.messages.filter((m) => m.role !== 'system').length !== 3) fail(
 
 // 3. errors
 mode = 'limit'; await page.fill('textarea[aria-label="Message the coach"]', 'more?'); await page.click('[data-testid=coach-send]'); await page.waitForSelector('[data-testid=coach-error]');
-let et = await page.textContent('[data-testid=coach-error]'); log('limit:', et); if (!/used today/.test(et) || await page.locator('[data-testid=coach-retry]').count()) fail('limit message');
+let et = await page.textContent('[data-testid=coach-error]'); log('limit:', et); if (!/You've used today's 5 coach messages./.test(et) || await page.locator('[data-testid=coach-retry]').count()) fail('limit message');
 mode = 'iplimit'; await page.fill('textarea[aria-label="Message the coach"]', 'net cap?'); await page.click('[data-testid=coach-send]'); await page.waitForTimeout(400); et = await page.textContent('[data-testid=coach-error]'); log('ip limit:', et); if (!/Daily coach limit reached for this network/.test(et)) fail('ip_limit message');
 mode = 'rl'; await page.fill('textarea[aria-label="Message the coach"]', 'fast?'); await page.click('[data-testid=coach-send]'); await page.waitForTimeout(400); et = await page.textContent('[data-testid=coach-error]'); log('rate limited:', et); if (!/wait a minute/.test(et)) fail('rate_limited message');
 mode = 'disabled'; await page.fill('textarea[aria-label="Message the coach"]', 'hello?'); await page.click('[data-testid=coach-send]'); await page.waitForTimeout(400); et = await page.textContent('[data-testid=coach-error]'); log('disabled:', et); if (!/switched off/.test(et)) fail('disabled message');

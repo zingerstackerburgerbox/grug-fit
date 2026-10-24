@@ -240,3 +240,54 @@ details.tut ol { margin: 6px 0 6px; padding-left: 22px; line-height: 1.5; } deta
 .season-notice { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(74px + env(safe-area-inset-bottom)); z-index: 60; display: flex; align-items: center; gap: 2px; width: max-content; max-width: calc(100vw - 20px);
   background: var(--toast-bg); color: var(--toast-fg); border: 1px solid color-mix(in srgb, var(--acc) 50%, transparent); border-radius: 14px; padding: 4px 4px 4px 14px; font-size: 14px; box-shadow: 0 6px 20px var(--shadow); }
 .season-notice .btn { color: var(--acc-text); min-height: 36px; padding: 0 10px; }
+
+/* v1.11.0 Grug's Review + stars (from Erik's approved mockups, /workspace/lunk-mockups/mock.css) */
+.grug { background: linear-gradient(160deg, color-mix(in srgb, var(--acc) 10%, var(--bg2)) 0%, var(--bg2) 65%); border-color: var(--acc-line); }
+.gav { position: relative; width: 42px; height: 42px; border-radius: 50%; flex: none; display:flex; align-items:center; justify-content:center; background: var(--acc-soft); border: 1px solid var(--acc-line); color: var(--acc-text); }
+.gav .bone { position:absolute; right:-5px; bottom:-4px; font-size: 15px; transform: rotate(-20deg); filter: drop-shadow(0 1px 1px #000a); }
+.rv .score { display:flex; gap: 16px; align-items:center; }
+.rv .subs { flex:1; display:flex; flex-direction:column; gap: 10px; min-width:0; }
+.rv .sub .row { justify-content: space-between; font-size: 13.5px; margin-bottom: 4px; }
+.rv .sub b { font-variant-numeric: tabular-nums; }
+.say { position: relative; background: var(--bg3); border-radius: 16px; border-top-left-radius: 6px; padding: 11px 13px; font-size: 15.5px; line-height: 1.5; }
+.rv .tagl { display:flex; flex-wrap: wrap; gap: 6px; }
+.rv .tag { display:inline-flex; align-items:center; gap:5px; font-size: 13px; padding: 6px 10px; border-radius: 999px; line-height: 1.25; }
+.rv .tag.ok { background: var(--acc-soft); color: var(--acc-tint); border: 1px solid color-mix(in srgb, var(--acc) 28%, var(--bg)); }
+.rv .tag.warn { background: color-mix(in srgb, var(--warn) 14%, var(--bg)); color: color-mix(in srgb, var(--warn) 60%, var(--fg)); border: 1px solid color-mix(in srgb, var(--warn) 30%, var(--bg)); }
+.rv .lbl { font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--mut); margin: 14px 2px 8px; }
+.rv .tip { display:flex; flex-direction:column; gap: 8px; }
+.rv .tip .hd { display:flex; gap: 10px; align-items: center; }
+.rv .tip .tic { width: 36px; height: 36px; border-radius: 10px; background: var(--bg3); display:flex; align-items:center; justify-content:center; font-size: 19px; flex:none; }
+.rv .tip .data { font-size: 13px; color: var(--mut); background: var(--bg3); border-radius: 10px; padding: 7px 10px; font-variant-numeric: tabular-nums; }
+.rv .tip p { margin: 0; font-size: 15px; line-height: 1.45; }
+.rv .foods { display:grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.rv .foods button { background: var(--bg3); border-radius: 10px; padding: 7px 10px; font-size: 13px; text-align:left; border: 1px solid transparent; color: var(--fg); font: inherit; font-size: 13px; }
+.rv .foods button.on { border-color: var(--acc); }
+.rv .foods b { color: var(--pro); font-weight: 700; display:block; font-size: 13px; }
+.btn.acc { color: var(--acc-text); }
+.rv .done { color: var(--acc-text); font-weight: 600; font-size: 14px; display:inline-flex; align-items:center; gap:6px; min-height: 38px; }
+.rv .disc { font-size: 12px; color: var(--mut); text-align:center; margin: 14px 8px 0; }
+.rv .kpi > div { padding: 10px 6px; }
+.rv-load { display:flex; flex-direction:column; align-items:center; text-align:center; padding: 34px 10px 10px; }
+.rv-load .cave { position: relative; width: 150px; height: 120px; }
+.rv-load .rock { position:absolute; left: 50%; bottom: 8px; transform: translateX(-50%); font-size: 54px; }
+.rv-load .club { position:absolute; left: 50%; top: 4px; font-size: 52px; transform-origin: 20% 90%; transform: translateX(-30%) rotate(-28deg); animation: bonk 1s ease-in-out infinite; }
+.rv-load .spark { position:absolute; font-size: 18px; color: var(--warn); }
+.rv-load .ground { position:absolute; left: 10px; right: 10px; bottom: 4px; height: 6px; border-radius: 9px; background: var(--bg3); }
+@keyframes bonk { 50% { transform: translateX(-30%) rotate(8deg); } }
+.rv-load .steps { width: 100%; max-width: 330px; display:flex; flex-direction:column; gap: 8px; margin-top: 22px; text-align:left; }
+.rv-load .steps > div { display:flex; gap: 10px; align-items:center; font-size: 14.5px; background: var(--bg2); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }
+.rv-load .ck { width: 22px; height: 22px; border-radius: 50%; background: var(--acc); color: var(--acc-ink); font-size: 13px; font-weight: 800; display:flex; align-items:center; justify-content:center; flex:none; }
+.rv-load .sp { width: 22px; height: 22px; border-radius: 50%; border: 3px solid var(--line); border-top-color: var(--acc); flex:none; animation: spin 0.9s linear infinite; }
+.rv-load .wait { width: 22px; height: 22px; border-radius: 50%; border: 2px dashed var(--line); flex:none; }
+.rv-load .pend { color: var(--mut); }
+@keyframes spin { to { transform: rotate(360deg); } }
+.skel { height: 12px; border-radius: 6px; background: linear-gradient(90deg, var(--bg3), color-mix(in srgb, var(--bg3) 60%, var(--line)), var(--bg3)); }
+.premium { color: var(--mut); }
+.premium b { color: var(--acc-text); font-weight: 600; }
+.stars-rows { display:flex; flex-direction:column; gap: 6px; margin-top: 12px; }
+.stars-row { display:flex; align-items:center; gap: 10px; background: var(--bg3); border: 0; border-radius: 12px; padding: 8px 10px; color: var(--fg); font: inherit; text-align:left; width:100%; cursor:pointer; }
+.st { color: var(--warn); letter-spacing: 1px; font-size: 15px; white-space: nowrap; }
+.st i { color: color-mix(in srgb, var(--mut) 45%, var(--bg3)); font-style: normal; }
+.stars-row .why { font-size: 12px; color: var(--mut); overflow:hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (prefers-reduced-motion: reduce) { .rv-load .club, .rv-load .sp { animation: none; } }

@@ -8,13 +8,19 @@
  * an optional portion note and an optional photo as a data URL), the reply is validated as strict JSON, and a SEPARATE daily cap
  * applies (EST_DAILY_CAP per device, EST_DAILY_CAP x EST_NETWORK_MULT per network; same UTC day as the coach caps). Only successful
  * estimates are counted; estimates never use coach messages. Photos are forwarded to xAI and never stored.
+ * v1.11.0: POST /review (Grug's weekly review: client sends a compact 7-day summary, the prompt + strict-JSON validation live here,
+ * REVIEW_WEEKLY_CAP per device and x REVIEW_NETWORK_MULT per network per Sydney week (Mon 00:00 Australia/Sydney), only successes count).
+ * Admin code: POST /admin {code} checks SHA-256(ADMIN_SALT + ':' + normalised code) against the ADMIN_CODE_HASH secret (constant time,
+ * 5 attempts/hour per device and per network). Success issues a random per-device admin token (only its SHA-256 is kept in KV) that
+ * the app sends as X-Admin-Token; it bypasses every cap like OWNER_TOKEN. POST /admin/remove revokes it. The code is never in this repo.
+ * Chat caps lowered in v1.11.0: 5 per device / 15 per network per UTC day.
  */
 const DEFAULTS = {
   MODEL: 'grok-4.7',
   UPSTREAM_URL: 'https://api.x.ai/v1/chat/completions',
   ALLOWED_ORIGINS: 'https://zingerstackerburgerbox.github.io,http://localhost:5173,http://localhost:4173,http://127.0.0.1:5173,http://127.0.0.1:4173',
-  DEVICE_DAILY_CAP: '30',
-  IP_DAILY_CAP: '60',
+  DEVICE_DAILY_CAP: '5',
+  IP_DAILY_CAP: '15',
   GLOBAL_DAILY_CAP: '500',
   MAX_INPUT_CHARS: '24000',
   MAX_MESSAGES: '40',
@@ -24,7 +30,13 @@ const DEFAULTS = {
   EST_MAX_IMAGE_CHARS: '1500000',
   EST_MAX_TOKENS: '1500',
   EST_TIMEOUT_MS: '90000',
-  EST_REASONING: 'low'
+  EST_REASONING: 'low',
+  REVIEW_WEEKLY_CAP: '1',
+  REVIEW_NETWORK_MULT: '3',
+  REVIEW_MAX_INPUT_CHARS: '16000',
+  REVIEW_MAX_TOKENS: '3000',
+  REVIEW_TIMEOUT_MS: '100000',
+  ADMIN_ATTEMPTS_PER_HOUR: '5'
 };
 const cfg = (env, k) => (env[k] != null && String(env[k]).trim() !== '' ? String(env[k]).trim() : DEFAULTS[k]);
 const int = (env, k) => Math.max(0, parseInt(cfg(env, k), 10) || 0);
@@ -37,7 +49,7 @@ const resetAt = (now = Date.now()) => { const d = new Date(now); d.setUTCHours(2
 
 function corsHeaders(origin) {
   return { 'Access-Control-Allow-Origin': origin, 'Vary': 'Origin', 'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, X-Device-Id, X-Owner-Token', 'Access-Control-Expose-Headers': 'X-Coach-Remaining, X-Coach-Cap, X-Coach-Reset, X-Est-Remaining, X-Est-Cap', 'Access-Control-Max-Age': '86400' };
+    'Access-Control-Allow-Headers': 'Content-Type, X-Device-Id, X-Owner-Token, X-Admin-Token', 'Access-Control-Expose-Headers': 'X-Coach-Remaining, X-Coach-Cap, X-Coach-Reset, X-Est-Remaining, X-Est-Cap, X-Review-Remaining', 'Access-Control-Max-Age': '86400' };
 }
 const json = (status, body, headers = {}) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', ...headers } });
 const err = (status, error, message, cors, extra = {}) => json(status, { error, message, ...extra }, cors);
@@ -139,7 +151,136 @@ async function estStatus(env, device, ip, day, owner) {
   const [d, i] = (await Promise.all([env.COACH_KV.get(`est:${day}:${device}`), env.COACH_KV.get(`esti:${day}:${ip}`)])).map((x) => parseInt(x || '0', 10));
   return { remaining: owner ? null : Math.max(0, Math.min(cap - d, capNet - i)), cap, used: d, network: { used: i, cap: capNet } };
 }
-const bump = (env, key, v) => env.COACH_KV.put(key, String(v), { expirationTtl: 3 * 86400 });
+
+// ---------- Sydney week (Grug's Review cap) ----------
+const SYD = 'Australia/Sydney';
+function sydParts(ts) { const o = {}; for (const p of new Intl.DateTimeFormat('en-CA', { timeZone: SYD, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(new Date(ts))) o[p.type] = p.value; return { y: +o.year, m: +o.month, d: +o.day, h: +o.hour, mi: +o.minute }; }
+const tzOffset = (ts) => { const p = sydParts(ts); return Math.round((Date.UTC(p.y, p.m - 1, p.d, p.h, p.mi) - ts) / 60000) * 60000; };
+/** Monday (Sydney local date) of the week containing `now`, plus when the next week starts (Mon 00:00 Sydney) as an ISO instant. */
+export function sydWeek(now = Date.now()) {
+  const p = sydParts(now); const local = Date.UTC(p.y, p.m - 1, p.d); const dow = (new Date(local).getUTCDay() + 6) % 7; // 0 = Monday
+  const mon = local - dow * 86400000; const next = mon + 7 * 86400000;
+  const nextUtc = next - tzOffset(next - 11 * 3600000);
+  return { week: new Date(mon).toISOString().slice(0, 10), nextMonday: new Date(next).toISOString().slice(0, 10), resetAt: new Date(nextUtc).toISOString() };
+}
+
+// ---------- Grug's Review ----------
+export const REVIEW_PROMPT = `You are Grug, the caveman fitness coach inside Lunk (a workout, nutrition and supplement tracker). Write a weekly review of the user's last 7 days from DATA (JSON, the user's own logs, already summarised).
+Reply with ONLY one JSON object, no prose, no code fences:
+{"scores":{"overall":n,"training":n,"nutrition":n,"consistency":n},"headline":string,"quote":string,"summary":string,"went_well":[string],"slipped":[string],"tips":[{"icon":string,"title":string,"data":string,"body":string,"action":ACTION|null}]}
+- scores: 0-10 with one decimal. Anchor training and nutrition on DATA.stars.training.score/10 and DATA.stars.nutrition.score/10 (adjust by at most 1 point, only for something the stars miss). consistency = how regularly they trained (vs DATA.goals.workoutsPerWeek), logged food, hit steps and took doses. overall = a fair blend of the three.
+- headline: 2-3 words, e.g. "Strong week", "Solid start", "Rough week". If DATA.prevReview exists you may compare.
+- quote: one short line in Grug voice for the Home card, max 70 characters.
+- summary: 2-4 short sentences in Grug caveman voice (simple words, "Grug see ...", "You lift heavy rock 4 times"), warm, specific to the numbers in DATA. No insults, no body shaming, no medical claims.
+- went_well and slipped: 2-4 short tags each (max 40 characters) with concrete numbers from DATA, plain English (not caveman), e.g. "4 of 4 planned workouts", "Bench 80 → 82.5 kg × 5", "Protein hit 3/7 days". Empty array if nothing fits.
+- tips: 3-5, most important first, each specific to DATA. icon = one emoji. title max 32 characters. data = one line with the user's numbers behind the tip. body = 1-2 sentences of practical advice in plain English (may start "Grug say:").
+- action: at most ONE per tip, only one of these exact shapes, or null when none truly fits (never invent other types, routines or exercises; never propose something that is already the case):
+  {"type":"add_food","label":"Add to tomorrow's snacks","day":"tomorrow","meal":"snacks","foods":[{"name":string,"grams":n,"kcal":n,"protein":n,"carbs":n,"fat":n}]}  (1-4 realistic options; values for that amount; carbs = total carbohydrate; day "today" or "tomorrow"; meal breakfast|lunch|dinner|snacks)
+  {"type":"add_routine_set","label":"Add set to \u201cLegs A\u201d","routine":"<exact name from DATA.routines>","exercise":"<exact exercise name from that routine or DATA.workouts>","sets":1,"reps":8,"kg":90}  (kg null for bodyweight; adds that many sets of reps x kg to the routine)
+  {"type":"update_targets","label":"Set protein to 170 g","kcal":n,"protein":n,"carbs":n,"fat":n}  (include only fields to change; carbs = net carbs; grams and kcal)
+  {"type":"set_step_goal","label":"Set step goal to 7,000","steps":n}
+  {"type":"set_workout_goal","label":"Plan 4 workouts a week","perWeek":n}
+- Use DATA.units for weights/energy in text. Australian English. If there is little data, say so kindly and focus tips on logging and getting started.`;
+const str = (v, max) => (typeof v === 'string' && v.trim() ? v.trim().slice(0, max) : null);
+const num = (v, lo, hi) => { const x = Number(v); return Number.isFinite(x) && x >= lo && x <= hi ? x : null; };
+const MEALS = new Set(['breakfast', 'lunch', 'dinner', 'snacks']);
+export function validAction(a) {
+  if (!a || typeof a !== 'object') return null; const label = str(a.label, 48);
+  if (a.type === 'add_food') {
+    const foods = (Array.isArray(a.foods) ? a.foods : []).slice(0, 4).map((f) => { const name = str(f?.name, 60), grams = num(f?.grams, 1, 2000), kcal = num(f?.kcal, 0, 3000), protein = num(f?.protein, 0, 300), carbs = num(f?.carbs, 0, 500), fat = num(f?.fat, 0, 300);
+      return name && grams != null && kcal != null && protein != null && carbs != null && fat != null ? { name, grams, kcal, protein, carbs, fat } : null; }).filter(Boolean);
+    if (!foods.length) return null;
+    return { type: 'add_food', label: label || 'Add to tomorrow\u2019s snacks', day: a.day === 'today' ? 'today' : 'tomorrow', meal: MEALS.has(a.meal) ? a.meal : 'snacks', foods };
+  }
+  if (a.type === 'add_routine_set') { const routine = str(a.routine, 80), exercise = str(a.exercise, 80), sets = num(a.sets, 1, 5), reps = num(a.reps, 1, 30); const kg = a.kg == null ? null : num(a.kg, 0, 500);
+    if (!routine || !exercise || sets == null || reps == null || (a.kg != null && kg == null)) return null; return { type: 'add_routine_set', label: label || `Add set to \u201c${routine}\u201d`, routine, exercise, sets: Math.round(sets), reps: Math.round(reps), kg }; }
+  if (a.type === 'update_targets') { const o = { type: 'update_targets', label: label || 'Update targets' }; let any = false;
+    for (const [k, lo, hi] of [['kcal', 800, 6000], ['protein', 20, 400], ['carbs', 0, 800], ['fat', 10, 300]]) if (a[k] != null) { const v = num(a[k], lo, hi); if (v == null) return null; o[k] = Math.round(v); any = true; }
+    return any ? o : null; }
+  if (a.type === 'set_step_goal') { const v = num(a.steps, 1000, 50000); return v == null ? null : { type: 'set_step_goal', label: label || `Set step goal to ${Math.round(v)}`, steps: Math.round(v / 100) * 100 }; }
+  if (a.type === 'set_workout_goal') { const v = num(a.perWeek, 1, 7); return v == null ? null : { type: 'set_workout_goal', label: label || `Plan ${Math.round(v)} workouts a week`, perWeek: Math.round(v) }; }
+  return null;
+}
+export function parseReview(text) {
+  if (typeof text !== 'string') return null;
+  const a = text.indexOf('{'), b = text.lastIndexOf('}'); if (a < 0 || b <= a) return null;
+  let j; try { j = JSON.parse(text.slice(a, b + 1)); } catch { return null; }
+  if (!j || typeof j !== 'object' || !j.scores) return null;
+  const sc = {}; for (const k of ['overall', 'training', 'nutrition', 'consistency']) { const v = num(j.scores[k], 0, 10); if (v == null) return null; sc[k] = Math.round(v * 10) / 10; }
+  const summary = str(j.summary, 700); if (!summary) return null;
+  const tags = (x) => (Array.isArray(x) ? x : []).map((t) => str(t, 60)).filter(Boolean).slice(0, 5);
+  const tips = (Array.isArray(j.tips) ? j.tips : []).slice(0, 5).map((t) => { const title = str(t?.title, 48), body = str(t?.body, 400); return title && body ? { icon: str(t.icon, 8) || '💡', title, data: str(t.data, 200) || '', body, action: validAction(t.action) } : null; }).filter(Boolean);
+  if (!tips.length) return null;
+  return { scores: sc, headline: str(j.headline, 40) || 'Your week', quote: str(j.quote, 90) || '', summary, went_well: tags(j.went_well), slipped: tags(j.slipped), tips };
+}
+async function review(request, env, cors, ctx0) {
+  const { device, ip, owner } = ctx0; const w = sydWeek();
+  const cap = int(env, 'REVIEW_WEEKLY_CAP'), capNet = cap * Math.max(1, int(env, 'REVIEW_NETWORK_MULT')), capG = int(env, 'GLOBAL_DAILY_CAP'), day = today();
+  const [d, i, g] = (await Promise.all([env.COACH_KV.get(`rv:${w.week}:${device}`), env.COACH_KV.get(`rvi:${w.week}:${ip}`), env.COACH_KV.get(`rvg:${day}`)])).map((x) => parseInt(x || '0', 10));
+  const remaining = owner ? null : Math.max(0, Math.min(cap - d, capNet - i));
+  const h = { ...cors, 'X-Review-Remaining': owner ? 'unlimited' : String(remaining) };
+  const meta = { cap, resetAt: w.resetAt, nextMonday: w.nextMonday, week: w.week };
+  const raw = await request.text();
+  if (raw.length > int(env, 'REVIEW_MAX_INPUT_CHARS') + 2000) return err(413, 'too_long', 'Too much data for one review.', h);
+  let body; try { body = JSON.parse(raw); } catch { return err(400, 'bad_request', 'Body is not valid JSON.', h); }
+  if (!body || typeof body.data !== 'object' || body.data == null) return err(400, 'bad_request', 'Missing data.', h);
+  const data = JSON.stringify(body.data); if (data.length > int(env, 'REVIEW_MAX_INPUT_CHARS')) return err(413, 'too_long', 'Too much data for one review.', h);
+  if (!owner) {
+    if (d >= cap) return err(429, 'review_limit', "You've used this week's free review.", h, { remaining: 0, ...meta });
+    if (i >= capNet) return err(429, 'review_ip_limit', "This week's free reviews for this network are used up.", h, { remaining: 0, ...meta, cap: capNet });
+    if (g >= capG) return err(429, 'global_limit', 'Grug is busy today. Try again tomorrow.', h, { remaining: 0, ...meta });
+    if (env.COACH_RL) { const { success } = await env.COACH_RL.limit({ key: ip }).catch(() => ({ success: true })); if (!success) return err(429, 'rate_limited', 'Too many requests in a short time – wait a minute and try again.', h, { retryAfter: 60 }); }
+  }
+  const out = { model: cfg(env, 'MODEL'), messages: [{ role: 'system', content: REVIEW_PROMPT }, { role: 'user', content: `DATA:\n${data}` }], stream: false, max_tokens: int(env, 'REVIEW_MAX_TOKENS') };
+  if (cfg(env, 'EST_REASONING') !== 'none') out.reasoning_effort = cfg(env, 'EST_REASONING');
+  let up;
+  try { up = await fetch(cfg(env, 'UPSTREAM_URL'), { method: 'POST', signal: AbortSignal.timeout(int(env, 'REVIEW_TIMEOUT_MS')), headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${env.XAI_API_KEY}` }, body: JSON.stringify(out) }); }
+  catch (e) { return err(504, 'upstream_unreachable', 'Grug took too long. Nothing was used up – try again.', h); }
+  if (!up.ok) { const detail = (await up.text().catch(() => '')).slice(0, 300); return err(502, 'upstream_error', `The review service returned HTTP ${up.status}. Nothing was used up.`, h, { upstreamStatus: up.status, detail }); }
+  let reply = ''; try { reply = (await up.json())?.choices?.[0]?.message?.content || ''; } catch {}
+  const rv = parseReview(reply);
+  if (!rv) return err(502, 'bad_review', "Grug's notes came out scrambled. Nothing was used up – try again.", h);
+  await Promise.all([owner ? null : bump(env, `rv:${w.week}:${device}`, d + 1, 9), owner ? null : bump(env, `rvi:${w.week}:${ip}`, i + 1, 9), bump(env, `rvg:${day}`, g + 1)]);
+  if (!owner) h['X-Review-Remaining'] = String(Math.max(0, remaining - 1));
+  return json(200, { review: rv, remaining: owner ? null : Math.max(0, remaining - 1), owner, ...meta }, h);
+}
+async function reviewStatus(env, device, ip, owner) {
+  const w = sydWeek(); const cap = int(env, 'REVIEW_WEEKLY_CAP'), capNet = cap * Math.max(1, int(env, 'REVIEW_NETWORK_MULT'));
+  const [d, i] = (await Promise.all([env.COACH_KV.get(`rv:${w.week}:${device}`), env.COACH_KV.get(`rvi:${w.week}:${ip}`)])).map((x) => parseInt(x || '0', 10));
+  return { remaining: owner ? null : Math.max(0, Math.min(cap - d, capNet - i)), cap, used: d, network: { used: i, cap: capNet }, week: w.week, nextMonday: w.nextMonday, resetAt: w.resetAt };
+}
+
+// ---------- admin code ----------
+const hex = (buf) => [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('');
+const sha256 = async (s) => hex(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s)));
+export const normaliseCode = (c) => String(c || '').trim().toUpperCase();
+export const adminCodeHash = (salt, code) => sha256(`${salt}:${normaliseCode(code)}`);
+/** Is X-Admin-Token a live token issued to this device? */
+async function isAdmin(request, env, device) {
+  const t = request.headers.get('X-Admin-Token') || ''; if (!/^[0-9a-f]{64}$/.test(t) || !env.COACH_KV) return false;
+  const rec = await env.COACH_KV.get(`adm:tok:${await sha256(t)}`); if (!rec) return false;
+  try { return JSON.parse(rec).device === device; } catch { return false; }
+}
+async function admin(request, env, cors, url, device, ip) {
+  let body = {}; try { body = JSON.parse((await request.text()).slice(0, 2000) || '{}'); } catch {}
+  if (url.pathname === '/admin/remove') {
+    const t = request.headers.get('X-Admin-Token') || ''; if (/^[0-9a-f]{64}$/.test(t)) { const k = `adm:tok:${await sha256(t)}`; const rec = await env.COACH_KV.get(k); if (rec && JSON.parse(rec).device === device) await env.COACH_KV.delete(k); }
+    return json(200, { removed: true }, cors);
+  }
+  if (!env.ADMIN_CODE_HASH || !env.ADMIN_SALT) return err(503, 'admin_off', 'Admin codes are not set up.', cors);
+  const hr = new Date().toISOString().slice(0, 13); const max = int(env, 'ADMIN_ATTEMPTS_PER_HOUR');
+  const kd = `adm:try:${hr}:d:${device}`, ki = `adm:try:${hr}:i:${ip}`;
+  const [nd, ni] = (await Promise.all([env.COACH_KV.get(kd), env.COACH_KV.get(ki)])).map((x) => parseInt(x || '0', 10));
+  if (nd >= max || ni >= max) return err(429, 'too_many_attempts', 'Too many attempts. Try again in an hour.', cors, { retryAfter: 3600 });
+  await Promise.all([env.COACH_KV.put(kd, String(nd + 1), { expirationTtl: 7200 }), env.COACH_KV.put(ki, String(ni + 1), { expirationTtl: 7200 })]);
+  const code = typeof body.code === 'string' ? body.code.slice(0, 200) : '';
+  const ok = !!code.trim() && safeEqual(await adminCodeHash(String(env.ADMIN_SALT), code), String(env.ADMIN_CODE_HASH).trim().toLowerCase());
+  if (!ok) return err(401, 'bad_code', 'Code not recognised.', cors);
+  const token = hex(crypto.getRandomValues(new Uint8Array(32)));
+  await env.COACH_KV.put(`adm:tok:${await sha256(token)}`, JSON.stringify({ device, created: Date.now() }), { expirationTtl: 400 * 86400 });
+  return json(200, { token, admin: true }, cors);
+}
+const bump = (env, key, v, days = 3) => env.COACH_KV.put(key, String(v), { expirationTtl: days * 86400 });
 
 export default {
   async fetch(request, env, ctx) {
@@ -153,17 +294,22 @@ export default {
 
     const device = request.headers.get('X-Device-Id') || '';
     if (!UUID.test(device)) return err(400, 'bad_device', 'Missing or invalid X-Device-Id (random UUID).', cors);
-    const owner = !!env.OWNER_TOKEN && safeEqual(request.headers.get('X-Owner-Token') || '', String(env.OWNER_TOKEN));
+    const ownerTok = !!env.OWNER_TOKEN && safeEqual(request.headers.get('X-Owner-Token') || '', String(env.OWNER_TOKEN));
+    const adminTok = !ownerTok && await isAdmin(request, env, device);
+    const owner = ownerTok || adminTok; // admin tokens bypass every cap exactly like the owner token
     const day = today(); const capD = int(env, 'DEVICE_DAILY_CAP'), capI = int(env, 'IP_DAILY_CAP'), capG = int(env, 'GLOBAL_DAILY_CAP');
-    const ip = await ipKey(request, env); const c = await counts(env, device, ip, day);
+    const ip = await ipKey(request, env);
+    if ((url.pathname === '/admin' || url.pathname === '/admin/remove') && request.method === 'POST') return admin(request, env, cors, url, device, ip);
+    const c = await counts(env, device, ip, day);
     const remaining = owner ? null : Math.max(0, Math.min(capD - c.d, capI - c.i, capG - c.g));
     const limitHeaders = { 'X-Coach-Remaining': owner ? 'unlimited' : String(remaining), 'X-Coach-Cap': owner ? 'unlimited' : String(capD), 'X-Coach-Reset': resetAt() };
 
     if (url.pathname === '/status' && request.method === 'GET')
-      return json(200, { enabled: true, owner, remaining: owner ? null : remaining, cap: capD, used: c.d, network: { used: c.i, cap: capI }, resetAt: resetAt(), model: cfg(env, 'MODEL'), estimate: await estStatus(env, device, ip, day, owner) }, { ...cors, ...limitHeaders });
-    if (!['/chat', '/estimate'].includes(url.pathname) || request.method !== 'POST') return err(404, 'not_found', 'Use POST /chat, POST /estimate or GET /status.', cors);
+      return json(200, { enabled: true, owner, remaining: owner ? null : remaining, cap: capD, used: c.d, network: { used: c.i, cap: capI }, resetAt: resetAt(), model: cfg(env, 'MODEL'), admin: adminTok, estimate: await estStatus(env, device, ip, day, owner), review: await reviewStatus(env, device, ip, owner) }, { ...cors, ...limitHeaders });
+    if (!['/chat', '/estimate', '/review'].includes(url.pathname) || request.method !== 'POST') return err(404, 'not_found', 'Use POST /chat, /estimate, /review, /admin or GET /status.', cors);
     if (!env.XAI_API_KEY) return err(500, 'misconfigured', 'XAI_API_KEY secret is not set.', cors);
     if (url.pathname === '/estimate') return estimate(request, env, cors, { device, ip, day, owner });
+    if (url.pathname === '/review') return review(request, env, cors, { device, ip, owner });
 
     const raw = await request.text();
     if (raw.length > int(env, 'MAX_INPUT_CHARS') * 2 + 4000) return err(413, 'too_long', 'Request too large.', cors);

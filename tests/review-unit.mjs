@@ -1,0 +1,22 @@
+// v1.11.0 Grug's Review client helpers: Sydney week (Monday 00:00 AEST/AEDT, DST), date labels, action filtering.
+import { buildSync } from 'esbuild'; import { mkdtempSync } from 'node:fs'; import { tmpdir } from 'node:os'; import { join } from 'node:path'; import { pathToFileURL } from 'node:url';
+const dir = mkdtempSync(join(tmpdir(), 'rv-'));
+buildSync({ entryPoints: [new URL('../src/review.ts', import.meta.url).pathname], bundle: true, format: 'esm', outfile: join(dir, 'b.mjs'), logLevel: 'error', define: { 'import.meta.env': '{}' } });
+const R = await import(pathToFileURL(join(dir, 'b.mjs')).href);
+let bad = 0; const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) bad++; };
+const w = (iso) => R.sydWeek(Date.parse(iso));
+ok(w('2026-10-25T12:59:00Z').week === '2026-10-19' && w('2026-10-25T12:59:00Z').nextMonday === '2026-10-26', 'Sun 25 Oct 23:59 AEDT → week of Mon 19 Oct, next Mon 26 Oct');
+ok(w('2026-10-25T13:00:00Z').week === '2026-10-26', 'Mon 26 Oct 00:00 AEDT (Sun 13:00 UTC) → new week');
+ok(w('2026-04-05T13:59:00Z').week === '2026-03-30' && w('2026-04-05T14:00:00Z').week === '2026-04-06', 'after DST ends (AEST, UTC+10): Monday starts at 14:00 UTC');
+ok(R.fmtShort('2026-10-26') === 'Mon 26 Oct' && R.fmtRange('2026-10-18', '2026-10-24') === 'Sun 18 – Sat 24 Oct' && R.fmtRange('2026-10-28', '2026-11-03') === 'Wed 28 Oct – Tue 3 Nov', 'date labels');
+ok(R.REVIEW_WEEKLY_CAP === 1, 'REVIEW_WEEKLY_CAP = 1');
+const ctx = { s: { targets: { kcal: 2400, protein: 180, carbs: 240, fat: 75 }, stepGoal: 8000, workoutGoal: 4 }, routines: [{ id: 'r', name: 'Legs A', exercises: [] }], exercises: [{ id: 'sq', name: 'Squat (Barbell)', muscle: 'Quadriceps' }] };
+ok(R.actionUsable({ type: 'add_routine_set', routine: 'legs a', exercise: 'squat (barbell)', sets: 1, reps: 8, kg: 90 }, ctx), 'routine/exercise matched case-insensitively');
+ok(!R.actionUsable({ type: 'add_routine_set', routine: 'Arms Z', exercise: 'Squat (Barbell)', sets: 1, reps: 8, kg: 90 }, ctx), "routine that doesn't exist → action dropped");
+ok(!R.actionUsable({ type: 'add_routine_set', routine: 'Legs A', exercise: 'Walking Lunge (Unicorn)', sets: 1, reps: 8, kg: null }, ctx), "exercise that doesn't exist → dropped");
+ok(!R.actionUsable({ type: 'set_step_goal', steps: 8000 }, ctx) && R.actionUsable({ type: 'set_step_goal', steps: 7000 }, ctx), 'step goal already set → dropped');
+ok(!R.actionUsable({ type: 'set_workout_goal', perWeek: 4 }, ctx) && R.actionUsable({ type: 'set_workout_goal', perWeek: 5 }, ctx), 'workout goal already set → dropped');
+ok(!R.actionUsable({ type: 'update_targets', protein: 180 }, ctx) && R.actionUsable({ type: 'update_targets', protein: 170 }, ctx), 'targets unchanged → dropped');
+ok(!R.actionUsable({ type: 'set_reminder', days: ['Sat'] }, ctx) && !R.actionUsable(null, ctx), 'unknown types (reminders) → dropped');
+const cl = R.cleanResult({ tips: [{ action: { type: 'set_reminder' } }, { action: { type: 'set_step_goal', steps: 7000 } }] }, ctx); ok(cl.tips[0].action === null && cl.tips[1].action, 'cleanResult keeps the tip text, nulls the fake action');
+if (bad) { console.error(bad, 'failure(s)'); process.exit(1); } else console.log('review unit OK');

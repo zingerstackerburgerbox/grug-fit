@@ -1,7 +1,8 @@
 import { useQuota, quotaText } from './Coach';
 import { UsernameSetting } from './Username';
 import { StepGoalSetting } from './Steps';
-import { coachMode, fetchStatus } from '../coach';
+import { coachMode, fetchStatus, removeAdmin, unlockAdmin } from '../coach';
+import { DEFAULT_WORKOUT_GOAL } from '../stars';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { SCALED, scaleMacros } from '../targets';
 import { clearAll, exportAll, importAll, getSettings, put } from '../db';
@@ -105,6 +106,8 @@ export function SettingsPage() {
     <h2>Units & workout</h2>
     <div class="card col"><label class="f">Energy<Seg value={s.energyUnit} onChange={(energyUnit) => save({ energyUnit })} options={[['kcal', 'kcal'], ['kJ', 'kJ']]} /></label>
       <label class="f">Lifting weight<Seg value={s.weightUnit} onChange={(weightUnit) => save({ weightUnit })} options={[['kg', 'kg'], ['lb', 'lb']]} /></label>
+      <label class="f">Workouts per week goal<NumInput int value={s.workoutGoal ?? DEFAULT_WORKOUT_GOAL} data-testid="workout-goal" onValue={(n) => n != null && n >= 1 && n <= 7 && save({ workoutGoal: Math.round(n) })} /></label>
+      <div class="mut xs" style="margin-top:-6px">Used for your Training stars and Grug's Review (1–7).</div>
       <label class="f">Default rest timer (seconds)<NumInput int value={s.defaultRest} onValue={(n) => n != null && save({ defaultRest: n })} /></label>
       <label class="row sm"><input type="checkbox" style="width:24px;min-height:24px" checked={s.vibrate} onChange={(e) => { save({ vibrate: e.currentTarget.checked }); localStorage.setItem('vibrate', e.currentTarget.checked ? '1' : '0'); }} /> Vibrate on set complete & rest end</label>
       <label class="row sm"><input type="checkbox" style="width:24px;min-height:24px" data-testid="fact-setting" checked={(s.factCard || 'open') !== 'off'} onChange={(e) => save({ factCard: e.currentTarget.checked ? 'open' : 'off' })} /> Show “Fitness fact of the day” on Home</label>
@@ -134,6 +137,7 @@ export function SettingsPage() {
       <div class="mut xs">Build <span data-testid="build-id">{BUILD_ID}</span> · updates install automatically (checked on launch, when you return to the app, and every 30 min). Your data stays on the device across updates.</div>
       <button class="btn sm" onClick={async () => { const r = await navigator.serviceWorker?.getRegistration(); if (!r) { toast('Updates unavailable (no service worker)'); return; } await r.update().catch(() => {}); toast(r.installing || r.waiting ? 'Update found – installing…' : 'You have the latest version'); }}>Check for updates</button></div>
       <button class="btn sm" data-testid="ocr-offline" onClick={async () => { toast('Downloading label scanner (~6 MB)…'); try { const m = await import('../ocr/ocr'); await m.prefetchOcr(); toast('Label scanning is ready offline'); } catch (e: any) { toast('Download failed: ' + (e?.message || e)); } }}>📷 Make label scanning available offline</button>
+    <AdminCode />
     <div class="mut xs center" style="margin-top:10px">Food data from Open Food Facts (ODbL)</div>
   </div></>;
 }
@@ -156,4 +160,18 @@ function CoachSettings() {
     <div class="mut xs">The coach sends a summary of your logs (profile, targets, 14 days of nutrition totals, recent workouts, PRs, body weight, supplements and adherence) with each message. Chat history stays on this device; clear it from the Coach tab.</div>
     {s0.coachConsent && <button class="btn g sm" onClick={() => commit({ coachConsent: undefined }, 'Privacy notice will show again')}>Show the privacy notice again</button>}
   </div>;
+}
+
+function AdminCode() {
+  const s = useSettings(); const [code, setCode] = useState(''); const [msg, setMsg] = useState(''); const [busy, setBusy] = useState(false); const [open, setOpen] = useState(false);
+  if (s.adminToken) return <div class="card col" data-testid="admin-box"><div class="row between"><b class="sm" data-testid="admin-on">Admin: unlimited access ✓</b>
+    <button class="btn sm" data-testid="admin-remove" disabled={busy} onClick={async () => { if (!confirmDo('Remove admin access from this device?')) return; setBusy(true); await removeAdmin(); setBusy(false); setMsg(''); toast('Admin access removed'); }}>Remove</button></div>
+    <div class="mut xs">Unlimited chat, Smart Estimates and reviews on this device.</div></div>;
+  const submit = async (e?: Event) => { e?.preventDefault(); if (busy) return; setBusy(true); setMsg(''); const r = await unlockAdmin(code); setBusy(false);
+    if (r.ok) { setCode(''); toast('Admin access unlocked'); } else setMsg(r.message); };
+  return <div class="card col" data-testid="admin-box">{!open ? <button class="btn g sm" style="justify-content:flex-start" data-testid="admin-open" onClick={() => setOpen(true)}>Advanced · Admin code ›</button>
+    : <form class="col" onSubmit={submit}><label class="f">Admin code<input type="password" autocomplete="off" autocapitalize="characters" spellcheck={false} value={code} data-testid="admin-code" onInput={(e) => { setCode(e.currentTarget.value); setMsg(''); }} /></label>
+      <button class="btn sm p" type="submit" disabled={busy || !code.trim()} data-testid="admin-unlock">{busy ? 'Checking…' : 'Unlock'}</button>
+      {msg && <div class="sm" style="color:var(--warn)" role="alert" data-testid="admin-msg">{msg}</div>}
+      <div class="mut xs">Only for the app owner. The code is checked by the Lunk service and isn't stored on this phone.</div></form>}</div>;
 }

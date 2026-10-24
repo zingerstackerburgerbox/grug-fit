@@ -21,7 +21,7 @@ export function EstimateNotice({ onOk, onManual }: { onOk: () => void; onManual:
 
 function QuotaLine({ q }: { q: EstQuota | null }) {
   if (!q) return null;
-  if (q.owner || q.remaining == null) return <div class="mut sm" data-testid="est-quota">Smart Estimate: unlimited (owner)</div>;
+  if (q.owner || q.remaining == null) return <div class="mut sm" data-testid="est-quota">Smart Estimate: unlimited</div>;
   if (q.remaining > 0) return <div class="mut sm" data-testid="est-quota">Smart Estimate: {q.remaining} left today</div>;
   return null;
 }

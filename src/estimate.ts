@@ -3,7 +3,7 @@
  *  The cap (EST_DAILY_CAP, 3/day for now) is enforced server-side; this file only mirrors it for the UI.
  *  Photos are downscaled in memory, sent once and never stored. */
 import { getSettings } from './db';
-import { deviceId, proxyReady, proxyUrl } from './coach';
+import { proxyHeaders, proxyReady, proxyUrl } from './coach';
 import type { Settings } from './types';
 
 /** Mirror of the Worker's EST_DAILY_CAP default (server is the source of truth; raise both when a paid tier exists). */
@@ -21,7 +21,7 @@ export function readEstQuota(): EstQuota | null {
   try { const q = JSON.parse(localStorage.getItem(KEY) || 'null'); if (!q) return null; if (q.resetAt && Date.parse(q.resetAt) <= Date.now()) return null; return q; } catch { return null; }
 }
 const saveEstQuota = (q: EstQuota) => { localStorage.setItem(KEY, JSON.stringify(q)); dispatchEvent(new Event('est-quota')); };
-const headers = (s: Settings): Record<string, string> => ({ 'X-Device-Id': deviceId(), ...(s.coachOwnerToken ? { 'X-Owner-Token': s.coachOwnerToken } : {}) });
+const headers = (s: Settings): Record<string, string> => proxyHeaders(s);
 export const resetTime = (iso?: string) => (iso ? new Date(iso).toLocaleTimeString('en-AU', { hour: 'numeric', minute: '2-digit' }) : 'midnight UTC');
 
 export async function fetchEstQuota(): Promise<EstQuota | null> {

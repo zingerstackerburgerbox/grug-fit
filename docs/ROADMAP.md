@@ -5,6 +5,9 @@ User accounts / login (sharing workouts, meals and recipes; a paid tier). Not bu
 Smart Estimate is limited to 3 a day (since v1.10.1; was 1) (`EST_DAILY_CAP` in coach-proxy/wrangler.toml + mirror in src/estimate.ts) until the paid tier exists;
 the "used" card in `src/pages/Estimate.tsx` has room for a future 'More with Lunk Pro' line. Data model kept ready for it:
 local records keep stable string IDs, and the on-device username is a display name only, separate from any future account id.
+Since v1.11.0 the free tier is: coach chat 5 messages a day (`DEVICE_DAILY_CAP`), Smart Estimate 3 a day, Grug's Review 1 a week
+(`REVIEW_WEEKLY_CAP`, Monday 00:00 Sydney). The review card and the used-review state show "Want more? Lunk Premium (coming soon)" –
+Premium would lift these caps (the worker already has the bypass path: owner token / per-device admin token). Not built yet: no purchase flow.
 
 ## Parked: steps + Android (branch `archive/android-steps`)
 Automatic step counting and the Android app were removed from `main` in v1.9.1 (Erik's call: revisit at the App Store /

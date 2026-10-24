@@ -1,5 +1,5 @@
 /** AI Coach: backend selection (proxy or user's own xAI key), compact data context, streaming client, action parsing, tiny markdown. */
-import { all, get, getSettings } from './db';
+import { all, get, getSettings, put } from './db';
 import { stepGoal, stepLog } from './steps';
 import type { BodyWeight, DiaryEntry, DoseLog, Exercise, Routine, Schedule, Settings, Supplement, Workout } from './types';
 import { addDays, e1rm, netCarbs, r0, r1, sumN, workingSets, ymd, EMPTY } from './util';
@@ -27,7 +27,7 @@ export class CoachError extends Error { constructor(public kind: 'offline' | 'li
 export type Quota = { remaining: number | null; cap?: number; resetAt?: string; owner?: boolean; day: string };
 export const readQuota = (): Quota | null => { try { const q = JSON.parse(localStorage.getItem('coachQuota') || 'null'); return q && q.day === ymd() ? q : null; } catch { return null; } };
 const saveQuota = (q: Omit<Quota, 'day'>) => { localStorage.setItem('coachQuota', JSON.stringify({ ...q, day: ymd() })); dispatchEvent(new Event('coach-quota')); };
-const proxyHeaders = (s: Settings): Record<string, string> => ({ 'X-Device-Id': deviceId(), ...(s.coachOwnerToken ? { 'X-Owner-Token': s.coachOwnerToken } : {}) });
+export const proxyHeaders = (s: Settings): Record<string, string> => ({ 'X-Device-Id': deviceId(), ...(s.coachOwnerToken ? { 'X-Owner-Token': s.coachOwnerToken } : {}), ...(s.adminToken ? { 'X-Admin-Token': s.adminToken } : {}) });
 export async function fetchStatus(): Promise<Quota | null> {
   const s = await getSettings(); if (coachMode(s) !== 'proxy') return null;
   try {
@@ -201,4 +201,26 @@ export function renderMarkdown(src: string): string {
     out.push(`<p>${para.map(inline).join('<br>')}</p>`);
   }
   return out.join('');
+}
+
+// ---------- admin code (v1.11.0) ----------
+// The code is typed by the owner and sent once to the worker, which compares a salted hash. Only the returned per-device token is stored.
+export type AdminResult = { ok: true } | { ok: false; kind: 'bad_code' | 'too_many' | 'offline' | 'off' | 'error'; message: string };
+export async function unlockAdmin(code: string): Promise<AdminResult> {
+  if (!code.trim()) return { ok: false, kind: 'bad_code', message: 'Code not recognised' };
+  if (!navigator.onLine) return { ok: false, kind: 'offline', message: "You're offline. Try again when connected." };
+  let r: Response; try { r = await fetch(proxyUrl() + '/admin', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Device-Id': deviceId() }, body: JSON.stringify({ code }) }); }
+  catch { return { ok: false, kind: 'offline', message: "Couldn't reach the Lunk service. Try again." }; }
+  let j: any = {}; try { j = await r.json(); } catch {}
+  if (r.ok && typeof j.token === 'string' && /^[0-9a-f]{64}$/.test(j.token)) { const s = await getSettings(); await put('kv', { ...s, adminToken: j.token }); fetchStatus(); return { ok: true }; }
+  if (r.status === 429) return { ok: false, kind: 'too_many', message: 'Too many attempts. Try again in an hour.' };
+  if (r.status === 503) return { ok: false, kind: 'off', message: 'Admin codes are not available right now.' };
+  if (r.status === 401) return { ok: false, kind: 'bad_code', message: 'Code not recognised' };
+  return { ok: false, kind: 'error', message: `Something went wrong (HTTP ${r.status}). Try again.` };
+}
+export async function removeAdmin() {
+  const s = await getSettings(); const t = s.adminToken;
+  if (t) await fetch(proxyUrl() + '/admin/remove', { method: 'POST', headers: { 'X-Device-Id': deviceId(), 'X-Admin-Token': t } }).catch(() => {});
+  const cur = await getSettings(); const { adminToken: _, ...rest } = cur; await put('kv', rest as Settings);
+  localStorage.removeItem('reviewQuota'); fetchStatus();
 }

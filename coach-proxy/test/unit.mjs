@@ -2,12 +2,12 @@
 import worker from '../src/index.js';
 import { startMock } from './mock-upstream.mjs';
 let failed = 0; const ok = (c, m) => { console.log((c ? '✓ ' : '✗ ') + m); if (!c) failed++; };
-const kv = new Map(); const KV = { get: async (k) => kv.get(k) ?? null, put: async (k, v) => { kv.set(k, v); } };
+const kv = new Map(); const KV = { get: async (k) => kv.get(k) ?? null, put: async (k, v) => { kv.set(k, v); }, delete: async (k) => { kv.delete(k); } };
 const { srv, seen } = await startMock(8788);
 const env = (o = {}) => ({ COACH_KV: KV, XAI_API_KEY: 'sk-test', OWNER_TOKEN: 'owner-secret', UPSTREAM_URL: 'http://127.0.0.1:8788/v1/chat/completions', DEVICE_DAILY_CAP: '3', GLOBAL_DAILY_CAP: '5', ...o });
 const DEV = '3f0b6a8e-1c2d-4e5f-8a9b-0c1d2e3f4a5b', DEV2 = '7a1b2c3d-4e5f-4a6b-9c8d-7e6f5a4b3c2d';
 const ORIGIN = 'https://zingerstackerburgerbox.github.io';
-const req = (path, { method = 'POST', origin = ORIGIN, device = DEV, owner, body, ip } = {}) => new Request('https://proxy.test' + path, { method, headers: { ...(ip ? { 'CF-Connecting-IP': ip } : {}), ...(origin ? { Origin: origin } : {}), ...(device ? { 'X-Device-Id': device } : {}), ...(owner ? { 'X-Owner-Token': owner } : {}), 'Content-Type': 'application/json' }, body: body == null ? undefined : typeof body === 'string' ? body : JSON.stringify(body) });
+const req = (path, { method = 'POST', origin = ORIGIN, device = DEV, owner, admin, body, ip } = {}) => new Request('https://proxy.test' + path, { method, headers: { ...(admin ? { 'X-Admin-Token': admin } : {}), ...(ip ? { 'CF-Connecting-IP': ip } : {}), ...(origin ? { Origin: origin } : {}), ...(device ? { 'X-Device-Id': device } : {}), ...(owner ? { 'X-Owner-Token': owner } : {}), 'Content-Type': 'application/json' }, body: body == null ? undefined : typeof body === 'string' ? body : JSON.stringify(body) });
 const chat = (o = {}) => ({ messages: [{ role: 'system', content: 'You are a coach' }, { role: 'user', content: 'hi' }], ...o });
 const call = async (r, e = env()) => { const res = await worker.fetch(r, e, {}); let j = null; const t = await res.text(); try { j = JSON.parse(t); } catch {} return { res, j, t }; };
 
@@ -95,4 +95,58 @@ kv.clear(); r = await call(req('/estimate', { ip: EIP, body: est({ image: 'data:
 ok(r.res.status === 200 && Array.isArray(upI) && upI[0].type === 'image_url' && upI[1].type === 'text', 'photo forwarded as image_url part');
 ok(![...kv.values()].some((v) => String(v).length > 20), 'photo/description never stored in KV');
 const P = I.parseEstimate; ok(P('{"items":[{"name":"x","kcal":"abc","protein":1,"carbs":1,"fat":1}]}') === null && P('nope') === null && P('{"items":[{"name":"x","kcal":-5,"protein":1,"carbs":1,"fat":1}]}') === null, 'parseEstimate rejects bad numbers');
+// ---------- v1.11.0 chat cap defaults: 5 per device, 15 per network ----------
+kv.clear(); { const E5 = { COACH_KV: KV, XAI_API_KEY: 'sk-test', UPSTREAM_URL: 'http://127.0.0.1:8788/v1/chat/completions', IP_SALT: 'pepper' };
+  let okN = 0; for (let k = 0; k < 5; k++) { r = await call(req('/chat', { ip: '203.0.113.90', body: chat() }), E5); if (r.res.status === 200) okN++; }
+  ok(okN === 5 && r.res.headers.get('x-coach-cap') === '5' && r.res.headers.get('x-coach-remaining') === '0', 'default chat cap: 5 messages per device');
+  r = await call(req('/chat', { ip: '203.0.113.90', body: chat() }), E5); ok(r.res.status === 429 && r.j.error === 'device_limit' && r.j.cap === 5, '6th chat message → 429 device_limit');
+  let n2 = 0; for (const dv of ['bbbbbbbb-0000-4000-8000-000000000001', 'bbbbbbbb-0000-4000-8000-000000000002']) for (let k = 0; k < 5; k++) { r = await call(req('/chat', { device: dv, ip: '203.0.113.90', body: chat() }), E5); if (r.res.status === 200) n2++; }
+  r = await call(req('/chat', { device: 'bbbbbbbb-0000-4000-8000-000000000003', ip: '203.0.113.90', body: chat() }), E5); ok(n2 === 10 && r.res.status === 429 && r.j.error === 'ip_limit' && r.j.cap === 15, 'default network chat cap 15'); }
+
+// ---------- v1.11.0 admin code ----------
+const I2 = await import('../src/index.js'); const SALT = 'unit-salt'; const AH = await I2.adminCodeHash(SALT, 'TEST-CODE-123');
+const A = (o = {}) => env({ IP_SALT: 'pepper', ADMIN_SALT: SALT, ADMIN_CODE_HASH: AH, DEVICE_DAILY_CAP: '1', GLOBAL_DAILY_CAP: '1000', ...o });
+kv.clear(); const AD = 'cccccccc-0000-4000-8000-000000000001', AIP = '198.51.100.20';
+r = await call(req('/admin', { device: AD, ip: AIP, body: { code: 'WRONG' } }), A()); ok(r.res.status === 401 && r.j.error === 'bad_code' && r.j.message === 'Code not recognised.', 'wrong admin code → 401 "Code not recognised."');
+r = await call(req('/admin', { device: AD, ip: AIP, body: { code: '  test-code-123 \n' } }), A()); const tok = r.j?.token;
+ok(r.res.status === 200 && /^[0-9a-f]{64}$/.test(tok), 'right code (trimmed, case-insensitive) → random 64-hex admin token');
+ok(![...kv.keys()].some((k) => k.includes(tok)) && ![...kv.values()].some((v) => String(v).includes(tok) || /TEST-CODE/i.test(String(v))), 'only a hash of the token is stored; the code is never stored');
+r = await call(req('/status', { method: 'GET', device: AD, ip: AIP, admin: tok }), A()); ok(r.j.owner === true && r.j.admin === true && r.j.remaining === null && r.j.estimate.remaining === null && r.j.review.remaining === null, '/status: admin → unlimited chat, estimate, review');
+for (let k = 0; k < 3; k++) r = await call(req('/chat', { device: AD, ip: AIP, admin: tok, body: chat() }), A()); ok(r.res.status === 200 && r.res.headers.get('x-coach-remaining') === 'unlimited', 'admin: chat beyond the cap');
+for (let k = 0; k < 4; k++) r = await call(req('/estimate', { device: AD, ip: AIP, admin: tok, body: { text: 'toast' } }), A()); ok(r.res.status === 200 && r.j.remaining === null, 'admin: 4 estimates (cap 3)');
+for (let k = 0; k < 2; k++) r = await call(req('/review', { device: AD, ip: AIP, admin: tok, body: { data: { x: 1 } } }), A()); ok(r.res.status === 200 && r.j.remaining === null && r.res.headers.get('x-review-remaining') === 'unlimited', 'admin: 2 reviews (cap 1)');
+r = await call(req('/chat', { device: 'cccccccc-0000-4000-8000-000000000002', ip: AIP, admin: tok, body: chat() }), A()); r = await call(req('/chat', { device: 'cccccccc-0000-4000-8000-000000000002', ip: AIP, admin: tok, body: chat() }), A());
+ok(r.res.status === 429, 'admin token is bound to its device (a copied token on another device is ignored)');
+r = await call(req('/admin/remove', { device: AD, ip: AIP, admin: tok }), A()); ok(r.res.status === 200 && ![...kv.keys()].some((k) => k.startsWith('adm:tok:')), 'remove revokes the token');
+r = await call(req('/chat', { device: AD, ip: AIP, admin: tok, body: chat() }), A()); ok(r.res.status === 200 && r.res.headers.get('x-coach-remaining') === '0', 'after remove: a normal capped device again (remaining 0 of 1)');
+r = await call(req('/status', { method: 'GET', device: AD, ip: AIP, owner: 'owner-secret' }), A()); ok(r.j.owner === true && r.j.admin === false, 'owner token path still works');
+// brute-force limit: 5 attempts/hour per device and per network (right code is refused too once locked)
+kv.clear(); for (let k = 0; k < 5; k++) r = await call(req('/admin', { device: AD, ip: AIP, body: { code: 'NOPE' + k } }), A());
+r = await call(req('/admin', { device: AD, ip: AIP, body: { code: 'TEST-CODE-123' } }), A()); ok(r.res.status === 429 && r.j.error === 'too_many_attempts', '6th attempt in an hour (even correct) → 429 too_many_attempts (device)');
+r = await call(req('/admin', { device: 'cccccccc-0000-4000-8000-000000000009', ip: AIP, body: { code: 'TEST-CODE-123' } }), A()); ok(r.res.status === 429, 'new device id on the same network is locked too');
+r = await call(req('/admin', { device: 'cccccccc-0000-4000-8000-000000000009', ip: '192.0.2.1', body: { code: 'TEST-CODE-123' } }), A()); ok(r.res.status === 200, 'other network + device still works');
+r = await call(req('/admin', { device: AD, ip: AIP, body: { code: 'x' } }), env({ IP_SALT: 'pepper' })); ok(r.res.status === 503 && r.j.error === 'admin_off', 'no secrets → admin_off');
+r = await call(req('/chat', { device: AD, ip: AIP, admin: 'f'.repeat(64), body: chat() }), A()); ok(r.res.status === 200, 'bogus admin token: treated as a normal device');
+
+// ---------- v1.11.0 Grug's Review: weekly cap (1/device, 3/network, Sydney week), only successes count ----------
+const W = I2.sydWeek(Date.parse('2026-10-24T01:00:00Z')); ok(W.week === '2026-10-19' && W.nextMonday === '2026-10-26' && W.resetAt === '2026-10-25T13:00:00.000Z', 'Sydney week: Sat 24 Oct → week of Mon 19, resets Mon 26 00:00 AEDT');
+const W2 = I2.sydWeek(Date.parse('2026-10-25T13:30:00Z')); ok(W2.week === '2026-10-26', 'Mon 00:30 Sydney is already the new week');
+const W3 = I2.sydWeek(Date.parse('2026-04-05T15:30:00Z')); ok(W3.week === '2026-04-06' && W3.resetAt === '2026-04-12T14:00:00.000Z', 'DST end (AEST): reset at Mon 00:00 +10');
+kv.clear(); const RV = env({ IP_SALT: 'pepper', GLOBAL_DAILY_CAP: '100' }); const RIP = '203.0.113.120'; const rvb = (o = {}) => ({ data: { week: 'x', ...o } });
+r = await call(req('/review', { ip: RIP, body: rvb({ t: 'REVIEW_FAIL' }) }), RV); ok(r.res.status === 502 && r.j.error === 'upstream_error', 'review: upstream failure → 502');
+r = await call(req('/review', { ip: RIP, body: rvb({ t: 'REVIEW_BAD' }) }), RV); ok(r.res.status === 502 && r.j.error === 'bad_review', 'review: non-JSON reply → 502 bad_review');
+ok(![...kv.keys()].some((k) => k.startsWith('rv')), 'failed reviews are not counted');
+r = await call(req('/status', { method: 'GET', ip: RIP }), RV); ok(r.j.review.remaining === 1 && r.j.review.cap === 1 && r.j.review.network.cap === 3 && /^\d{4}-\d\d-\d\d$/.test(r.j.review.nextMonday), '/status: 1 review left this week + reset date');
+r = await call(req('/review', { ip: RIP, body: rvb() }), RV); const rv = r.j?.review;
+ok(r.res.status === 200 && rv.scores.overall === 7.5 && rv.tips.length === 3 && r.j.remaining === 0 && r.j.nextMonday, 'review: parsed, remaining 0');
+ok(rv.tips[0].action.type === 'add_food' && rv.tips[1].action.type === 'add_routine_set' && rv.tips[2].action === null, 'unknown action types (set_reminder) are dropped to null');
+const upR = seen.at(-1); ok(/^You are Grug, the caveman/.test(upR.body.messages[0].content) && upR.body.messages[1].content.startsWith('DATA:'), 'review prompt built server-side');
+ok(!kv.has(`est:${new Date().toISOString().slice(0, 10)}:${DEV}`) && !kv.has(`d:${new Date().toISOString().slice(0, 10)}:${DEV}`), 'review uses no chat message or estimate');
+r = await call(req('/review', { ip: RIP, body: rvb() }), RV); ok(r.res.status === 429 && r.j.error === 'review_limit' && r.j.nextMonday && r.j.resetAt, 'second review this week → 429 review_limit with reset date');
+r = await call(req('/review', { ip: RIP, owner: 'owner-secret', body: rvb() }), RV); ok(r.res.status === 200 && r.j.owner === true, 'owner bypasses the weekly cap');
+for (const dv of ['dddddddd-0000-4000-8000-000000000001', 'dddddddd-0000-4000-8000-000000000002']) { r = await call(req('/review', { device: dv, ip: RIP, body: rvb() }), RV); ok(r.res.status === 200, 'network: another device on the same Wi-Fi'); }
+r = await call(req('/review', { device: 'dddddddd-0000-4000-8000-000000000003', ip: RIP, body: rvb() }), RV); ok(r.res.status === 429 && r.j.error === 'review_ip_limit', 'network: 4th device this week → 429 review_ip_limit');
+r = await call(req('/review', { ip: RIP, body: { data: { big: 'x'.repeat(20000) } } }), RV); ok(r.res.status === 413, 'oversized review data → 413');
+const PR = I2.parseReview; ok(PR('{"scores":{"overall":11,"training":1,"nutrition":1,"consistency":1},"summary":"x","tips":[{"title":"a","body":"b"}]}') === null && PR('{"scores":{"overall":5,"training":1,"nutrition":1,"consistency":1},"summary":"x","tips":[]}') === null, 'parseReview rejects out-of-range scores / no tips');
+const VA = I2.validAction; ok(VA({ type: 'update_targets', protein: 170 })?.protein === 170 && VA({ type: 'update_targets' }) === null && VA({ type: 'set_step_goal', steps: 7040 }).steps === 7000 && VA({ type: 'add_routine_set', routine: 'A', exercise: 'B', sets: 9, reps: 8 }) === null, 'validAction');
 srv.close(); if (failed) { console.error(failed + ' failed'); process.exit(1); } console.log('PROXY UNIT TESTS PASSED');

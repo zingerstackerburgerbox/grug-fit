@@ -13,6 +13,7 @@ import { ActiveWorkout, BodyWeightPage, ExerciseDetail, ExercisesPage, HistoryRe
 import { LabelScan } from './pages/LabelScan';
 import { AddFood, Diary, FoodEdit, MyFoods, RecipeEdit, Trends } from './pages/Nutrition';
 import { EstimatePage } from './pages/Estimate';
+import { ReviewPage } from './pages/Review';
 import { CalendarPage, SuppEdit, SuppsPage } from './pages/Supps';
 import { SettingsPage } from './pages/Settings';
 import { Onboarding } from './pages/Onboarding';
@@ -67,12 +68,13 @@ function route(h: string) {
     case 'calendar': return <CalendarPage />;
     case 'settings': return <SettingsPage />;
     case 'coach': return <CoachPage />;
+    case 'review': return <ReviewPage id={p[1] || 'new'} key={p[1]} />;
     case 'welcome': return <Onboarding />;
     default: return <Home />;
   }
 }
 const TABS: [string, string, keyof typeof I, string[]][] = [
-  ['/', 'Home', 'home', ['']], ['/workouts', 'Workout', 'lift', ['workouts', 'workout', 'routine', 'history', 'exercises', 'exercise', 'body']],
+  ['/', 'Home', 'home', ['', 'review']], ['/workouts', 'Workout', 'lift', ['workouts', 'workout', 'routine', 'history', 'exercises', 'exercise', 'body']],
   ['/food', 'Food', 'food', ['food', 'foods', 'recipe']], ['/coach', 'Coach', 'coach', ['coach']], ['/supps', 'Doses', 'pill', ['supps', 'supp', 'calendar']], ['/settings', 'Settings', 'gear', ['settings']]
 ];
 function UpdateBanner() {

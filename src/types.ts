@@ -71,6 +71,10 @@ export type Settings = {
   seasonal?: Record<string, 'on' | 'off'>;
   /** v1.10.0 Smart Estimate first-open notice accepted ('Got it', timestamp; also covers sending the description/photo) */
   estNotice?: number;
+  /** v1.11.0 weekly workout goal for the Training stars (default 3) */
+  workoutGoal?: number;
+  /** v1.11.0 per-device admin token issued by the coach proxy after a valid admin code (the code itself is never stored) */
+  adminToken?: string;
   /** onboarding finished/skipped (timestamp) */
   onboarded?: number;
 };

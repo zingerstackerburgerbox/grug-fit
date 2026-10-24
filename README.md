@@ -25,6 +25,22 @@ Deploy `dist/` to any static HTTPS host (GitHub Pages, Netlify, Cloudflare Pages
 Steps are typed in per day (Workout tab › Steps, any date; optional goal in Settings › Steps). Calories above the first
 2,000 steps a day are added to burned-today (stride from height, 0.5 kcal per kg per km); see `src/steps.ts`.
 
+## Grug's Review, star ratings, admin code (v1.11.0)
+- **Grug's Review** (Home card under the nutrition card → `#/review/new`): the last 7 days of workouts, food, doses and steps are summarised
+  on the device (`src/review.ts` `snapshot()`, ≤14k chars, no username) and sent to the coach proxy's `POST /review`, which returns strict JSON
+  (scores, caveman summary, went well / slipped, 3–5 tips each with at most one real action). The stat tiles are computed locally.
+  Actions that map to real features only: add a food to today/tomorrow, add a set to an existing routine, update targets, step goal,
+  workouts-per-week goal. Anything else is dropped (worker and client). Reviews are kept on the device (`kv grugReviews`), can be saved
+  (`#/review/saved`) and shared (Web Share image → text → PNG download + copied text). 1 free review a week (`REVIEW_WEEKLY_CAP`), resetting
+  Monday 00:00 Sydney time, enforced on the worker (×3 per network); only successful reviews count.
+- **Stars** (`src/stars.ts`, free, instant, never sent): Training = consistency 40 (vs Settings › workouts-per-week goal, default 3),
+  progressive overload 30, volume balance 20, movement 10; Nutrition = calories 35, protein 35, logging 20, supplements 10. A part that
+  doesn't apply is left out and its points shared out. "Rating builds after 7 days" until 7 days of history.
+- **Coach chat cap**: 5 free messages per device per day (15 per network). People using their own xAI key call xAI directly and aren't capped.
+- **Admin code** (Settings › About › Advanced · Admin code): sent once to `POST /admin`; the worker compares a salted hash kept as a secret
+  and returns a per-device admin token (stored as `settings.adminToken`, sent as `X-Admin-Token`) that lifts every cap. The code is
+  not stored in the app or this repo. Remove revokes the token.
+
 ## Smart Estimate (v1.10.0)
 Food tab › "≈ Estimate" (on each meal, and on the Add food screen) opens `#/food/estimate/<date>/<meal>`. You describe a meal (and can add a photo), get an
 editable per-item estimate (name, grams, kcal, protein, carbs, fat), and nothing is saved until you tap Log. Logged items are normal diary entries with an

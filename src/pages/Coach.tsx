@@ -17,7 +17,7 @@ export function useQuota() {
   useEffect(() => { const f = () => setQ(readQuota()); addEventListener('coach-quota', f); fetchStatus().then(f); return () => removeEventListener('coach-quota', f); }, []);
   return q;
 }
-export const quotaText = (q: Quota | null) => !q ? '' : q.owner || q.remaining == null ? 'Owner: unlimited' : `${q.remaining}${q.cap ? `/${q.cap}` : ''} messages left today`;
+export const quotaText = (q: Quota | null) => !q ? '' : q.owner || q.remaining == null ? 'Unlimited' : `${q.remaining}${q.cap ? `/${q.cap}` : ''} messages left today`;
 
 export function CoachPage() {
   const s = useSettings(); const mode = coachMode(s); const q = useQuota();
