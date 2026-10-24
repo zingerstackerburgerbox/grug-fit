@@ -1,6 +1,6 @@
-/** v1.12.0 Leaderboard (opt-in). The "Grug rating" is the Home star score: (Training + Nutrition) / 2, each out of 100, computed on this
- *  phone with the same functions as the Home stars (stars.ts). Daily = today's rating; Weekly = the average of this Sydney week's daily
- *  ratings so far (Monday 00:00 Australia/Sydney). Only the username and these two integers are ever sent (coach proxy /leaderboard*);
+/** v1.12.0 Leaderboard (opt-in); v1.12.1: a TRAINING leaderboard. The score is the Home Training stars' score (out of 100), computed on
+ *  this phone with the same functions as the Home stars (stars.ts); nutrition is not used (most people don't log food). Daily = today's
+ *  training score; Weekly = the average of this Sydney week's daily training scores so far (Monday 00:00 Australia/Sydney). Only the username and these two integers are ever sent (coach proxy /leaderboard*);
  *  never weight, calories, food or photos. Submits are quiet and debounced (at most once per 5 minutes). */
 import { all, getSettings, put } from './db';
 import { deviceId, proxyHeaders, proxyReady, proxyUrl } from './coach';
@@ -14,21 +14,22 @@ import { addDays, ymd } from './util';
 export type Period = 'weekly' | 'daily';
 export type LbRow = { rank: number; name: string; score: number; stars: number; me?: boolean };
 export type Board = { period: Period; key: string; total: number; top: LbRow[]; me: LbRow | null; joined: boolean; resetAt?: string };
-export type Payload = { deviceId: string; username: string; daily: { score: number; date: string }; weekly: { score: number; weekKey: string } };
+export type Payload = { deviceId: string; username: string; kind: 'training'; daily: { score: number; date: string }; weekly: { score: number; weekKey: string } };
 export class LbError extends Error { constructor(public kind: 'offline' | 'error' | 'setup', msg: string) { super(msg); } }
 
 export const DEBOUNCE_MS = 5 * 60e3;
-export const combined = (st: Pick<Stars, 'training' | 'nutrition'>) => Math.round((st.training.score + st.nutrition.score) / 2);
+/** v1.12.1: the leaderboard score = the Training stars' score (0–100). */
+export const lbScoreOf = (st: Pick<Stars, 'training'>) => Math.round(st.training.score);
 export const MEDAL: Record<number, string> = { 1: '🥇', 2: '🥈', 3: '🥉' };
 
-/** Today's and this week's Grug rating. Past days of the week are re-computed as they stood at the end of that day. */
+/** Today's and this week's training score. Past days of the week are re-computed as they stood at the end of that day. */
 export async function lbScores(now = new Date()): Promise<{ daily: number; weekly: number; day: string; week: string; days: number }> {
   const [s, diary, workouts, exList, steps, dose] = await Promise.all([getSettings(), all<DiaryEntry>('diary'), all<Workout>('workouts'), all<Exercise>('exercises'), stepLog(), loadDoseData()]);
   const exercises = new Map(exList.map((e) => [e.id, e])); const today = ymd(now);
   const at = (date: string) => {
     const end = new Date(addDays(date, 1) + 'T00:00:00').getTime(); const doseSlots: { date: string; taken: boolean }[] = [];
     for (let i = 1; i <= 7; i++) for (const sl of slotsFor(addDays(date, -i), dose.schedules, dose.supps, dose.logs, now)) if (sl.status === 'taken' || sl.status === 'missed') doseSlots.push({ date: sl.date, taken: sl.status === 'taken' });
-    return combined(computeStars({ today: date, diary, workouts: workouts.filter((w) => w.start < end), exercises, steps, settings: s, doseSlots }));
+    return lbScoreOf(computeStars({ today: date, diary, workouts: workouts.filter((w) => w.start < end), exercises, steps, settings: s, doseSlots }));
   };
   const week = sydWeek(now.getTime()).week; const days: string[] = [];
   for (let d = week, i = 0; d <= today && i < 7; d = addDays(d, 1), i++) days.push(d);
@@ -38,7 +39,7 @@ export async function lbScores(now = new Date()): Promise<{ daily: number; weekl
 }
 export async function buildPayload(now = new Date()): Promise<Payload | null> {
   const s = await getSettings(); if (!s.username) return null; const x = await lbScores(now);
-  return { deviceId: deviceId(), username: s.username, daily: { score: x.daily, date: x.day }, weekly: { score: x.weekly, weekKey: x.week } };
+  return { deviceId: deviceId(), username: s.username, kind: 'training', daily: { score: x.daily, date: x.day }, weekly: { score: x.weekly, weekKey: x.week } };
 }
 
 // ---------- submit / leave ----------
@@ -54,6 +55,7 @@ export async function submitScores(): Promise<SubmitResult> {
     if (last && last.sig === sig && Date.now() - last.at < 12 * 3600e3) return 'same';
     const r = await fetch(proxyUrl() + '/leaderboard/submit', { method: 'POST', headers: { 'Content-Type': 'application/json', ...proxyHeaders(s) }, body: sig });
     if (!r.ok) return 'error';
+    const j = await r.json().catch(() => ({})); if (j && j.stored === false) return 'error';
     localStorage.setItem(LAST, JSON.stringify({ sig, at: Date.now() }));
     if (!(await getSettings()).lbJoin) await leaveBoard(); // left while this was in flight
     return 'sent';

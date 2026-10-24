@@ -40,7 +40,7 @@ export function StarsSheet({ open, onClose, stars }: { open: boolean; onClose: (
     {r.weakest && <div class="xs" style="color:var(--warn)">Weakest: {r.weakest.tip}</div>}</div>;
   return <Sheet open={open} onClose={onClose} title="Your stars · last 7 days"><div class="col" data-testid="stars-sheet">
     {block('Training', stars.training, 'training')}{block('Nutrition', stars.nutrition, 'nutrition')}
-    <div class="mut xs">100-point scores: 90+ ★★★★★ · 75+ ★★★★ · 60+ ★★★ · 40+ ★★ · below ★. Nutrition counts the 7 days up to yesterday. A part that doesn't apply to you (no steps logged, no supplements scheduled, no lift history yet) is left out and its points shared out. Worked out on this phone; only shared (as one score) if you join the leaderboard.</div>
+    <div class="mut xs">100-point scores: 90+ ★★★★★ · 75+ ★★★★ · 60+ ★★★ · 40+ ★★ · below ★. Nutrition counts the 7 days up to yesterday. A part that doesn't apply to you (no steps logged, no supplements scheduled, no lift history yet) is left out and its points shared out. Worked out on this phone; only the Training score is shared, and only if you join the training leaderboard.</div>
     <button class="btn" onClick={onClose}>Close</button></div></Sheet>;
 }
 
@@ -69,7 +69,7 @@ export function ReviewCard() {
     : <>
       <a class="btn p full" style="margin-top:12px" href="#/review/new" data-testid="review-get">Get this week's review</a>
       <div class="mut xs center" style="margin-top:8px" data-testid="review-note">{q?.owner ? 'Admin: unlimited reviews' : `1 free review a week · resets ${fmtShort(q?.nextMonday || wk.nextMonday)}`}</div></>}
-    <a class="btn full sm" style="margin-top:8px" href="#/leaderboard" data-testid="review-leaderboard">🏆 View leaderboard</a>
+    <a class="btn full sm" style="margin-top:8px" href="#/leaderboard" data-testid="review-leaderboard">🏆 View training leaderboard</a>
     {saved > 0 && <a class="btn g full sm" href="#/review/saved" data-testid="review-saved-link">🔖 Saved reviews ({saved}) ›</a>}
   </div>{stars && <StarsSheet open={sheet} onClose={() => setSheet(false)} stars={stars} />}</>;
 }
@@ -155,7 +155,7 @@ function ReviewView({ rv, onChange }: { rv: Review; onChange: (r: Review) => voi
         <div class="grid2" style="margin-top:4px"><button class="btn" data-testid="rv-save" disabled={rv.saved} onClick={async () => { await upd({ ...rv, saved: true }); toast('Review saved on this phone'); }}>{rv.saved ? '✓ Saved' : '🔖 Save review'}</button>
           <button class="btn" data-testid="rv-share" onClick={share}>↗ Share card</button></div>
         <button class="btn g full sm" style="margin-top:6px" onClick={() => { setMore(false); scrollTo(0, 0); }}>Show less ▴</button></>}
-      <a class="btn full" style="margin-top:14px" href="#/leaderboard" data-testid="rv-leaderboard">🏆 View leaderboard</a>
+      <a class="btn full" style="margin-top:14px" href="#/leaderboard" data-testid="rv-leaderboard">🏆 View training leaderboard</a>
       <div class="disc">Estimates and advice can be off. Not medical advice.</div>
     </div></>;
 }

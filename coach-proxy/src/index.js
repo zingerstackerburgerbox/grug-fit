@@ -14,7 +14,7 @@
  * 5 attempts/hour per device and per network). Success issues a random per-device admin token (only its SHA-256 is kept in KV) that
  * the app sends as X-Admin-Token; it bypasses every cap like OWNER_TOKEN. POST /admin/remove revokes it. The code is never in this repo.
  * Chat caps lowered in v1.11.0: 5 per device / 15 per network per UTC day.
- * v1.12.0: leaderboard (opt-in). POST /leaderboard/submit {deviceId, username, daily:{score,date}, weekly:{score,weekKey}},
+ * v1.12.0: leaderboard (opt-in). POST /leaderboard/submit {deviceId, username, kind:'training' (v1.12.1), daily:{score,date}, weekly:{score,weekKey}},
  * POST /leaderboard/leave, GET /leaderboard?period=weekly|daily (top 50 + the caller's own rank). KV `lb:e:<device>`; submits are
  * rate-limited per device and per hashed network per hour. Viewing never counts against chat, estimate or review limits.
  */
@@ -287,7 +287,12 @@ async function admin(request, env, cors, url, device, ip) {
 // One KV key per opted-in device: `lb:e:<deviceId>`. The entry (username + this Sydney day's and week's Grug rating) is stored as the
 // value AND as KV metadata, so GET /leaderboard is a single list() call. Only a username and two 0-100 integers are ever stored.
 // Scores are computed on the phone (same maths as the Home stars), so the server can only check shape and range, not truth.
-export const LB_PREFIX = 'lb:e:';
+// v1.12.1: the board ranks the TRAINING score only. Entries live under a new prefix, so v1.12.0 combined (training+nutrition) entries
+// under `lb:e:` are never read again (they expire via their TTL); submits must say kind:"training", older app versions' submits are
+// acknowledged but not stored, so they can't mix combined scores into the board.
+export const LB_PREFIX = 'lb2:e:';
+export const LB_OLD_PREFIX = 'lb:e:';
+export const LB_KIND = 'training';
 const pad2 = (n) => String(n).padStart(2, '0');
 const addDaysStr = (d, n) => { const [y, m, dd] = d.split('-').map(Number); return new Date(Date.UTC(y, m - 1, dd + n)).toISOString().slice(0, 10); };
 /** Sydney local date (YYYY-MM-DD). */
@@ -309,7 +314,8 @@ const YMD = /^\d{4}-\d\d-\d\d$/;
 export function validSubmit(body, device, now = Date.now()) {
   if (!body || typeof body !== 'object' || Array.isArray(body)) return { error: 'Body must be a JSON object.' };
   if (body.deviceId != null && body.deviceId !== device) return { error: 'deviceId does not match X-Device-Id.' };
-  const allowed = new Set(['deviceId', 'username', 'daily', 'weekly']); for (const k of Object.keys(body)) if (!allowed.has(k)) return { error: `Unexpected field "${k}".` };
+  const allowed = new Set(['deviceId', 'username', 'daily', 'weekly', 'kind']); for (const k of Object.keys(body)) if (!allowed.has(k)) return { error: `Unexpected field "${k}".` };
+  if (body.kind != null && body.kind !== LB_KIND) return { error: 'kind must be "training".' };
   const name = cleanLbName(body.username); if (!name) return { error: 'Username must be 1–20 characters.' };
   const P = lbPeriods(now); let daily = null, weekly = null;
   if (body.daily != null) {
@@ -370,14 +376,16 @@ async function leaderboard(request, env, cors, url, device, ip, owner) {
     const raw = await request.text(); if (raw.length > 2000) return err(413, 'too_long', 'Request too large.', cors);
     let body; try { body = JSON.parse(raw); } catch { return err(400, 'bad_request', 'Body is not valid JSON.', cors); }
     const v = validSubmit(body, device, now); if (v.error) return err(400, 'bad_request', v.error, cors);
+    // v1.12.0 clients send combined scores without `kind`: accept quietly (so they don't retry) but never store them
+    if (body.kind !== LB_KIND) return json(200, { ok: true, joined: false, stored: false, reason: 'outdated_app', kind: LB_KIND }, cors);
     const lim = await lbRate(env, device, ip, owner); if (lim) return err(429, lim, lim === 'lb_ip_rate_limited' ? 'Too many leaderboard updates from this network. Try again later.' : 'Too many leaderboard updates. Try again later.', cors, { retryAfter: 3600 });
     let old = null; try { old = JSON.parse((await env.COACH_KV.get(key)) || 'null'); } catch {}
     const e = mergeEntry(old, v, now);
     const same = old && old.u === e.u && JSON.stringify(old.d) === JSON.stringify(e.d) && JSON.stringify(old.w) === JSON.stringify(e.w) && now - (old.t || 0) < 86400000;
     if (!same) { const s = JSON.stringify(e); await env.COACH_KV.put(key, s, { metadata: e, expirationTtl: lbInt(env, 'LB_TTL_DAYS') * 86400 }); lbCache = null; }
-    return json(200, { ok: true, joined: true, entry: { username: e.u, daily: e.d && { date: e.d[0], score: e.d[1] }, weekly: e.w && { weekKey: e.w[0], score: e.w[1] } } }, cors);
+    return json(200, { ok: true, joined: true, stored: true, kind: LB_KIND, entry: { username: e.u, daily: e.d && { date: e.d[0], score: e.d[1] }, weekly: e.w && { weekKey: e.w[0], score: e.w[1] } } }, cors);
   }
-  if (url.pathname === '/leaderboard/leave' && request.method === 'POST') { await env.COACH_KV.delete(key); lbCache = null; return json(200, { ok: true, joined: false }, cors); }
+  if (url.pathname === '/leaderboard/leave' && request.method === 'POST') { await Promise.all([env.COACH_KV.delete(key), env.COACH_KV.delete(LB_OLD_PREFIX + device)]); lbCache = null; return json(200, { ok: true, joined: false }, cors); }
   if (url.pathname === '/leaderboard' && request.method === 'GET') {
     const period = url.searchParams.get('period') || 'weekly'; if (period !== 'weekly' && period !== 'daily') return err(400, 'bad_request', 'period must be weekly or daily.', cors);
     const P = lbPeriods(now); const pk = period === 'weekly' ? P.week : P.day; const f = period === 'weekly' ? 'w' : 'd';
@@ -391,7 +399,7 @@ async function leaderboard(request, env, cors, url, device, ip, owner) {
     const ranked = rankRows(rows, (id) => tags.get(id));
     const out = (r) => ({ rank: r.rank, name: r.name, score: r.score, stars: r.stars, ...(r.id === device ? { me: true } : {}) });
     const meRow = ranked.find((r) => r.id === device);
-    return json(200, { period, key: pk, total: ranked.length, top: ranked.slice(0, lbInt(env, 'LB_TOP')).map(out), me: meRow ? out(meRow) : null, joined: !!mine,
+    return json(200, { period, kind: LB_KIND, key: pk, total: ranked.length, top: ranked.slice(0, lbInt(env, 'LB_TOP')).map(out), me: meRow ? out(meRow) : null, joined: !!mine,
       ...(period === 'weekly' ? { resetAt: sydWeek(now).resetAt } : {}) }, cors);
   }
   return err(404, 'not_found', 'Use GET /leaderboard?period=weekly|daily, POST /leaderboard/submit or /leaderboard/leave.', cors);

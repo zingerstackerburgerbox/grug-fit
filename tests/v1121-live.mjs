@@ -1,4 +1,4 @@
-// v1.12.0 live check on the deployed site + Worker: leaderboard API validation/ranking/leave with 3 fake test devices, seeded demo rows for
+// v1.12.1 live check (training-only leaderboard) on the deployed site + Worker: leaderboard API validation/ranking/leave with 3 fake test devices, seeded demo rows for
 // the screenshots (390x844, dark), a real browser device (seeded "Erik" week, noon clock) that sees the opt-in, joins, views Weekly + Daily,
 // and the Settings toggle. EVERYTHING it adds is removed again at the end (all test/demo devices + the browser device leave) and verified gone.
 // The owner token is read from /home/box/.grug-coach-owner-token only to lift the submit rate limit for the seeding; it is never printed.
@@ -15,7 +15,7 @@ const H = (device, owner) => ({ 'Content-Type': 'application/json', Origin: ORIG
 const api = async (path, device, { body, owner } = {}) => { const r = await fetch(U + path, { method: body ? 'POST' : 'GET', headers: H(device, owner), body: body && JSON.stringify(body) }); let j = null; try { j = await r.json(); } catch {} return { s: r.status, j }; };
 const uuid = () => crypto.randomUUID();
 const mine = []; // every device id this script puts on the board (cleaned up at the end)
-const submit = (device, username, d, w, P, owner = true) => { mine.push(device); return api('/leaderboard/submit', device, { owner, body: { deviceId: device, username, daily: { score: d, date: P.day }, weekly: { score: w, weekKey: P.week } } }); };
+const submit = (device, username, d, w, P, owner = true) => { mine.push(device); return api('/leaderboard/submit', device, { owner, body: { deviceId: device, username, kind: 'training', daily: { score: d, date: P.day }, weekly: { score: w, weekKey: P.week } } }); };
 const viewer = uuid();
 // KV list() is eventually consistent: new rows can take up to ~60 s to be listed for other devices
 const waitFor = async (dev, pred, what) => { for (let i = 0; i < 15; i++) { const r = await api('/leaderboard?period=weekly', dev); if (pred(r.j)) return r; await new Promise((x) => setTimeout(x, 6000)); } fail('timed out waiting for ' + what); return api('/leaderboard?period=weekly', dev); };
@@ -32,10 +32,13 @@ try {
   const before = await api('/leaderboard?period=weekly', viewer); if (before.s !== 200) throw new Error('GET /leaderboard ' + before.s + ' ' + JSON.stringify(before.j));
   const P = { week: before.j.key, day: (await api('/leaderboard?period=daily', viewer)).j.key }; log(`live board before: ${before.j.total} on weekly ${P.week}, daily ${P.day}`);
   const T = [uuid(), uuid(), uuid()];
-  for (const [b, m] of [[{ deviceId: T[0], username: 'lbtest_a', daily: { score: 101, date: P.day } }, 'score 101'], [{ deviceId: T[0], username: 'lbtest_a', daily: { score: 50, date: '2020-01-01' } }, 'old date'],
-    [{ deviceId: T[0], username: 'x'.repeat(21), daily: { score: 5, date: P.day } }, '21-char name'], [{ deviceId: T[0], username: 'lbtest_a', daily: { score: 5, date: P.day }, weightKg: 80 }, 'extra field']]) {
+  for (const [b, m] of [[{ deviceId: T[0], username: 'lbtest_a', kind: 'training', daily: { score: 101, date: P.day } }, 'score 101'], [{ deviceId: T[0], username: 'lbtest_a', kind: 'training', daily: { score: 50, date: '2020-01-01' } }, 'old date'],
+    [{ deviceId: T[0], username: 'x'.repeat(21), kind: 'training', daily: { score: 5, date: P.day } }, '21-char name'], [{ deviceId: T[0], username: 'lbtest_a', kind: 'training', daily: { score: 5, date: P.day }, weightKg: 80 }, 'extra field']]) {
     const r = await api('/leaderboard/submit', T[0], { body: b }); if (r.s !== 400) fail(`live: ${m} → ${r.s}`); }
   log('live validation: 101 / old date / 21-char name / extra field → 400');
+  { const old = uuid(); mine.push(old); const o = await api('/leaderboard/submit', old, { body: { deviceId: old, username: 'lbtest_old', daily: { score: 99, date: P.day }, weekly: { score: 99, weekKey: P.week } } });
+    const g = await api('/leaderboard?period=weekly', old); if (o.s !== 200 || o.j.stored !== false || g.j.joined) fail('old-app submit was stored'); else log('live: v1.12.0-style submit (no kind) → 200 stored:false, not on the board');
+    if (g.j.kind !== 'training') fail('GET kind ' + g.j.kind); }
   await submit(T[0], 'lbtest_a', 11, 12, P, false); await submit(T[1], 'lbtest_b', 13, 14, P, false); await submit(T[2], 'lbtest_b', 9, 10, P, false);
   let r = await waitFor(T[1], (j) => j.top.filter((x) => /^lbtest_/.test(x.name)).length === 3, '3 test rows'); const tests = r.j.top.filter((x) => /^lbtest_/.test(x.name));
   log('live weekly (test rows):', tests.map((x) => `${x.rank}. ${x.name} ${x.score}${x.me ? ' (me)' : ''}`).join(' | '));
@@ -55,13 +58,13 @@ try {
     userAgent: 'Mozilla/5.0 (Linux; Android 14; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Mobile Safari/537.36' });
   const now = new Date(); await ctx.clock.install({ time: new Date(now.getFullYear(), now.getMonth(), now.getDate(), 12, 0, 0) });
   const page = await ctx.newPage(); page.setDefaultTimeout(20000); page.on('pageerror', (e) => fail('pageerror ' + e.message)); page.on('dialog', (d) => d.accept());
-  const shot = async (name) => { await page.waitForTimeout(500); await page.screenshot({ path: `${OUT}/v1120-${name}.png` }); log('screenshot', `${OUT}/v1120-${name}.png`); };
+  const shot = async (name) => { await page.waitForTimeout(500); await page.screenshot({ path: `${OUT}/v1121-${name}.png` }); log('screenshot', `${OUT}/v1121-${name}.png`); };
   await page.goto(BASE); await page.fill('[data-testid=ob-username]', 'Erik'); await page.click('[data-testid=ob-next]'); await page.click('[data-testid=ob-skip]'); await page.waitForSelector("text=Today's nutrition");
   await seedWeek(page); await page.reload(); await page.waitForSelector('[data-testid=stars-training]'); const nn = page.locator('text=Not now'); if (await nn.count()) await nn.first().click();
   mine.push(await page.evaluate(() => localStorage.getItem('coachDevice')));
-  await page.goto(BASE + '#/settings'); const ver = (await page.textContent('[data-testid=app-version]')).trim(); if (ver !== '1.12.0') fail('live version ' + ver); else log('live About: v' + ver);
+  await page.goto(BASE + '#/settings'); const ver = (await page.textContent('[data-testid=app-version]')).trim(); if (ver !== '1.12.1') fail('live version ' + ver); else log('live About: v' + ver);
   await page.goto(BASE + '#/'); await page.waitForSelector('[data-testid=review-leaderboard]');
-  await page.evaluate(() => { const c = document.querySelector('[data-testid=review-card]'); scrollTo(0, c.getBoundingClientRect().top + scrollY - 70); }); await shot('review-card');
+  await page.evaluate(() => { const c = document.querySelector('[data-testid=review-card]'); scrollTo(0, c.getBoundingClientRect().top + scrollY - 70); });
   await page.click('[data-testid=review-leaderboard]'); await page.waitForSelector('[data-testid=lb-optin]');
   for (let i = 0; i < 12 && !(await page.locator('[data-testid=lb-row]:has-text("Big_Ugg")').count() && !(await page.locator('[data-testid=lb-row]:has-text("lbtest_")').count())); i++) { // edge caches/list() catch up
     await page.waitForTimeout(6000); await page.reload(); await page.waitForSelector('[data-testid=lb-optin]'); await page.waitForSelector('[data-testid=lb-list-weekly], [data-testid=lb-empty]'); }
@@ -72,10 +75,12 @@ try {
   await page.click('[data-testid=lb-tab-daily]'); await page.waitForSelector('[data-testid=lb-list-daily]'); await page.waitForSelector('[data-testid=lb-row][data-me]');
   log('live daily:', (await page.locator('[data-testid=lb-row]').allInnerTexts()).map((x) => x.replace(/\s+/g, ' ')).join(' | ')); await shot('daily');
   if (/\bAI\b/.test(await page.textContent('body'))) fail('"AI" on the leaderboard');
+  if (/nutrition/i.test(await page.textContent('[data-testid=leaderboard]'))) fail('leaderboard mentions nutrition');
+  const ttl = (await page.textContent('header.top h1')).trim(); if (ttl !== 'Training leaderboard') fail('title ' + ttl); else log('live title:', ttl);
   await page.goto(BASE + '#/settings'); await page.waitForSelector('[data-testid=lb-setting]');
-  await page.evaluate(() => { const c = document.querySelector('[data-testid=lb-setting]'); scrollTo(0, c.getBoundingClientRect().top + scrollY - 160); }); if (!(await page.isChecked('[data-testid=set-lb-join]'))) fail('toggle not on'); await shot('settings');
+  await page.evaluate(() => { const c = document.querySelector('[data-testid=lb-setting]'); scrollTo(0, c.getBoundingClientRect().top + scrollY - 160); }); if (!(await page.isChecked('[data-testid=set-lb-join]'))) fail('toggle not on');
   await page.uncheck('[data-testid=set-lb-join]'); await page.waitForSelector('.toast:has-text("Removed from the leaderboard")'); log('live Settings toggle off → removed');
   r = await api('/leaderboard?period=weekly', mine.at(-1)); if (r.j.joined) fail('browser device still joined after toggle off');
 } catch (e) { fail(String(e?.stack || e)); }
 finally { await cleanup().catch((e) => fail('cleanup ' + e)); await browser?.close(); }
-if (failed) { console.error(failed, 'failure(s)'); process.exitCode = 1; } else console.log('V1.12.0 LIVE OK');
+if (failed) { console.error(failed, 'failure(s)'); process.exitCode = 1; } else console.log('V1.12.1 LIVE OK');

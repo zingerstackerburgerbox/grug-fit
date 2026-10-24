@@ -1,6 +1,6 @@
 // v1.12.0 leaderboard: validation, merge, ranking (ties, duplicate names), submit/leave/GET through the fetch handler with a KV mock that
 // supports list() + metadata, rate limits per device and per hashed network, owner bypass, and no effect on chat/estimate/review counters.
-import worker, { cleanLbName, validSubmit, mergeEntry, rankRows, lbPeriods, sydDay, lbStars, LB_PREFIX } from '../src/index.js';
+import worker, { cleanLbName, validSubmit, mergeEntry, rankRows, lbPeriods, sydDay, lbStars, LB_PREFIX, LB_OLD_PREFIX } from '../src/index.js';
 let failed = 0; const ok = (c, m) => { console.log((c ? '✓ ' : '✗ ') + m); if (!c) failed++; };
 const kv = new Map(); const meta = new Map();
 const KV = { get: async (k) => kv.get(k) ?? null, put: async (k, v, o = {}) => { kv.set(k, v); if (o.metadata) meta.set(k, o.metadata); else meta.delete(k); }, delete: async (k) => { kv.delete(k); meta.delete(k); },
@@ -11,7 +11,7 @@ const env = (o = {}) => ({ COACH_KV: KV, IP_SALT: 'pepper', OWNER_TOKEN: 'owner-
 const dev = (n) => `eeeeeeee-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const req = (path, { method = 'POST', device = dev(1), body, ip = '203.0.113.5', owner } = {}) => new Request('https://proxy.test' + path, { method, headers: { Origin: ORIGIN, 'X-Device-Id': device, 'CF-Connecting-IP': ip, 'Content-Type': 'application/json', ...(owner ? { 'X-Owner-Token': owner } : {}) }, body: body == null ? undefined : typeof body === 'string' ? body : JSON.stringify(body) });
 const call = async (r, e = env()) => { const res = await worker.fetch(r, e, {}); const t = await res.text(); let j = null; try { j = JSON.parse(t); } catch {} return { res, j }; };
-const P = lbPeriods(); const sub = (device, username, d, w, o = {}) => ({ deviceId: device, username, ...(d != null ? { daily: { score: d, date: P.day } } : {}), ...(w != null ? { weekly: { score: w, weekKey: P.week } } : {}), ...o });
+const P = lbPeriods(); const sub = (device, username, d, w, o = {}) => ({ deviceId: device, username, kind: 'training', ...(d != null ? { daily: { score: d, date: P.day } } : {}), ...(w != null ? { weekly: { score: w, weekKey: P.week } } : {}), ...o });
 
 // ---------- pure helpers ----------
 ok(cleanLbName('  Erik  ') === 'Erik' && cleanLbName('a\u0000b\u200Bc\u202Ed') === 'abcd' && cleanLbName('big   lunk') === 'big lunk', 'username: trimmed, control/zero-width/bidi chars stripped, spaces collapsed');
@@ -20,14 +20,14 @@ ok(cleanLbName('x'.repeat(20)) === 'x'.repeat(20) && cleanLbName('x'.repeat(21))
 const NOW = Date.parse('2026-10-24T01:00:00Z'); const PP = lbPeriods(NOW);
 ok(PP.day === '2026-10-24' && PP.prevDay === '2026-10-23' && PP.week === '2026-10-19' && PP.prevWeek === '2026-10-12', 'periods: Sydney day + Monday week, and the previous ones');
 ok(sydDay(Date.parse('2026-10-24T13:30:00Z')) === '2026-10-25', 'Sydney day rolls over at local midnight (00:30 AEDT is the next day)');
-const V = (b) => validSubmit(b, dev(1), NOW); const good = { deviceId: dev(1), username: 'Erik', daily: { score: 72, date: '2026-10-24' }, weekly: { score: 68, weekKey: '2026-10-19' } };
+const V = (b) => validSubmit(b, dev(1), NOW); const good = { deviceId: dev(1), username: 'Erik', kind: 'training', daily: { score: 72, date: '2026-10-24' }, weekly: { score: 68, weekKey: '2026-10-19' } };
 ok(!V(good).error && V(good).daily.score === 72 && V(good).weekly.week === '2026-10-19', 'valid submit accepted');
 ok(!V({ ...good, daily: { score: 50, date: '2026-10-23' }, weekly: { score: 50, weekKey: '2026-10-12' } }).error, 'previous day / previous week accepted (midnight edge)');
 for (const [b, m] of [[{ ...good, daily: { score: 101, date: '2026-10-24' } }, 'score 101'], [{ ...good, daily: { score: -1, date: '2026-10-24' } }, 'score -1'], [{ ...good, daily: { score: 70.5, date: '2026-10-24' } }, 'score 70.5'],
   [{ ...good, daily: { score: '70', date: '2026-10-24' } }, 'score as string'], [{ ...good, weekly: { score: 1e9, weekKey: '2026-10-19' } }, 'huge weekly'], [{ ...good, daily: { score: 70, date: '2026-10-22' } }, 'date 2 days ago'],
   [{ ...good, daily: { score: 70, date: '2026-10-25' } }, 'future date'], [{ ...good, weekly: { score: 70, weekKey: '2026-10-20' } }, 'week key not a Monday of this/last week'], [{ ...good, weekly: { score: 70, weekKey: '2026-10-05' } }, 'week 2 weeks ago'],
   [{ ...good, username: '' }, 'empty name'], [{ ...good, username: 'x'.repeat(21) }, '21-char name'], [{ ...good, deviceId: dev(2) }, 'deviceId ≠ header'], [{ ...good, weightKg: 80 }, 'extra field (weight)'],
-  [{ ...good, daily: { score: 70, date: '2026-10-24', kcal: 2000 } }, 'extra field inside daily'], [{ username: 'Erik' }, 'no scores'], [[], 'array body'], [null, 'null body']])
+  [{ ...good, daily: { score: 70, date: '2026-10-24', kcal: 2000 } }, 'extra field inside daily'], [{ username: 'Erik' }, 'no scores'], [{ ...good, kind: 'combined' }, 'kind other than training'], [[], 'array body'], [null, 'null body']])
   ok(!!V(b).error, 'rejected: ' + m);
 // merge: newer periods replace, older never overwrite newer
 let e = mergeEntry(null, V(good), 1); ok(e.u === 'Erik' && e.d[0] === '2026-10-24' && e.d[1] === 72 && e.w[1] === 68, 'merge: new entry');
@@ -41,10 +41,11 @@ ok(dup.find((r) => r.id === 'b001').name === 'Grug #b001' && dup.find((r) => r.i
 ok([0, 39, 40, 59, 60, 74, 75, 89, 90, 100].map(lbStars).join('') === '1122334455', 'stars: same thresholds as the Home stars');
 
 // ---------- through the Worker ----------
+ok(LB_PREFIX === 'lb2:e:' && LB_OLD_PREFIX === 'lb:e:', 'v1.12.1: new KV prefix for training-only entries');
 let r = await call(req('/leaderboard?period=weekly', { method: 'GET' })); ok(r.res.status === 200 && r.j.total === 0 && r.j.top.length === 0 && r.j.me === null && r.j.joined === false, 'empty board: 200, no rows (no XAI key needed)');
 r = await call(req('/leaderboard?period=monthly', { method: 'GET' })); ok(r.res.status === 400, 'unknown period → 400');
 r = await call(req('/leaderboard/submit', { body: sub(dev(1), 'Erik', 72, 68) })); ok(r.res.status === 200 && r.j.ok && r.j.entry.username === 'Erik' && r.j.entry.weekly.score === 68, 'submit: 200');
-const stored = kv.get(LB_PREFIX + dev(1)); ok(stored && JSON.stringify(Object.keys(JSON.parse(stored)).sort()) === '["d","t","u","w"]' && !/kcal|weight|food|photo/i.test(stored), 'stored entry only holds username + scores (+ time): ' + stored);
+ok(r.j.stored === true && r.j.kind === 'training', 'submit with kind training → stored'); const stored = kv.get(LB_PREFIX + dev(1)); ok(stored && JSON.stringify(Object.keys(JSON.parse(stored)).sort()) === '["d","t","u","w"]' && !/kcal|weight|food|photo/i.test(stored), 'stored entry only holds username + scores (+ time): ' + stored);
 r = await call(req('/leaderboard/submit', { body: sub(dev(1), 'Erik', 101, 68) })); ok(r.res.status === 400 && r.j.error === 'bad_request', 'submit: out-of-range score → 400');
 r = await call(req('/leaderboard/submit', { body: '{bad' })); ok(r.res.status === 400, 'submit: bad JSON → 400');
 r = await call(req('/leaderboard/submit', { body: sub(dev(1), 'x', 1, 1, { pad: 'y'.repeat(3000) }) })); ok(r.res.status === 413, 'submit: oversized body → 413');
@@ -58,10 +59,17 @@ ok(/^Erik #[0-9a-f]{4}$/.test(r.j.top[0].name) && /^Erik #[0-9a-f]{4}$/.test(r.j
 ok(!JSON.stringify(r.j).includes('eeeeeeee'), 'device IDs are never returned');
 ok(r.j.top.every((x) => JSON.stringify(Object.keys(x).filter((k) => k !== 'me').sort()) === '["name","rank","score","stars"]'), 'rows: rank, name, stars, score only');
 r = await call(req('/leaderboard?period=daily', { method: 'GET', device: dev(9) })); ok(r.j.key === P.day && r.j.top.map((x) => x.score).join(',') === '90,72,60,40' && r.j.me === null && r.j.joined === false, 'daily board; a viewer who is not on it can still view (me null)');
+// v1.12.1: v1.12.0 combined-score entries (old prefix) are ignored, and an old app's submit (no kind) is acknowledged but never stored
+{ const m = { u: 'OldCombined', d: [P.day, 99], w: [P.week, 99], t: 1 }; kv.set(LB_OLD_PREFIX + dev(6), JSON.stringify(m)); meta.set(LB_OLD_PREFIX + dev(6), m); }
+r = await call(req('/leaderboard/submit', { device: dev(7), ip: '203.0.113.9', body: { deviceId: dev(7), username: 'OldApp', daily: { score: 99, date: P.day }, weekly: { score: 99, weekKey: P.week } } }));
+ok(r.res.status === 200 && r.j.stored === false && r.j.reason === 'outdated_app' && !kv.has(LB_PREFIX + dev(7)) && !kv.has(LB_OLD_PREFIX + dev(7)), 'old app submit (no kind) → 200 stored:false, nothing written');
+await call(req('/leaderboard/submit', { device: dev(2), ip: '203.0.113.6', body: sub(dev(2), 'Lunk', 92, 55) })); // reset the list cache
+r = await call(req('/leaderboard?period=daily', { method: 'GET', device: dev(9) })); ok(r.j.kind === 'training' && !r.j.top.some((x) => /^Old/.test(x.name)), 'old combined entries and old-app submits never appear on the board');
+r = await call(req('/leaderboard/leave', { device: dev(6) })); ok(!kv.has(LB_OLD_PREFIX + dev(6)), 'leave also removes a leftover v1.12.0 entry');
 // stale entries (old periods) are not shown
 kv.set(LB_PREFIX + dev(5), 'x'); meta.set(LB_PREFIX + dev(5), { u: 'Old', d: ['2020-01-01', 99], w: ['2019-12-30', 99], t: 1 });
 await call(req('/leaderboard/submit', { device: dev(2), ip: '203.0.113.6', body: sub(dev(2), 'Lunk', 91, 55) })); // a write resets the list cache
-r = await call(req('/leaderboard?period=weekly', { method: 'GET', device: dev(9) })); ok(r.j.total === 3 && !r.j.top.some((x) => x.name === 'Old'), 'entries from an old week/day are not shown');
+r = await call(req('/leaderboard?period=weekly', { method: 'GET', device: dev(9) })); ok(r.j.total === 3 && r.j.kind === 'training' && !r.j.top.some((x) => x.name === 'Old'), 'entries from an old week/day are not shown');
 // top 50 + own rank beyond it
 for (let i = 10; i < 70; i++) { const d = dev(i); const m = { u: `fx${i}`, d: [P.day, 90], w: [P.week, 95], t: 1 }; kv.set(LB_PREFIX + d, JSON.stringify(m)); meta.set(LB_PREFIX + d, m); }
 r = await call(req('/leaderboard?period=weekly', { method: 'GET', device: dev(4), ip: '198.51.100.1' }), env({ LB_TOP: '50' })); // dev(4) has no weekly score

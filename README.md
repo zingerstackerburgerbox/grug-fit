@@ -25,12 +25,12 @@ Deploy `dist/` to any static HTTPS host (GitHub Pages, Netlify, Cloudflare Pages
 Steps are typed in per day (Workout tab › Steps, any date; optional goal in Settings › Steps). Calories above the first
 2,000 steps a day are added to burned-today (stride from height, 0.5 kcal per kg per km); see `src/steps.ts`.
 
-## Leaderboard (v1.12.0)
+## Training leaderboard (v1.12.0, training-only since v1.12.1)
 - **Where:** "🏆 View leaderboard" on the Grug's Review card (Home) and on the review result screen → `#/leaderboard`, tabs **Weekly**
   (default) and **Daily**. Rows: rank (🥇🥈🥉 for the top 3), username, stars, score; your own row is highlighted. Top 50 plus your own rank.
-- **Grug rating** = the Home stars' Training and Nutrition scores averaged (out of 100, `src/leaderboard.ts` `lbScores()`, same functions as
-  `src/stars.ts`). Daily = today's rating (Sydney day). Weekly = the average of this week's daily ratings so far (each past day re-computed as it
-  stood at the end of that day; week = Monday 00:00 Sydney).
+- **Score** = the Home Training stars' score (out of 100, `src/leaderboard.ts` `lbScores()`, same functions as `src/stars.ts`). Nutrition is
+  not used since v1.12.1 (most people don't log food). Daily = today's training score (Sydney day). Weekly = the average of this week's daily
+  training scores so far (each past day re-computed as it stood at the end of that day; week = Monday 00:00 Sydney).
 - **Opt-in:** first open asks "Show me on the leaderboard" / "Just look"; Settings › Leaderboard joins or leaves (leaving deletes the entry on
   the worker; if offline it's retried on the next open). Not joined = can still view. Only the username and the two integers are sent.
 - **Submitting:** when joined, quietly on app open / return to the app and after food, workout, dose or steps changes, at most once per

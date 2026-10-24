@@ -105,7 +105,7 @@ export function SettingsPage() {
       <div class="grid2"><button class="btn" onClick={() => { if (confirmDo('Reset targets to defaults (1800 kcal, P 157.5, C 202.5, F 40)?')) save({ targets: DEFAULT_SETTINGS.targets }); }}>Reset defaults</button><button class="btn p" onClick={saveTargets}>Save targets</button></div></div>
     <h2>Steps</h2>
     <StepGoalSetting />
-    <h2>Leaderboard</h2>
+    <h2>Training leaderboard</h2>
     <LeaderboardSetting />
     <h2>Units & workout</h2>
     <div class="card col"><label class="f">Energy<Seg value={s.energyUnit} onChange={(energyUnit) => save({ energyUnit })} options={[['kcal', 'kcal'], ['kJ', 'kJ']]} /></label>
@@ -138,7 +138,7 @@ export function SettingsPage() {
     <button class="btn d" onClick={async () => { if (confirmDo('Delete ALL data (workouts, diary, supplements, settings)? This cannot be undone.') && confirmDo('Really? Export a backup first if unsure.')) { if ((await getSettings()).lbJoin) await leaveBoard(); await clearAll(); localStorage.removeItem('rest'); toast('All data cleared'); } }}>Clear all data</button>
     <h2>About</h2>
     <div class="card col" data-testid="about"><div class="row between"><b>Lunk v<span data-testid="app-version">{APP_VERSION}</span></b><span class="mut sm">built {fmtDate(new Date(BUILD_TIME))} {fmtTime(+new Date(BUILD_TIME))}</span></div>
-      <div class="xs" data-testid="whats-new">New in v1.12: 🏆 leaderboard. Open it from Grug's Review on Home; join or leave here under Leaderboard.</div>
+      <div class="xs" data-testid="whats-new">New in v1.12: 🏆 training leaderboard (ranked by your Training stars score). Open it from Grug's Review on Home; join or leave here under Training leaderboard.</div>
       <div class="mut xs">Build <span data-testid="build-id">{BUILD_ID}</span> · updates install automatically (checked on launch, when you return to the app, and every 30 min). Your data stays on the device across updates.</div>
       <button class="btn sm" onClick={async () => { const r = await navigator.serviceWorker?.getRegistration(); if (!r) { toast('Updates unavailable (no service worker)'); return; } await r.update().catch(() => {}); toast(r.installing || r.waiting ? 'Update found – installing…' : 'You have the latest version'); }}>Check for updates</button></div>
       <button class="btn sm" data-testid="ocr-offline" onClick={async () => { toast('Downloading label scanner (~6 MB)…'); try { const m = await import('../ocr/ocr'); await m.prefetchOcr(); toast('Label scanning is ready offline'); } catch (e: any) { toast('Download failed: ' + (e?.message || e)); } }}>📷 Make label scanning available offline</button>
