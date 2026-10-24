@@ -12,18 +12,18 @@ const idb = (src) => page.evaluate(async (src) => {
   const res = await new Function('tx', 'p', `return (async () => { ${src} })()`)(tx, p); d.close(); return res;
 }, src);
 const RESET = new Date(Date.now() + 3 * 3600e3).toISOString();
-let mode = 'ok', remaining = 1, posts = [];
+let mode = 'ok', remaining = 3, posts = [];
 const MEAL = { items: [
   { name: 'Scrambled eggs', qty: '2 large eggs', grams: 110, kcal: 160, protein: 14, carbs: 1, fat: 11, fibre: 0 },
   { name: 'Butter', qty: '2 tsp', grams: 10, kcal: 74, protein: 0, carbs: 0, fat: 8, fibre: 0 },
   { name: 'White toast', qty: '2 slices', grams: 70, kcal: 185, protein: 6, carbs: 34, fat: 2, fibre: 2 }], confidence: 'med', note: 'Assumed 10 g butter and 2 slices of white bread.' };
 await ctx.route('https://coach.test/**', async (r) => {
   const u = r.request().url(); const cors = { 'access-control-allow-origin': '*', 'access-control-expose-headers': 'X-Est-Remaining' };
-  if (u.endsWith('/status')) return r.fulfill({ status: 200, contentType: 'application/json', headers: cors, body: JSON.stringify({ enabled: true, owner: false, remaining: 30, cap: 30, resetAt: RESET, estimate: { remaining, cap: 1, used: 1 - remaining } }) });
+  if (u.endsWith('/status')) return r.fulfill({ status: 200, contentType: 'application/json', headers: cors, body: JSON.stringify({ enabled: true, owner: false, remaining: 30, cap: 30, resetAt: RESET, estimate: { remaining, cap: 3, used: 3 - remaining } }) });
   posts.push(JSON.parse(r.request().postData() || '{}'));
   if (mode === 'fail') return r.fulfill({ status: 502, contentType: 'application/json', headers: cors, body: JSON.stringify({ error: 'bad_estimate', message: "Couldn't read the estimate. Nothing was used up – try again." }) });
-  if (mode === 'limit') return r.fulfill({ status: 429, contentType: 'application/json', headers: cors, body: JSON.stringify({ error: 'est_limit', message: 'used', remaining: 0, cap: 1, resetAt: RESET }) });
-  remaining = 0; return r.fulfill({ status: 200, contentType: 'application/json', headers: cors, body: JSON.stringify({ ...MEAL, remaining: 0, cap: 1, resetAt: RESET, owner: false }) });
+  if (mode === 'limit') return r.fulfill({ status: 429, contentType: 'application/json', headers: cors, body: JSON.stringify({ error: 'est_limit', message: 'used', remaining: 0, cap: 3, resetAt: RESET }) });
+  remaining = Math.max(0, remaining - 1); return r.fulfill({ status: 200, contentType: 'application/json', headers: cors, body: JSON.stringify({ ...MEAL, remaining, cap: 3, resetAt: RESET, owner: false }) });
 });
 await page.goto(BASE); await page.fill('[data-testid=ob-username]', 'grug_tester').then(() => page.click('[data-testid=ob-next]')).then(() => page.click('[data-testid=ob-skip]')); await page.waitForSelector("text=Today's nutrition");
 await page.evaluate(() => localStorage.setItem('coachProxyUrl', 'https://coach.test'));
@@ -34,6 +34,7 @@ await page.goto(BASE + '#/food'); await page.click('[data-testid=est-open-breakf
 await page.waitForSelector('[data-testid=est-notice]'); const nt = await page.textContent('[data-testid=est-notice-text]');
 if (!/Automated calorie estimates can be unreliable\. Portion sizes, oils and hidden ingredients are hard to judge\. If you know the exact calories \(from a label or recipe\), please enter them manually instead\./.test(nt)) fail('notice wording');
 const allText = await page.textContent('body'); if (/\bAI\b/.test(allText)) fail('estimator copy must not say "AI"');
+if (!/You get 3 Smart Estimates a day\./.test(await page.textContent('[data-testid=est-notice]'))) fail('notice: 3 a day');
 log('notice shown on first open');
 await page.click('[data-testid=est-manual]'); await page.waitForTimeout(300);
 if (!page.url().includes(`#/food/add/${today}/breakfast`)) fail('Enter manually → normal add-food: ' + page.url()); else log('Enter manually → add food screen');
@@ -42,7 +43,7 @@ await page.click('[data-testid=est-ok]'); await page.waitForSelector('[data-test
 const sn = await idb(`return (await p(tx('kv').get('settings'))).estNotice`); if (!sn) fail('Got it stored in settings');
 await page.reload(); await page.waitForSelector('[data-testid=est-text]'); await page.waitForTimeout(400);
 if (await page.locator('[data-testid=est-notice]').count()) fail('notice shown twice'); else log('notice not shown after Got it (remembered on-device)');
-const ql = await page.textContent('[data-testid=est-quota]'); if (ql.trim() !== 'Smart Estimate: 1 left today') fail('quota line: ' + ql); else log(ql);
+const ql = await page.textContent('[data-testid=est-quota]'); if (ql.trim() !== 'Smart Estimate: 3 left today') fail('quota line: ' + ql); else log(ql);
 
 // 2) failure → message + manual, nothing consumed
 mode = 'fail'; await page.fill('[data-testid=est-text]', '2 eggs scrambled with butter, 2 slices toast'); await page.click('[data-testid=est-go]');
@@ -82,17 +83,20 @@ if (!toast2.est || Math.abs(toast2.n.kcal - 92.5) > 0.6 || foods2) fail('edit ke
 await page.goto(BASE + '#/settings'); const [dl] = await Promise.all([page.waitForEvent('download'), page.click('text=Export all data')]);
 const bj = JSON.parse(await (await import('fs')).promises.readFile(await dl.path(), 'utf8')); if ((bj.data.diary || []).filter((e) => e.est).length !== 2) fail('backup has est entries'); else log('backup keeps the est flag');
 
+// 3/day: next open shows 2 left
+await page.goto(BASE + `#/food/estimate/${today}/dinner`); await page.waitForSelector('[data-testid=est-quota]'); const q2 = (await page.textContent('[data-testid=est-quota]')).trim(); if (q2 !== 'Smart Estimate: 2 left today') fail('quota after one: ' + q2); else log(q2);
 // 4) cap mirror: used card with reset time + Enter manually
-await page.goto(BASE + `#/food/estimate/${today}/dinner`); await page.waitForSelector('[data-testid=est-used]');
+await page.waitForTimeout(500); remaining = 0; await page.evaluate(() => localStorage.removeItem('estQuota'));
+await page.goto(BASE + `#/food/estimate/${today}/snacks`); await page.reload(); await page.waitForSelector('[data-testid=est-used]');
 const ut = await page.textContent('[data-testid=est-used]'); log('used:', ut.trim());
-if (!/^You've used today's Smart Estimate\. It resets at .+\. You can still enter food manually\./.test(ut.trim())) fail('used copy');
-await page.click('[data-testid=est-used-manual]'); await page.waitForTimeout(300); if (!page.url().includes(`#/food/add/${today}/dinner`)) fail('used → manual');
+if (!/^You've used today's Smart Estimates\. They reset at .+\. You can still enter food manually\./.test(ut.trim())) fail('used copy');
+await page.click('[data-testid=est-used-manual]'); await page.waitForTimeout(300); if (!page.url().includes(`#/food/add/${today}/snacks`)) fail('used → manual');
 // server says limit even though the mirror says 1 left (e.g. another browser / incognito on the same device)
-remaining = 1; mode = 'limit'; await page.evaluate(() => localStorage.removeItem('estQuota'));
+remaining = 3; mode = 'limit'; await page.evaluate(() => localStorage.removeItem('estQuota'));
 await page.goto(BASE + `#/food/estimate/${today}/dinner`); await page.waitForSelector('[data-testid=est-quota]');
 await page.fill('[data-testid=est-text]', 'chicken wrap'); await page.click('[data-testid=est-go]'); await page.waitForSelector('[data-testid=est-error]');
 const lk = await page.getAttribute('[data-testid=est-error]', 'data-kind'); const lt = await page.textContent('[data-testid=est-error]');
-if (lk !== 'limit' || !/You've used today's Smart Estimate/.test(lt)) fail('server 429 → limit message'); else log('server cap →', lt.trim().slice(0, 90));
+if (lk !== 'limit' || !/You've used today's Smart Estimates\. They reset at/.test(lt)) fail('server 429 → limit message'); else log('server cap →', lt.trim().slice(0, 90));
 // 5) offline
 mode = 'ok'; await page.evaluate(() => localStorage.removeItem('estQuota')); await page.reload(); await page.waitForSelector('[data-testid=est-text]');
 await ctx.setOffline(true); await page.fill('[data-testid=est-text]', 'banana'); const n0 = posts.length; await page.click('[data-testid=est-go]'); await page.waitForSelector('[data-testid=est-error]');

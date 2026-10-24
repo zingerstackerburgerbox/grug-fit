@@ -21,7 +21,7 @@ MAX_TOKENS = "1200"
 KILL_SWITCH = "0"
 # v1.10.0 Smart Estimate (Food tab): successful estimates per device per UTC day (raise when a paid tier exists);
 # per network = EST_DAILY_CAP x EST_NETWORK_MULT. Separate from coach messages.
-EST_DAILY_CAP = "1"
+EST_DAILY_CAP = "3"
 EST_NETWORK_MULT = "3"
 EST_MAX_IMAGE_CHARS = "1500000"
 EST_MAX_TOKENS = "1500"

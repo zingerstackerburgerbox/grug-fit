@@ -1,13 +1,15 @@
 /** v1.10.0 Smart Estimate: describe (and optionally photograph) a meal, get an editable per-item calorie/macro estimate.
  *  Goes through the coach proxy's POST /estimate (prompt + strict-JSON validation + daily cap live in the Worker).
- *  The cap (EST_DAILY_CAP, 1/day for now) is enforced server-side; this file only mirrors it for the UI.
+ *  The cap (EST_DAILY_CAP, 3/day for now) is enforced server-side; this file only mirrors it for the UI.
  *  Photos are downscaled in memory, sent once and never stored. */
 import { getSettings } from './db';
 import { deviceId, proxyReady, proxyUrl } from './coach';
 import type { Settings } from './types';
 
 /** Mirror of the Worker's EST_DAILY_CAP default (server is the source of truth; raise both when a paid tier exists). */
-export const EST_DAILY_CAP = 1;
+export const EST_DAILY_CAP: number = 3;
+/** 'You've used today's Smart Estimate(s). It/They reset at …' (singular only if the cap is ever 1). */
+export const usedText = (resetAt?: string, cap = EST_DAILY_CAP) => cap === 1 ? `You've used today's Smart Estimate. It resets at ${resetTime(resetAt)}. You can still enter food manually.` : `You've used today's Smart Estimates. They reset at ${resetTime(resetAt)}. You can still enter food manually.`;
 export type EstItem = { name: string; qty: string; grams: number; kcal: number; protein: number; carbs: number; fat: number; fibre: number };
 export type EstResult = { items: EstItem[]; confidence: 'low' | 'med' | 'high'; note: string };
 export type EstQuota = { remaining: number | null; cap?: number; resetAt?: string; owner?: boolean };
@@ -46,7 +48,7 @@ export async function runEstimate(input: { text: string; portion?: string; image
   if (r.ok && Array.isArray(j.items)) { saveEstQuota({ remaining: j.owner ? null : j.remaining, cap: j.cap ?? undefined, resetAt: j.resetAt, owner: !!j.owner }); return { items: j.items, confidence: j.confidence, note: j.note || '' }; }
   if (r.status === 429 && (j.error === 'est_limit' || j.error === 'est_ip_limit')) {
     saveEstQuota({ remaining: 0, cap: j.cap, resetAt: j.resetAt });
-    throw new EstError('limit', j.error === 'est_ip_limit' ? `Today's Smart Estimates for this network are used up. They reset at ${resetTime(j.resetAt)}. You can still enter food manually.` : `You've used today's Smart Estimate. It resets at ${resetTime(j.resetAt)}. You can still enter food manually.`, j.resetAt);
+    throw new EstError('limit', j.error === 'est_ip_limit' ? `Today's Smart Estimates for this network are used up. They reset at ${resetTime(j.resetAt)}. You can still enter food manually.` : usedText(j.resetAt, j.cap || EST_DAILY_CAP), j.resetAt);
   }
   if (r.status === 429) throw new EstError('busy', j.error === 'rate_limited' ? 'Too many requests in a short time. Wait a minute and try again.' : 'Smart Estimate is busy today. Try again tomorrow, or enter food manually.');
   if (r.status === 503) throw new EstError('disabled', 'Smart Estimate is switched off for now. You can still enter food manually.');

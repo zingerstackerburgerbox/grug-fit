@@ -1,6 +1,6 @@
 // Live end-to-end Smart Estimate: deployed app → deployed Worker /estimate → xAI.
 // A) a fresh (non-owner) device: notice, real text estimate, review, Log, then the daily cap (used card + server 429 on a retry).
-//    Uses 1 of today's per-network allowance (EST_DAILY_CAP x 3).
+//    Uses 1 of today's per-network allowance (EST_DAILY_CAP x 3 = 9).
 // B) owner device (token read from ~/.grug-coach-owner-token, never printed): photo-only estimate (vision) – bypasses the cap.
 // SHOTDIR=<dir> also saves v1100-*.png screenshots.
 import { chromium, devices } from 'playwright';
@@ -23,7 +23,7 @@ const waitReview = async (page) => { await page.waitForSelector('[data-testid=es
 { const { ctx, page } = await fresh();
   await page.click('nav.tabs a:has-text("Food")'); await page.waitForSelector('[data-testid=est-open-lunch]'); await page.click('[data-testid=est-open-lunch]');
   await page.waitForSelector('[data-testid=est-notice]'); await shot(page, 'disclaimer'); await page.click('[data-testid=est-ok]');
-  await page.waitForSelector('[data-testid=est-quota]'); const q = (await page.textContent('[data-testid=est-quota]')).trim(); log(q); if (q !== 'Smart Estimate: 1 left today') fail('quota line live');
+  await page.waitForSelector('[data-testid=est-quota]'); const q = (await page.textContent('[data-testid=est-quota]')).trim(); log(q); if (q !== 'Smart Estimate: 3 left today') fail('quota line live');
   await page.fill('[data-testid=est-text]', 'Chicken salad wrap: wholemeal wrap, grilled chicken breast, lettuce, tomato, a little mayo. Plus a regular flat white with full-cream milk.');
   await page.fill('[data-testid=est-portion]', 'about 120 g chicken'); await shot(page, 'input');
   const t0 = Date.now(); await page.click('[data-testid=est-go]');
@@ -34,14 +34,8 @@ const waitReview = async (page) => { await page.waitForSelector('[data-testid=es
     await page.evaluate(() => scrollTo(0, 0)); await shot(page, 'review');
     await page.click('[data-testid=est-log]'); await page.waitForSelector('[data-testid=est-badge]'); log('logged; badges:', await page.locator('[data-testid=est-badge]').count());
     await page.locator('.card', { hasText: 'Lunch' }).first().scrollIntoViewIfNeeded(); await page.waitForSelector('.toast', { state: 'detached', timeout: 5000 }).catch(() => {}); await shot(page, 'diary');
-    // cap: mirror shows the used card; a retry with the mirror cleared is refused by the server
-    await page.click('[data-testid=est-open-dinner]'); await page.waitForSelector('[data-testid=est-used]'); log('used card:', (await page.textContent('[data-testid=est-used]')).trim());
-    await shot(page, 'used');
-    await page.evaluate(() => localStorage.removeItem('estQuota')); await page.reload(); await page.waitForSelector('[data-testid=est-used], [data-testid=est-text]');
-    if (await page.locator('[data-testid=est-used]').count()) log('server /status already reports 0 left'); else {
-      await page.fill('[data-testid=est-text]', 'a banana'); await page.click('[data-testid=est-go]'); await page.waitForSelector('[data-testid=est-error]');
-      if ((await page.getAttribute('[data-testid=est-error]', 'data-kind')) !== 'limit') fail('second estimate not blocked by the server'); }
-    // a cleared-storage "new device" on the same network can still get one (network allowance x3) – not exercised here to save the allowance
+    // 3/day: the next open shows 2 left (the 2nd-estimate / 4th-blocked check is done against the Worker directly, see tests/estimate-cap-live.mjs)
+    await page.click('[data-testid=est-open-dinner]'); await page.waitForSelector('[data-testid=est-quota]'); const q2 = (await page.textContent('[data-testid=est-quota]')).trim(); log('after one:', q2); if (q2 !== 'Smart Estimate: 2 left today') fail('quota after one estimate');
   }
   await ctx.close(); }
 

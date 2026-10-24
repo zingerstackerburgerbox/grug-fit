@@ -5,7 +5,7 @@ import { go, useSettings } from '../hooks';
 import type { DiaryEntry, Meal } from '../types';
 import { NumInput, Top, toast } from '../ui';
 import { r0, r1, uid, ymd } from '../util';
-import { EST_DAILY_CAP, EstError, fetchEstQuota, photoToDataUrl, readEstQuota, resetTime, runEstimate, type EstItem, type EstQuota, type EstResult } from '../estimate';
+import { EST_DAILY_CAP, EstError, fetchEstQuota, photoToDataUrl, readEstQuota, usedText, runEstimate, type EstItem, type EstQuota, type EstResult } from '../estimate';
 import { MEALS } from './Nutrition';
 
 const CONF: Record<string, string> = { low: 'Low confidence', med: 'Medium confidence', high: 'High confidence' };
@@ -63,7 +63,7 @@ export function EstimatePage({ date: date0, meal: meal0 }: { date: string; meal:
     {ready && notice && <EstimateNotice onOk={okNotice} onManual={manual} />}
     {!res && <>
       {used ? <div class="card col" data-testid="est-used" style="border-color:var(--warn)">
-        <div class="sm">You've used today's Smart Estimate. It resets at {resetTime(q?.resetAt)}. You can still enter food manually.</div>
+        <div class="sm">{usedText(q?.resetAt, q?.cap || EST_DAILY_CAP)}</div>
         {/* room for a future 'More with Lunk Pro' line (no paid UI yet) */}
         <button class="btn p" data-testid="est-used-manual" onClick={manual}>Enter manually</button></div>
       : <div class="col" style="gap:10px">

@@ -30,7 +30,7 @@ Food tab › "≈ Estimate" (on each meal, and on the Add food screen) opens `#/
 editable per-item estimate (name, grams, kcal, protein, carbs, fat), and nothing is saved until you tap Log. Logged items are normal diary entries with an
 `est` flag (shown as "≈ est.") and no saved food. A one-time notice (`settings.estNotice`) comes first and also covers sending the description or photo.
 Requests go to the coach proxy's `POST /estimate`, which builds the prompt, checks the JSON reply and enforces the daily cap
-(`EST_DAILY_CAP`, 1 per device per UTC day, ×3 per network). Only successful estimates count, the owner token bypasses the cap, and coach messages aren't used.
+(`EST_DAILY_CAP`, 3 per device per UTC day since v1.10.1, ×3 = 9 per network). Only successful estimates count, the owner token bypasses the cap, and coach messages aren't used.
 The user-facing copy never says "AI". Photos are shrunk in memory (≤1024 px JPEG), sent once and never stored. Code: `src/estimate.ts`, `src/pages/Estimate.tsx`.
 
 ## Name (v1.9.4)

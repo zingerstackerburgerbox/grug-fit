@@ -19,7 +19,7 @@ const DEFAULTS = {
   MAX_INPUT_CHARS: '24000',
   MAX_MESSAGES: '40',
   MAX_TOKENS: '1200',
-  EST_DAILY_CAP: '1',
+  EST_DAILY_CAP: '3',
   EST_NETWORK_MULT: '3',
   EST_MAX_IMAGE_CHARS: '1500000',
   EST_MAX_TOKENS: '1500',
@@ -112,7 +112,7 @@ async function estimate(request, env, cors, ctx0) {
   if (image && (image.length > int(env, 'EST_MAX_IMAGE_CHARS') || !DATA_URL.test(image))) return err(400, 'bad_image', 'Photo must be a JPEG/PNG/WebP under ~1 MB.', h);
   if (!text && !image) return err(400, 'bad_request', 'Describe what you ate (or add a photo).', h);
   if (!owner) {
-    if (d >= cap) return err(429, 'est_limit', `You've used today's Smart Estimate.`, h, { remaining: 0, cap, resetAt: resetAt() });
+    if (d >= cap) return err(429, 'est_limit', cap === 1 ? `You've used today's Smart Estimate.` : `You've used today's Smart Estimates.`, h, { remaining: 0, cap, resetAt: resetAt() });
     if (i >= capNet) return err(429, 'est_ip_limit', `Today's Smart Estimates for this network are used up.`, h, { remaining: 0, cap: capNet, resetAt: resetAt() });
     if (g >= capG) return err(429, 'global_limit', 'Smart Estimate is busy today. Try again tomorrow.', h, { remaining: 0, resetAt: resetAt() });
     if (env.COACH_RL) { const { success } = await env.COACH_RL.limit({ key: ip }).catch(() => ({ success: true })); if (!success) return err(429, 'rate_limited', 'Too many requests in a short time – wait a minute and try again.', h, { retryAfter: 60 }); }
