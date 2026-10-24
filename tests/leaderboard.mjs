@@ -1,3 +1,4 @@
+import fs from 'fs';
 // v1.12.0 Leaderboard, training-only since v1.12.1 (mocked network, but the REAL coach-proxy Worker code runs in-process behind https://coach.test with an in-memory KV):
 // Review card + result-screen button, first-open opt-in ("Just look" sends nothing), empty state, other lunks ranked with medals,
 // joining (payload = username + kind + two integers only; daily score = Home Training stars score), own row highlighted, Daily tab,
@@ -108,6 +109,6 @@ await page.goto(BASE + '#/leaderboard'); await page.waitForSelector('[data-testi
 await page.waitForSelector('[data-testid=lb-error]'); log('offline:', (await page.textContent('[data-testid=lb-error] .sm')).trim()); await ctx.setOffline(false);
 await page.click('[data-testid=lb-retry]'); await page.waitForSelector('[data-testid=lb-list-weekly]'); log('retry online → board back');
 if (/\bAI\b/.test(await page.textContent('body'))) fail('"AI" in leaderboard copy');
-await page.goto(BASE + '#/settings'); const ver = (await page.textContent('[data-testid=app-version]')).trim(); if (ver !== '1.12.1') fail('version ' + ver); else log('About: v' + ver, '·', (await page.textContent('[data-testid=whats-new]')).trim());
+await page.goto(BASE + '#/settings'); const ver = (await page.textContent('[data-testid=app-version]')).trim(); if (ver !== JSON.parse(fs.readFileSync('package.json', 'utf8')).version) fail('version ' + ver); else log('About: v' + ver, '·', (await page.textContent('[data-testid=whats-new]')).trim());
 await b.close();
 if (failed) { console.error(failed, 'failure(s)'); process.exit(1); } console.log('LEADERBOARD E2E PASSED');

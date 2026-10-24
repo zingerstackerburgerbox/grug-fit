@@ -6,7 +6,7 @@ import { go, useQuery, useSettings } from '../hooks';
 import type { DiaryEntry, DoseLog, Food, Meal, Nutrients, Serving, Settings, Supplement } from '../types';
 import { Bar, BarChart, NumInput, Ring, Seg, Sheet, Top, confirmDo, num, toast } from '../ui';
 import { addDays, energy, fmtDay, fmtDM, MICROS, netCarbs, r0, r1, scaleN, sumN, uid, ymd, EMPTY, NKEYS, parseYmd, WD } from '../util';
-import { lookupBarcode, searchOFF } from '../off';
+import { lookupLocal, lookupOnline, searchFoods } from '../foodlookup';
 import { lookupFDC, FdcBusy } from '../fdc';
 import { amountText, baseUnit, BUILTIN_SERVINGS, convertQty, defaultServingOf, isBase, matchUnit, normaliseServings, servingsOf, unitLabel, unitsFor, type ServingOverride } from '../servings';
 import { Scanner } from '../scanner';
@@ -247,10 +247,11 @@ export function AddFood({ date, meal }: { date: string; meal: Meal }) {
     if (!q.trim()) return; setTab('search'); setErr(''); setNotFound(null);
     if (/^\d{8,14}$/.test(q.trim())) { await barcode(q.trim()); return; }
     setBusy(true); setRes(null);
-    try { setRes(await searchOFF(q.trim())); } catch (e: any) { setErr(navigator.onLine ? 'Open Food Facts search failed (' + (e?.message || 'error') + '). Try again shortly.' : 'You are offline — showing your saved foods only.'); setRes([]); }
+    const r = await searchFoods(q.trim(), setRes); setRes(r.foods); // offline pack hits show instantly, online results are appended
+    if (r.error) setErr(navigator.onLine ? 'Open Food Facts search failed (' + r.error + '). Try again shortly.' : 'You are offline — showing your saved foods only.');
     setBusy(false);
   };
-  /** Lookup order: 1) saved/custom foods  2) Open Food Facts  3) USDA FoodData Central (Branded)  4) not-found card. */
+  /** Lookup order: 1) saved/custom foods  2) offline Australian pack  3) Open Food Facts (via the Worker, else direct)  4) USDA FoodData Central (Branded)  5) not-found card. */
   const barcode = async (code: string) => {
     setErr(''); setNotFound(null); setUsdaNote(''); setDiag('');
     const local = await byBarcode(code);
@@ -261,9 +262,12 @@ export function AddFood({ date, meal }: { date: string; meal: Meal }) {
       const ex = await get<Food>('foods', f.id); const keep = await applyServingOverride(ex ? { ...f, lastServing: ex.lastServing, useCount: ex.useCount, lastUsed: ex.lastUsed, servings: [...f.servings, ...(ex.servings || []).filter((x) => x.kind === 'custom')], userServings: ex.userServings, defaultServing: ex.defaultServing } : f);
       await put('foods', keep); setLookup(''); setScan(false); setPartialName(''); setPick(keep);
     };
+    const t0 = Date.now(); const d: string[] = [];
+    const pk = await lookupLocal(code); if (pk) { await remember(pk); return; }
+    d.push('offline pack: not found');
     setLookup(`Looking up ${code} on Open Food Facts…`);
-    let partial = '', offErr = ''; const t0 = Date.now(); const d: string[] = [];
-    try { const f = await lookupBarcode(code); if (f && 'partial' in f) { partial = f.partial; d.push('OFF: found, no nutrition data'); } else if (f) { await remember(f); return; } else d.push('OFF: not found'); }
+    let partial = '', offErr = '';
+    try { const { food: f, via } = await lookupOnline(code); const src = via === 'proxy' ? 'OFF' : 'OFF (direct)'; if (f && 'partial' in f) { partial = f.partial; d.push(src + ': found, no nutrition data'); } else if (f) { await remember(f); return; } else d.push(src + ': not found'); }
     catch (e: any) { offErr = e?.message || 'network error'; d.push('OFF: ' + offErr); }
     const finish = (note: string, e = '') => {
       if (empty) d.push('saved food with this barcode has no nutrition');
@@ -386,7 +390,7 @@ export function RecipeEdit({ id }: { id: string }) {
       <div class="xs mut" style="margin-top:4px">Whole recipe: {r0(totalG)} g, {energy(tot.kcal, s)} {eu(s)}</div></div>
     {id !== 'new' && <button class="btn d" onClick={async () => { if (confirmDo('Delete recipe?')) { await del('foods', r.id); history.back(); } }}>Delete recipe</button>}
     <Sheet open={add} onClose={() => setAdd(false)} title="Add ingredient"><div class="col">
-      <form class="row" onSubmit={async (e) => { e.preventDefault(); if (!q.trim()) return; setBusy(true); try { setRes(await searchOFF(q)); } catch { toast('Search failed'); } setBusy(false); }}>
+      <form class="row" onSubmit={async (e) => { e.preventDefault(); if (!q.trim()) return; setBusy(true); const r = await searchFoods(q.trim(), setRes); setRes(r.foods); if (r.error) toast('Search failed'); setBusy(false); }}>
         <input type="search" value={q} onInput={(e) => setQ(e.currentTarget.value)} placeholder="Search saved foods / Open Food Facts" /><button class="btn p" type="submit">🔍</button></form>
       {busy && <div class="mut sm">Searching…</div>}
       <div class="list">{[...local, ...res].map((f) => <FoodRow f={f} s={s} onPick={() => pickIng(f)} />)}</div>

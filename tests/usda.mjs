@@ -9,7 +9,8 @@ const log = (...a) => console.log('•', ...a); let failed = 0;
 const fail = (m) => { console.error('FAIL:', m); failed++; };
 const near = (a, b, t = 0.15) => Math.abs(a - b) <= t;
 const b = await chromium.launch();
-const ctx = await b.newContext({ ...devices['Pixel 7'], colorScheme: 'dark' }); const page = await ctx.newPage(); page.setDefaultTimeout(15000);
+const ctx = await b.newContext({ ...devices['Pixel 7'], colorScheme: 'dark' }); await ctx.addInitScript(() => { localStorage.setItem('foodPack', '0'); localStorage.setItem('coachProxyUrl', 'https://REPLACE-ME.test'); }); // v1.13.0: exercise the direct Open Food Facts path these mocks target
+const page = await ctx.newPage(); page.setDefaultTimeout(15000);
 page.on('pageerror', (e) => fail('pageerror ' + e.message));
 const idb = (store, id) => page.evaluate(([store, id]) => new Promise((res) => { const r = indexedDB.open('grugfit'); r.onsuccess = () => { const q = r.result.transaction(store).objectStore(store).get(id); q.onsuccess = () => { res(q.result); r.result.close(); }; }; }), [store, id]);
 await page.goto(BASE); await page.fill('[data-testid=ob-username]', 'grug_tester').then(() => page.click('[data-testid=ob-next]')).then(() => page.click('[data-testid=ob-skip]')); await page.waitForSelector("text=Today's nutrition");

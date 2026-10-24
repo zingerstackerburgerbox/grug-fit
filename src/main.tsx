@@ -16,6 +16,7 @@ import { EstimatePage } from './pages/Estimate';
 import { ReviewPage } from './pages/Review';
 import { LeaderboardPage } from './pages/Leaderboard';
 import { initLeaderboard } from './leaderboard';
+import { initOffpack } from './offpack';
 import { CalendarPage, SuppEdit, SuppsPage } from './pages/Supps';
 import { SettingsPage } from './pages/Settings';
 import { Onboarding } from './pages/Onboarding';
@@ -94,7 +95,7 @@ function App() {
     init().then(() => checkStale()).catch(() => null).then(async () => {
       const p = await pv; setPriv(p.private ? (privateDismissed() ? 'warn' : 'block') : 'no'); document.documentElement.dataset.private = p.reason;
       const ob = !!(await getSettings().catch(() => ({} as any))).onboarded; setOnboard(!ob); setReady(true);
-      if (ob) { armPersist(); protectStorage(); } scheduleReminders(); showUpdatedToast(); initLeaderboard(); });
+      if (ob) { armPersist(); protectStorage(); } scheduleReminders(); showUpdatedToast(); initLeaderboard(); initOffpack(); });
     const v = () => { if (document.visibilityState === 'visible') { scheduleReminders(); checkStale(); } };
     document.addEventListener('visibilitychange', v); const t = setInterval(() => checkStale(), 60e3);
     return () => { document.removeEventListener('visibilitychange', v); clearInterval(t); };

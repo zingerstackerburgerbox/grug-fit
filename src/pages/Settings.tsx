@@ -18,6 +18,7 @@ import { KCAL_EXPLAIN } from '../setKcal';
 import { ImportSection } from './Import';
 import { InstallSetting } from './Install';
 import { StorageCard } from './Private';
+import { ensurePack, loadPackStatus, packStatus, type PackStatus } from '../offpack';
 import { AppearanceSettings } from './Appearance';
 import { GOAL_LABEL, ageFromBirthYear, bmr, eatBackOn, latestWeight, sedentaryBurn, type Goal } from '../energy';
 import { go, useQuery } from '../hooks';
@@ -117,7 +118,7 @@ export function SettingsPage() {
       <label class="row sm"><input type="checkbox" style="width:24px;min-height:24px" data-testid="fact-setting" checked={(s.factCard || 'open') !== 'off'} onChange={(e) => save({ factCard: e.currentTarget.checked ? 'open' : 'off' })} /> Show “Fitness fact of the day” on Home</label>
       <div class="mut xs">Dates are shown as DD/MM/YYYY. Food quantities in grams.</div></div>
     <h2>Food lookup</h2>
-    <div class="card col"><UsdaKeyField />
+    <div class="card col"><OfflinePackLine /><UsdaKeyField />
       <div class="mut xs">Barcodes Open Food Facts doesn't know are checked in USDA FoodData Central (US branded foods). The shared DEMO_KEY allows only ~30 lookups an hour; a <a href="https://fdc.nal.usda.gov/api-key-signup" target="_blank" rel="noopener">free personal key</a> raises that to 1,000.</div></div>
     <h2>Coach</h2>
     <CoachSettings />
@@ -138,12 +139,12 @@ export function SettingsPage() {
     <button class="btn d" onClick={async () => { if (confirmDo('Delete ALL data (workouts, diary, supplements, settings)? This cannot be undone.') && confirmDo('Really? Export a backup first if unsure.')) { if ((await getSettings()).lbJoin) await leaveBoard(); await clearAll(); localStorage.removeItem('rest'); toast('All data cleared'); } }}>Clear all data</button>
     <h2>About</h2>
     <div class="card col" data-testid="about"><div class="row between"><b>Lunk v<span data-testid="app-version">{APP_VERSION}</span></b><span class="mut sm">built {fmtDate(new Date(BUILD_TIME))} {fmtTime(+new Date(BUILD_TIME))}</span></div>
-      <div class="xs" data-testid="whats-new">New in v1.12: 🏆 training leaderboard (ranked by your Training stars score). Open it from Grug's Review on Home; join or leave here under Training leaderboard.</div>
+      <div class="xs" data-testid="whats-new">New in v1.13: ⚡ faster barcode scans. About 30,000 products sold in Australia are kept on this device, so most scans and searches are instant and work offline.</div>
       <div class="mut xs">Build <span data-testid="build-id">{BUILD_ID}</span> · updates install automatically (checked on launch, when you return to the app, and every 30 min). Your data stays on the device across updates.</div>
       <button class="btn sm" onClick={async () => { const r = await navigator.serviceWorker?.getRegistration(); if (!r) { toast('Updates unavailable (no service worker)'); return; } await r.update().catch(() => {}); toast(r.installing || r.waiting ? 'Update found – installing…' : 'You have the latest version'); }}>Check for updates</button></div>
       <button class="btn sm" data-testid="ocr-offline" onClick={async () => { toast('Downloading label scanner (~6 MB)…'); try { const m = await import('../ocr/ocr'); await m.prefetchOcr(); toast('Label scanning is ready offline'); } catch (e: any) { toast('Download failed: ' + (e?.message || e)); } }}>📷 Make label scanning available offline</button>
     <AdminCode />
-    <div class="mut xs center" style="margin-top:10px">Food data from Open Food Facts (ODbL)</div>
+    <div class="mut xs center" style="margin-top:10px" data-testid="off-credit">Food data from <a href="https://world.openfoodfacts.org" target="_blank" rel="noopener">Open Food Facts</a>, <a href="https://opendatacommons.org/licenses/odbl/1-0/" target="_blank" rel="noopener">ODbL</a><PackDate /></div>
   </div></>;
 }
 
@@ -179,4 +180,21 @@ function AdminCode() {
       <button class="btn sm p" type="submit" disabled={busy || !code.trim()} data-testid="admin-unlock">{busy ? 'Checking…' : 'Unlock'}</button>
       {msg && <div class="sm" style="color:var(--warn)" role="alert" data-testid="admin-msg">{msg}</div>}
       <div class="mut xs">Only for the app owner. The code is checked by the Lunk service and isn't stored on this phone.</div></form>}</div>;
+}
+
+const fmtPackDate = (d?: string) => (d ? new Date(d + 'T12:00:00').toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' }) : '');
+function usePack() {
+  const [st, setSt] = useState<PackStatus>(packStatus());
+  useEffect(() => { const on = (e: Event) => setSt({ ...(e as CustomEvent).detail }); addEventListener('lunk-offpack', on); loadPackStatus().then((x) => setSt({ ...x })).catch(() => null); return () => removeEventListener('lunk-offpack', on); }, []);
+  return st;
+}
+function PackDate() { const st = usePack(); return st.date ? <> · offline pack data {fmtPackDate(st.date)}</> : null; }
+/** v1.13.0: one quiet line about the on-device Australian food pack, with a refresh link. */
+function OfflinePackLine() {
+  const st = usePack();
+  const txt = st.state === 'ready' ? `${st.count.toLocaleString('en-AU')} Australian products on this device · data ${fmtPackDate(st.date)}`
+    : st.state === 'loading' ? `downloading… ${Math.round((st.done / (st.total || 16)) * 100)}%`
+      : st.state === 'error' ? `couldn't download (${st.error || 'offline?'})` : 'not downloaded yet';
+  return <div class="row between xs mut" data-testid="offpack-status" data-state={st.state}><span>Offline food pack: {txt}</span>
+    {st.state !== 'loading' && <button class="btn sm" style="min-height:28px;padding:2px 10px" data-testid="offpack-refresh" onClick={() => { if (!navigator.onLine) { toast("You're offline"); return; } ensurePack(true).then((x) => toast(x.state === 'ready' ? 'Offline food pack is up to date' : 'Download failed – try again later')); }}>{st.state === 'ready' ? 'Refresh' : 'Download'}</button>}</div>;
 }

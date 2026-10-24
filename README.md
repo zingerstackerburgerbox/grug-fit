@@ -16,7 +16,7 @@ Deploy `dist/` to any static HTTPS host (GitHub Pages, Netlify, Cloudflare Pages
 - Reminders: the Web has no reliable scheduled alarms on Android. Reminders are timers in the service worker / page and fire
   only while Chrome keeps the app alive. Notification Triggers (`TimestampTrigger`) are used automatically if the browser
   supports them (Chrome doesn't ship it by default).
-- Open Food Facts text search (cgi/search.pl) is rate-limited and sometimes returns 503; the app retries. Barcode lookup is reliable.
+- Open Food Facts text search (cgi/search.pl) is rate-limited and sometimes returns 503; the Worker caches searches and falls back to search-a-licious, and the app falls back to direct OFF with retries. Offline pack results show regardless.
   search.openfoodfacts.org doesn't send CORS headers, so it's only a fallback.
 - Micronutrients exist only where OFF/custom foods have data.
 - Data is local-only: export JSON backups from Settings.
@@ -24,6 +24,14 @@ Deploy `dist/` to any static HTTPS host (GitHub Pages, Netlify, Cloudflare Pages
 ## Steps (v1.9.1)
 Steps are typed in per day (Workout tab › Steps, any date; optional goal in Settings › Steps). Calories above the first
 2,000 steps a day are added to burned-today (stride from height, 0.5 kcal per kg per km); see `src/steps.ts`.
+
+## Fast Australian food lookups (v1.13.0)
+- **Offline pack**: `public/offpack/` holds ~30,000 products sold in Australia (OFF `countries_tags` contains `en:australia`, with a barcode, a name and kcal/100 g; most-scanned / most complete first), built from the official Open Food Facts bulk CSV export by `node scripts/build-au-pack.mjs <en.openfoodfacts.org.products.csv.gz> [max=30000] [YYYY-MM-DD]` (~90 s). 16 JSON shards keyed by the barcode's last two digits mod 16 (~3.5 MB raw, ~1.4 MB gzip as served by GitHub Pages) + `meta.json` (version/date/count). Not precached and not in the JS bundle: the app downloads it into its own IndexedDB database `grugfit-offpack` a few seconds after start-up (skipped with Data Saver), re-checks `meta.json` at most every 12 h, and fetches just one shard on demand if a scan comes first. Settings → Food lookup shows the status line with Refresh; About shows the ODbL credit and pack date. Rebuild + commit the shards to refresh the data (new `version` → devices re-download).
+- **Lookup order** (barcode): saved foods → offline pack → coach-proxy `GET /food/barcode` (edge-cached OFF, trimmed fields, 6 s timeout, UPC/EAN variants in parallel) → direct OFF (only if the Worker fails) → USDA → not-found card. Every hit is saved as a food, so a rescan is instant and offline.
+- **Search**: pack matches show immediately ("weet-bix", "weetbix"), then online results (`GET /food/search` via the Worker, else direct OFF) are appended; online results are cached on the device for 7 days and used offline.
+- Test switch: `localStorage.foodPack = '0'` disables the pack (used by the older OFF-mock tests together with a REPLACE-ME `coachProxyUrl`). `localStorage.offpackAuto = '0'` disables only the background download.
+- FSANZ AFCD (generic whole foods) was considered but not bundled: its licence is CC BY-SA 3.0 AU-based with extra notice terms (share-alike + limitation statement on every copy), and it has no barcodes.
+- Food data © Open Food Facts contributors, [ODbL](https://opendatacommons.org/licenses/odbl/1-0/).
 
 ## Training leaderboard (v1.12.0, training-only since v1.12.1)
 - **Where:** "🏆 View leaderboard" on the Grug's Review card (Home) and on the review result screen → `#/leaderboard`, tabs **Weekly**

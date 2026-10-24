@@ -17,7 +17,11 @@
  * v1.12.0: leaderboard (opt-in). POST /leaderboard/submit {deviceId, username, kind:'training' (v1.12.1), daily:{score,date}, weekly:{score,weekKey}},
  * POST /leaderboard/leave, GET /leaderboard?period=weekly|daily (top 50 + the caller's own rank). KV `lb:e:<device>`; submits are
  * rate-limited per device and per hashed network per hour. Viewing never counts against chat, estimate or review limits.
+ * v1.13.0: GET /food/barcode?code= and GET /food/search?q= (src/food.js): Open Food Facts lookups with trimmed fields, a 6 s timeout,
+ * barcode variants in parallel and isolate + KV caching (`food:b:` / `food:s:` keys). No xAI key, no coach counters.
  */
+import { food } from './food.js';
+export { food };
 const DEFAULTS = {
   MODEL: 'grok-4.7',
   UPSTREAM_URL: 'https://api.x.ai/v1/chat/completions',
@@ -52,7 +56,7 @@ const resetAt = (now = Date.now()) => { const d = new Date(now); d.setUTCHours(2
 
 function corsHeaders(origin) {
   return { 'Access-Control-Allow-Origin': origin, 'Vary': 'Origin', 'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, X-Device-Id, X-Owner-Token, X-Admin-Token', 'Access-Control-Expose-Headers': 'X-Coach-Remaining, X-Coach-Cap, X-Coach-Reset, X-Est-Remaining, X-Est-Cap, X-Review-Remaining', 'Access-Control-Max-Age': '86400' };
+    'Access-Control-Allow-Headers': 'Content-Type, X-Device-Id, X-Owner-Token, X-Admin-Token', 'Access-Control-Expose-Headers': 'X-Coach-Remaining, X-Coach-Cap, X-Coach-Reset, X-Est-Remaining, X-Est-Cap, X-Review-Remaining, X-Food-Cache, Server-Timing', 'Access-Control-Max-Age': '86400' };
 }
 const json = (status, body, headers = {}) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', ...headers } });
 const err = (status, error, message, cors, extra = {}) => json(status, { error, message, ...extra }, cors);
@@ -426,6 +430,8 @@ export default {
     if ((url.pathname === '/admin' || url.pathname === '/admin/remove') && request.method === 'POST') return admin(request, env, cors, url, device, ip);
     // v1.12.0 leaderboard: never touches chat / estimate / review counters and needs no xAI key
     if (url.pathname === '/leaderboard' || url.pathname.startsWith('/leaderboard/')) return leaderboard(request, env, cors, url, device, ip, owner);
+    // v1.13.0 food lookups (Open Food Facts, edge-cached): no xAI key, no coach counters
+    if (url.pathname.startsWith('/food/')) return food(request, env, cors, url, ip, owner);
     const c = await counts(env, device, ip, day);
     const remaining = owner ? null : Math.max(0, Math.min(capD - c.d, capI - c.i, capG - c.g));
     const limitHeaders = { 'X-Coach-Remaining': owner ? 'unlimited' : String(remaining), 'X-Coach-Cap': owner ? 'unlimited' : String(capD), 'X-Coach-Reset': resetAt() };

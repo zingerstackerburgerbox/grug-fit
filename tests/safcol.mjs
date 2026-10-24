@@ -14,7 +14,8 @@ const PRODUCT = { code: CODE, product_name: 'No Net Tuna in Spring Water', produ
 const b = await chromium.launch();
 
 // ---------- lookup ----------
-const ctx = await b.newContext({ ...devices['Pixel 7'], colorScheme: 'dark' }); const page = await ctx.newPage(); page.setDefaultTimeout(20000);
+const ctx = await b.newContext({ ...devices['Pixel 7'], colorScheme: 'dark' }); await ctx.addInitScript(() => { localStorage.setItem('foodPack', '0'); localStorage.setItem('coachProxyUrl', 'https://REPLACE-ME.test'); }); // v1.13.0: exercise the direct Open Food Facts path these mocks target
+const page = await ctx.newPage(); page.setDefaultTimeout(20000);
 page.on('pageerror', (e) => fail('pageerror ' + e.message));
 let mode = 'ok', calls = [];
 await ctx.route(/openfoodfacts\.org\/api\/v\d\/product\/9310768114941/, async (r) => {
