@@ -61,7 +61,7 @@ export type Settings = {
   coachKey?: string; coachOwnerToken?: string; coachConsent?: number;
   /** v1.9.1 manual steps: daily goal (undefined = 8,000, 0 = no goal) */
   stepGoal?: number;
-  /** v1.9.2 on-device display name (never sent anywhere; a future account id would be separate) */
+  /** v1.9.2 display name, kept on this device (sent only if you join the v1.12.0 leaderboard; a future account id would be separate) */
   username?: string;
   /** Home 'Fitness fact of the day' card: open (default), collapsed, or off */
   factCard?: 'open' | 'collapsed' | 'off';
@@ -75,6 +75,8 @@ export type Settings = {
   workoutGoal?: number;
   /** v1.11.0 per-device admin token issued by the coach proxy after a valid admin code (the code itself is never stored) */
   adminToken?: string;
+  /** v1.12.0 leaderboard: opted in (shares username + Grug rating), and when the first-open question was answered */
+  lbJoin?: boolean; lbAsked?: number;
   /** onboarding finished/skipped (timestamp) */
   onboarded?: number;
 };

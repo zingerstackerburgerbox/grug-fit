@@ -33,8 +33,10 @@ export function db() {
 }
 export const all = async <T = any>(s: StoreName): Promise<T[]> => (await db()).getAll(s);
 export const get = async <T = any>(s: StoreName, id: string): Promise<T | undefined> => (await db()).get(s, id);
-export const put = async (s: StoreName, v: any) => { await (await db()).put(s, v); bump(); onWrite(); };
-export const del = async (s: StoreName, id: string) => { await (await db()).delete(s, id); bump(); };
+export const put = async (s: StoreName, v: any) => { await (await db()).put(s, v); bump(); onWrite(); logged(s, v?.id); };
+export const del = async (s: StoreName, id: string) => { await (await db()).delete(s, id); bump(); logged(s, id); };
+/** v1.12.0: food, a workout, doses or steps changed → the leaderboard may re-submit (debounced, opt-in only; see leaderboard.ts) */
+const logged = (s: StoreName, id?: string) => { if ((s === 'diary' || s === 'workouts' || s === 'doselogs' || (s === 'kv' && id === 'stepLog')) && typeof dispatchEvent === 'function') dispatchEvent(new Event('lunk-logged')); };
 export const byDate = async <T = any>(s: StoreName, from: string, to: string): Promise<T[]> => (await db()).getAllFromIndex(s, 'date', IDBKeyRange.bound(from, to));
 export const byBarcode = async (code: string) => (await db()).getFromIndex('foods', 'barcode', code);
 

@@ -25,6 +25,18 @@ Deploy `dist/` to any static HTTPS host (GitHub Pages, Netlify, Cloudflare Pages
 Steps are typed in per day (Workout tab › Steps, any date; optional goal in Settings › Steps). Calories above the first
 2,000 steps a day are added to burned-today (stride from height, 0.5 kcal per kg per km); see `src/steps.ts`.
 
+## Leaderboard (v1.12.0)
+- **Where:** "🏆 View leaderboard" on the Grug's Review card (Home) and on the review result screen → `#/leaderboard`, tabs **Weekly**
+  (default) and **Daily**. Rows: rank (🥇🥈🥉 for the top 3), username, stars, score; your own row is highlighted. Top 50 plus your own rank.
+- **Grug rating** = the Home stars' Training and Nutrition scores averaged (out of 100, `src/leaderboard.ts` `lbScores()`, same functions as
+  `src/stars.ts`). Daily = today's rating (Sydney day). Weekly = the average of this week's daily ratings so far (each past day re-computed as it
+  stood at the end of that day; week = Monday 00:00 Sydney).
+- **Opt-in:** first open asks "Show me on the leaderboard" / "Just look"; Settings › Leaderboard joins or leaves (leaving deletes the entry on
+  the worker; if offline it's retried on the next open). Not joined = can still view. Only the username and the two integers are sent.
+- **Submitting:** when joined, quietly on app open / return to the app and after food, workout, dose or steps changes, at most once per
+  5 minutes, and only when the numbers changed (plus on opening the board). Worker side: see `coach-proxy/README.md`.
+- Scores are worked out on each phone, so a determined person could send a made-up (0–100) score.
+
 ## Grug's Review, star ratings, admin code (v1.11.0)
 - **Grug's Review** (Home card under the nutrition card → `#/review/new`): the last 7 days of workouts, food, doses and steps are summarised
   on the device (`src/review.ts` `snapshot()`, ≤14k chars, no username) and sent to the coach proxy's `POST /review`, which returns strict JSON
@@ -33,7 +45,7 @@ Steps are typed in per day (Workout tab › Steps, any date; optional goal in Se
   workouts-per-week goal. Anything else is dropped (worker and client). Reviews are kept on the device (`kv grugReviews`), can be saved
   (`#/review/saved`) and shared (Web Share image → text → PNG download + copied text). 1 free review a week (`REVIEW_WEEKLY_CAP`), resetting
   Monday 00:00 Sydney time, enforced on the worker (×3 per network); only successful reviews count.
-- **Stars** (`src/stars.ts`, free, instant, never sent): Training = consistency 40 (vs Settings › workouts-per-week goal, default 3),
+- **Stars** (`src/stars.ts`, free, instant; only the combined score is sent, and only if you join the leaderboard): Training = consistency 40 (vs Settings › workouts-per-week goal, default 3),
   progressive overload 30, volume balance 20, movement 10; Nutrition = calories 35, protein 35, logging 20, supplements 10. A part that
   doesn't apply is left out and its points shared out. "Rating builds after 7 days" until 7 days of history.
 - **Coach chat cap**: 5 free messages per device per day (15 per network). People using their own xAI key call xAI directly and aren't capped.

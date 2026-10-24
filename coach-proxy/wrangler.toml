@@ -33,6 +33,11 @@ REVIEW_NETWORK_MULT = "3"
 REVIEW_MAX_TOKENS = "3000"
 # Admin code: wrong/right attempts per hour per device and per network. Secrets ADMIN_SALT + ADMIN_CODE_HASH (= sha256(ADMIN_SALT + ":" + CODE upper-cased)); the code itself is never stored.
 ADMIN_ATTEMPTS_PER_HOUR = "5"
+# v1.12.0 leaderboard (opt-in): submits per device / per hashed network per hour; top N returned; entries expire after LB_TTL_DAYS without a submit
+LB_SUBMITS_PER_HOUR = "20"
+LB_NETWORK_SUBMITS_PER_HOUR = "60"
+LB_TOP = "50"
+LB_TTL_DAYS = "21"
 ALLOWED_ORIGINS = "https://zingerstackerburgerbox.github.io,http://localhost:5173,http://localhost:4173,http://127.0.0.1:5173,http://127.0.0.1:4173"
 # Secrets (never in this file): XAI_API_KEY (required), IP_SALT (required for private IP hashing), OWNER_TOKEN (optional), ADMIN_SALT + ADMIN_CODE_HASH (optional)
 

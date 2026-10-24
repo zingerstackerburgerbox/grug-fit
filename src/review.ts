@@ -16,7 +16,7 @@ export const fmtShort = (d: string) => { const [y, m, dd] = d.split('-').map(Num
 export const fmtRange = (from: string, to: string) => { const a = fmtShort(from), b = fmtShort(to); return from.slice(0, 7) === to.slice(0, 7) ? `${a.replace(/ \w+$/, '')} – ${b}` : `${a} – ${b}`; };
 
 // ---------- Sydney week (same rule as the Worker: Monday 00:00 Australia/Sydney) ----------
-function sydYmd(ts: number) { const o: any = {}; for (const p of new Intl.DateTimeFormat('en-CA', { timeZone: 'Australia/Sydney', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date(ts))) o[p.type] = p.value; return `${o.year}-${o.month}-${o.day}`; }
+export function sydYmd(ts: number) { const o: any = {}; for (const p of new Intl.DateTimeFormat('en-CA', { timeZone: 'Australia/Sydney', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date(ts))) o[p.type] = p.value; return `${o.year}-${o.month}-${o.day}`; }
 export function sydWeek(now = Date.now()) {
   const d = sydYmd(now); const [y, m, dd] = d.split('-').map(Number); const dow = (new Date(Date.UTC(y, m - 1, dd)).getUTCDay() + 6) % 7;
   const mon = new Date(Date.UTC(y, m - 1, dd - dow)).toISOString().slice(0, 10); const next = new Date(Date.UTC(y, m - 1, dd - dow + 7)).toISOString().slice(0, 10);

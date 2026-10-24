@@ -1,33 +1,41 @@
 /** v1.9.2: username field (onboarding, one-time prompt for existing users, Settings › Profile). On-device only. */
 import { useEffect, useRef, useState } from 'preact/hooks';
+import { scheduleSubmit } from '../leaderboard';
 import { getSettings, put } from '../db';
 import { useQuery } from '../hooks';
 import { toast } from '../ui';
 import { cleanUsername, usernameError } from '../username';
 
-export async function saveUsername(v: string) { const u = cleanUsername(v); const cur = await getSettings(); await put('kv', { ...cur, username: u }); return u; }
+export async function saveUsername(v: string) { const u = cleanUsername(v); const cur = await getSettings(); await put('kv', { ...cur, username: u }); if (cur.lbJoin) scheduleSubmit(); return u; }
 
 export function UsernameField({ value, onInput, onEnter, autoFocus, tid = 'username-input' }: { value: string; onInput: (v: string) => void; onEnter?: () => void; autoFocus?: boolean; tid?: string }) {
   const ref = useRef<HTMLInputElement>(null); useEffect(() => { if (autoFocus) setTimeout(() => ref.current?.focus(), 50); }, []);
   return <input ref={ref} value={value} maxLength={24} autoCapitalize="none" autoCorrect="off" spellcheck={false} autoComplete="username" placeholder="e.g. erik_lifts" aria-label="Username"
     data-testid={tid} onInput={(e) => onInput(e.currentTarget.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); onEnter?.(); } }} />;
 }
-export const USERNAME_HINT = '3–20 characters: letters, numbers, _ or . Stays on this device.';
+export const USERNAME_HINT = '3–20 characters: letters, numbers, _ or . Stays on this device unless you join the leaderboard.';
 
-/** existing users who finished onboarding before v1.9.2: one quick, unskippable prompt */
-export function UsernameGate() {
-  const s = useQuery(getSettings, []); const [v, setV] = useState(''); const [err, setErr] = useState('');
-  if (!s || !s.onboarded || s.username) return null;
-  const save = async () => { const e = usernameError(v); if (e) return setErr(e); const u = await saveUsername(v); toast(`Hi, ${u} 👋`); };
+/** The username prompt (one modal, two uses): the unskippable one-time gate for existing users, and the leaderboard's
+ *  "pick a name first" step (v1.12.0, with Cancel). */
+export function UsernameModal({ title = 'Add a username', note = "Lunk now uses a username. It's only stored on this device.", onSaved, onCancel }: { title?: string; note?: string; onSaved?: (u: string) => void; onCancel?: () => void }) {
+  const [v, setV] = useState(''); const [err, setErr] = useState('');
+  const save = async () => { const e = usernameError(v); if (e) return setErr(e); const u = await saveUsername(v); toast(`Hi, ${u} 👋`); onSaved?.(u); };
   return <div class="modal-bg" data-testid="username-modal" role="dialog" aria-modal="true" aria-labelledby="un-h">
     <div class="modal col">
-      <h2 id="un-h" style="margin:0">Add a username</h2>
-      <div class="mut sm">Lunk now uses a username. It's only stored on this device.</div>
+      <h2 id="un-h" style="margin:0">{title}</h2>
+      <div class="mut sm">{note}</div>
       <UsernameField value={v} onInput={(x) => { setV(x); setErr(''); }} onEnter={save} autoFocus />
       <div class={err ? 'sm' : 'mut xs'} style={err ? 'color:var(--bad)' : ''} data-testid="username-err">{err || USERNAME_HINT}</div>
       <button class="btn p full" onClick={save} data-testid="username-save">Save</button>
+      {onCancel && <button class="btn g full sm" onClick={onCancel} data-testid="username-cancel">Cancel</button>}
     </div>
   </div>;
+}
+/** existing users who finished onboarding before v1.9.2: one quick, unskippable prompt */
+export function UsernameGate() {
+  const s = useQuery(getSettings, []);
+  if (!s || !s.onboarded || s.username) return null;
+  return <UsernameModal />;
 }
 
 /** Settings › Profile */

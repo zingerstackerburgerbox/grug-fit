@@ -291,3 +291,14 @@ details.tut ol { margin: 6px 0 6px; padding-left: 22px; line-height: 1.5; } deta
 .st i { color: color-mix(in srgb, var(--mut) 45%, var(--bg3)); font-style: normal; }
 .stars-row .why { font-size: 12px; color: var(--mut); overflow:hidden; text-overflow: ellipsis; white-space: nowrap; }
 @media (prefers-reduced-motion: reduce) { .rv-load .club, .rv-load .sp { animation: none; } }
+/* v1.12.0 leaderboard */
+.lb-list { padding: 4px 6px; }
+.lb-row { display:flex; align-items:center; gap: 10px; padding: 10px 8px; border-radius: 12px; }
+.lb-row + .lb-row { border-top: 1px solid var(--line); }
+.lb-row.me { background: var(--acc-soft); border: 1px solid color-mix(in srgb, var(--acc) 45%, var(--bg)); }
+.lb-row.me + .lb-row, .lb-row + .lb-row.me { border-top-color: transparent; }
+.lb-rank { width: 30px; text-align:center; font-weight: 800; font-size: 15px; font-variant-numeric: tabular-nums; flex:none; }
+.lb-name { font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lb-score { width: 32px; text-align: right; font-variant-numeric: tabular-nums; font-size: 16px; flex:none; }
+.lb-gap { text-align:center; line-height: 1; padding: 2px 0; }
+.lb .disc { font-size: 12px; color: var(--mut); text-align:center; margin: 14px 8px 0; }

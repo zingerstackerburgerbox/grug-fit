@@ -1,6 +1,6 @@
 /**
- * v1.9.2 username: a display name chosen at sign-up, kept ON THIS DEVICE ONLY (settings.username → part of Backup).
- * Never sent anywhere: the Coach context (coach.ts buildContext) deliberately leaves it out.
+ * v1.9.2 username: a display name chosen at sign-up, kept on this device (settings.username → part of Backup).
+ * The Coach context (coach.ts buildContext) deliberately leaves it out. v1.12.0: it is sent only if the user joins the leaderboard.
  * Future accounts/login will get their own separate account id; this stays a local display name.
  */
 export const USERNAME_RE = /^[A-Za-z0-9_.]{3,20}$/;

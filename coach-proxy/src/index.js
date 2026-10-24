@@ -14,6 +14,9 @@
  * 5 attempts/hour per device and per network). Success issues a random per-device admin token (only its SHA-256 is kept in KV) that
  * the app sends as X-Admin-Token; it bypasses every cap like OWNER_TOKEN. POST /admin/remove revokes it. The code is never in this repo.
  * Chat caps lowered in v1.11.0: 5 per device / 15 per network per UTC day.
+ * v1.12.0: leaderboard (opt-in). POST /leaderboard/submit {deviceId, username, daily:{score,date}, weekly:{score,weekKey}},
+ * POST /leaderboard/leave, GET /leaderboard?period=weekly|daily (top 50 + the caller's own rank). KV `lb:e:<device>`; submits are
+ * rate-limited per device and per hashed network per hour. Viewing never counts against chat, estimate or review limits.
  */
 const DEFAULTS = {
   MODEL: 'grok-4.7',
@@ -280,6 +283,119 @@ async function admin(request, env, cors, url, device, ip) {
   await env.COACH_KV.put(`adm:tok:${await sha256(token)}`, JSON.stringify({ device, created: Date.now() }), { expirationTtl: 400 * 86400 });
   return json(200, { token, admin: true }, cors);
 }
+// ---------- v1.12.0 Leaderboard ----------
+// One KV key per opted-in device: `lb:e:<deviceId>`. The entry (username + this Sydney day's and week's Grug rating) is stored as the
+// value AND as KV metadata, so GET /leaderboard is a single list() call. Only a username and two 0-100 integers are ever stored.
+// Scores are computed on the phone (same maths as the Home stars), so the server can only check shape and range, not truth.
+export const LB_PREFIX = 'lb:e:';
+const pad2 = (n) => String(n).padStart(2, '0');
+const addDaysStr = (d, n) => { const [y, m, dd] = d.split('-').map(Number); return new Date(Date.UTC(y, m - 1, dd + n)).toISOString().slice(0, 10); };
+/** Sydney local date (YYYY-MM-DD). */
+export const sydDay = (now = Date.now()) => { const p = sydParts(now); return `${p.y}-${pad2(p.m)}-${pad2(p.d)}`; };
+/** Current and previous leaderboard periods (Sydney day; Sydney week = its Monday). */
+export function lbPeriods(now = Date.now()) { const day = sydDay(now), week = sydWeek(now).week; return { day, prevDay: addDaysStr(day, -1), week, prevWeek: addDaysStr(week, -7) }; }
+// control chars (C0/C1), zero-width, bidi overrides/isolates, line/paragraph separators, BOM
+const LB_CTRL = /[\u0000-\u001F\u007F-\u009F\u200B-\u200F\u2028-\u202E\u2060-\u206F\uFEFF]/g;
+/** Trim, strip control/invisible characters, collapse spaces; 1–20 characters or null. */
+export function cleanLbName(v) {
+  if (typeof v !== 'string') return null;
+  const s = v.normalize('NFC').replace(LB_CTRL, '').replace(/\s+/g, ' ').trim(); const n = [...s].length;
+  return n >= 1 && n <= 20 ? s : null;
+}
+const lbScore = (v) => (typeof v === 'number' && Number.isInteger(v) && v >= 0 && v <= 100 ? v : null);
+export const lbStars = (score) => (score >= 90 ? 5 : score >= 75 ? 4 : score >= 60 ? 3 : score >= 40 ? 2 : 1); // same as the app's starsFor
+const YMD = /^\d{4}-\d\d-\d\d$/;
+/** Validate a submit body. Returns { error } or { name, daily: {date, score}|null, weekly: {week, score}|null }. */
+export function validSubmit(body, device, now = Date.now()) {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) return { error: 'Body must be a JSON object.' };
+  if (body.deviceId != null && body.deviceId !== device) return { error: 'deviceId does not match X-Device-Id.' };
+  const allowed = new Set(['deviceId', 'username', 'daily', 'weekly']); for (const k of Object.keys(body)) if (!allowed.has(k)) return { error: `Unexpected field "${k}".` };
+  const name = cleanLbName(body.username); if (!name) return { error: 'Username must be 1–20 characters.' };
+  const P = lbPeriods(now); let daily = null, weekly = null;
+  if (body.daily != null) {
+    const d = body.daily; if (typeof d !== 'object' || Object.keys(d).some((k) => k !== 'score' && k !== 'date')) return { error: 'daily must be {score, date}.' };
+    const sc = lbScore(d.score); if (sc == null) return { error: 'daily.score must be an integer 0–100.' };
+    if (typeof d.date !== 'string' || !YMD.test(d.date) || (d.date !== P.day && d.date !== P.prevDay)) return { error: 'daily.date must be today or yesterday (Sydney).' };
+    daily = { date: d.date, score: sc };
+  }
+  if (body.weekly != null) {
+    const w = body.weekly; if (typeof w !== 'object' || Object.keys(w).some((k) => k !== 'score' && k !== 'weekKey')) return { error: 'weekly must be {score, weekKey}.' };
+    const sc = lbScore(w.score); if (sc == null) return { error: 'weekly.score must be an integer 0–100.' };
+    if (typeof w.weekKey !== 'string' || !YMD.test(w.weekKey) || (w.weekKey !== P.week && w.weekKey !== P.prevWeek)) return { error: 'weekly.weekKey must be this or last week (Sydney Monday).' };
+    weekly = { week: w.weekKey, score: sc };
+  }
+  if (!daily && !weekly) return { error: 'Send daily and/or weekly.' };
+  return { name, daily, weekly };
+}
+/** Merge a valid submit into the stored entry (never replaces a newer period with an older one). Entry: {u, d:[date,score]|null, w:[week,score]|null, t}. */
+export function mergeEntry(old, sub, now = Date.now()) {
+  const e = { u: sub.name, d: old?.d || null, w: old?.w || null, t: now };
+  if (sub.daily && (!e.d || sub.daily.date >= e.d[0])) e.d = [sub.daily.date, sub.daily.score];
+  if (sub.weekly && (!e.w || sub.weekly.week >= e.w[0])) e.w = [sub.weekly.week, sub.weekly.score];
+  return e;
+}
+/** Rank rows ({id, u, score}) for one period: score desc, ties share a rank (1,1,3) and are listed by name; duplicate names get a short tag. */
+export function rankRows(rows, tagOf) {
+  const sorted = [...rows].sort((a, b) => b.score - a.score || a.u.localeCompare(b.u, 'en', { sensitivity: 'base' }) || (a.id < b.id ? -1 : 1));
+  const count = new Map(); for (const r of sorted) { const k = r.u.toLocaleLowerCase('en'); count.set(k, (count.get(k) || 0) + 1); }
+  let rank = 0, prev = null;
+  return sorted.map((r, i) => { if (r.score !== prev) { rank = i + 1; prev = r.score; } const dup = count.get(r.u.toLocaleLowerCase('en')) > 1;
+    return { id: r.id, rank, name: dup ? `${r.u} #${tagOf(r.id)}` : r.u, score: r.score, stars: lbStars(r.score) }; });
+}
+const LB_DEFAULTS = { LB_SUBMITS_PER_HOUR: 20, LB_NETWORK_SUBMITS_PER_HOUR: 60, LB_TOP: 50, LB_TTL_DAYS: 21 };
+const lbInt = (env, k) => { const v = parseInt(env[k], 10); return Number.isFinite(v) && v >= 0 ? v : LB_DEFAULTS[k]; };
+let lbCache = null; // per-isolate cache of the full list (KV list() is itself eventually consistent, ~60 s)
+async function lbListAll(env) {
+  if (lbCache && Date.now() - lbCache.at < 15000) return lbCache.rows;
+  const rows = []; let cursor;
+  for (let page = 0; page < 10; page++) {
+    const res = await env.COACH_KV.list({ prefix: LB_PREFIX, cursor, limit: 1000 });
+    for (const k of res.keys) if (k.metadata && typeof k.metadata.u === 'string') rows.push({ id: k.name.slice(LB_PREFIX.length), ...k.metadata });
+    if (res.list_complete || !res.cursor) break; cursor = res.cursor;
+  }
+  lbCache = { at: Date.now(), rows }; return rows;
+}
+async function lbRate(env, device, ip, owner) {
+  if (owner) return null;
+  const hr = new Date().toISOString().slice(0, 13); const kd = `lbs:${hr}:d:${device}`, ki = `lbs:${hr}:i:${ip}`;
+  const [nd, ni] = (await Promise.all([env.COACH_KV.get(kd), env.COACH_KV.get(ki)])).map((x) => parseInt(x || '0', 10));
+  if (nd >= lbInt(env, 'LB_SUBMITS_PER_HOUR')) return 'lb_rate_limited';
+  if (ni >= lbInt(env, 'LB_NETWORK_SUBMITS_PER_HOUR')) return 'lb_ip_rate_limited';
+  await Promise.all([env.COACH_KV.put(kd, String(nd + 1), { expirationTtl: 7200 }), env.COACH_KV.put(ki, String(ni + 1), { expirationTtl: 7200 })]);
+  return null;
+}
+async function leaderboard(request, env, cors, url, device, ip, owner) {
+  const key = LB_PREFIX + device; const now = Date.now();
+  if (url.pathname === '/leaderboard/submit' && request.method === 'POST') {
+    const raw = await request.text(); if (raw.length > 2000) return err(413, 'too_long', 'Request too large.', cors);
+    let body; try { body = JSON.parse(raw); } catch { return err(400, 'bad_request', 'Body is not valid JSON.', cors); }
+    const v = validSubmit(body, device, now); if (v.error) return err(400, 'bad_request', v.error, cors);
+    const lim = await lbRate(env, device, ip, owner); if (lim) return err(429, lim, lim === 'lb_ip_rate_limited' ? 'Too many leaderboard updates from this network. Try again later.' : 'Too many leaderboard updates. Try again later.', cors, { retryAfter: 3600 });
+    let old = null; try { old = JSON.parse((await env.COACH_KV.get(key)) || 'null'); } catch {}
+    const e = mergeEntry(old, v, now);
+    const same = old && old.u === e.u && JSON.stringify(old.d) === JSON.stringify(e.d) && JSON.stringify(old.w) === JSON.stringify(e.w) && now - (old.t || 0) < 86400000;
+    if (!same) { const s = JSON.stringify(e); await env.COACH_KV.put(key, s, { metadata: e, expirationTtl: lbInt(env, 'LB_TTL_DAYS') * 86400 }); lbCache = null; }
+    return json(200, { ok: true, joined: true, entry: { username: e.u, daily: e.d && { date: e.d[0], score: e.d[1] }, weekly: e.w && { weekKey: e.w[0], score: e.w[1] } } }, cors);
+  }
+  if (url.pathname === '/leaderboard/leave' && request.method === 'POST') { await env.COACH_KV.delete(key); lbCache = null; return json(200, { ok: true, joined: false }, cors); }
+  if (url.pathname === '/leaderboard' && request.method === 'GET') {
+    const period = url.searchParams.get('period') || 'weekly'; if (period !== 'weekly' && period !== 'daily') return err(400, 'bad_request', 'period must be weekly or daily.', cors);
+    const P = lbPeriods(now); const pk = period === 'weekly' ? P.week : P.day; const f = period === 'weekly' ? 'w' : 'd';
+    const all = (await lbListAll(env)).filter((r) => r.id !== device);
+    // the caller's own entry is read directly (fresher than list()), so their row is right straight after a submit or leave
+    let mine = null; try { mine = JSON.parse((await env.COACH_KV.get(key)) || 'null'); } catch {}
+    if (mine) all.push({ id: device, ...mine });
+    const rows = all.filter((r) => Array.isArray(r[f]) && r[f][0] === pk && lbScore(r[f][1]) != null && cleanLbName(r.u)).map((r) => ({ id: r.id, u: cleanLbName(r.u), score: r[f][1] }));
+    const salt = String(env.IP_SALT || 'grug-coach-unsalted'); const tags = new Map();
+    for (const r of rows) tags.set(r.id, (await sha256(`lbtag\u0000${salt}\u0000${r.id}`)).slice(0, 4));
+    const ranked = rankRows(rows, (id) => tags.get(id));
+    const out = (r) => ({ rank: r.rank, name: r.name, score: r.score, stars: r.stars, ...(r.id === device ? { me: true } : {}) });
+    const meRow = ranked.find((r) => r.id === device);
+    return json(200, { period, key: pk, total: ranked.length, top: ranked.slice(0, lbInt(env, 'LB_TOP')).map(out), me: meRow ? out(meRow) : null, joined: !!mine,
+      ...(period === 'weekly' ? { resetAt: sydWeek(now).resetAt } : {}) }, cors);
+  }
+  return err(404, 'not_found', 'Use GET /leaderboard?period=weekly|daily, POST /leaderboard/submit or /leaderboard/leave.', cors);
+}
 const bump = (env, key, v, days = 3) => env.COACH_KV.put(key, String(v), { expirationTtl: days * 86400 });
 
 export default {
@@ -300,13 +416,15 @@ export default {
     const day = today(); const capD = int(env, 'DEVICE_DAILY_CAP'), capI = int(env, 'IP_DAILY_CAP'), capG = int(env, 'GLOBAL_DAILY_CAP');
     const ip = await ipKey(request, env);
     if ((url.pathname === '/admin' || url.pathname === '/admin/remove') && request.method === 'POST') return admin(request, env, cors, url, device, ip);
+    // v1.12.0 leaderboard: never touches chat / estimate / review counters and needs no xAI key
+    if (url.pathname === '/leaderboard' || url.pathname.startsWith('/leaderboard/')) return leaderboard(request, env, cors, url, device, ip, owner);
     const c = await counts(env, device, ip, day);
     const remaining = owner ? null : Math.max(0, Math.min(capD - c.d, capI - c.i, capG - c.g));
     const limitHeaders = { 'X-Coach-Remaining': owner ? 'unlimited' : String(remaining), 'X-Coach-Cap': owner ? 'unlimited' : String(capD), 'X-Coach-Reset': resetAt() };
 
     if (url.pathname === '/status' && request.method === 'GET')
       return json(200, { enabled: true, owner, remaining: owner ? null : remaining, cap: capD, used: c.d, network: { used: c.i, cap: capI }, resetAt: resetAt(), model: cfg(env, 'MODEL'), admin: adminTok, estimate: await estStatus(env, device, ip, day, owner), review: await reviewStatus(env, device, ip, owner) }, { ...cors, ...limitHeaders });
-    if (!['/chat', '/estimate', '/review'].includes(url.pathname) || request.method !== 'POST') return err(404, 'not_found', 'Use POST /chat, /estimate, /review, /admin or GET /status.', cors);
+    if (!['/chat', '/estimate', '/review'].includes(url.pathname) || request.method !== 'POST') return err(404, 'not_found', 'Use POST /chat, /estimate, /review, /admin, GET /status or /leaderboard.', cors);
     if (!env.XAI_API_KEY) return err(500, 'misconfigured', 'XAI_API_KEY secret is not set.', cors);
     if (url.pathname === '/estimate') return estimate(request, env, cors, { device, ip, day, owner });
     if (url.pathname === '/review') return review(request, env, cors, { device, ip, owner });
