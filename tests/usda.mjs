@@ -75,12 +75,12 @@ usdaMode = 'hang'; const t0 = Date.now(); await typeCode('850001234604');
 const oc = await outcome(); const dt = Date.now() - t0; log('timeout fall-through in', dt, 'ms');
 if (oc !== 'notfound' || dt > 10000) fail('USDA timeout not handled fast'); else if (!/timed out/.test(await page.textContent('[data-testid=usda-note]'))) fail('timeout note missing');
 // G) personal key from Settings is used
-await page.goto(BASE + '#/settings'); await page.fill('[data-testid=usda-key]', 'MY-TEST-KEY'); await page.locator('[data-testid=usda-key]').blur(); await page.waitForTimeout(300);
+await page.goto(BASE + '#/settings/keys'); await page.fill('[data-testid=usda-key]', 'MY-TEST-KEY'); await page.locator('[data-testid=usda-key]').blur(); await page.waitForTimeout(300);
 if (!(await page.locator('a[href="https://fdc.nal.usda.gov/api-key-signup"]').count())) fail('no signup link in Settings');
 usdaMode = '429'; await typeCode('850001234581'); await outcome();
 if (!/api_key=MY-TEST-KEY/.test(lastUsdaUrl)) fail('settings key not used: ' + lastUsdaUrl); else log('Settings key used for USDA');
 await page.screenshot({ path: 'screenshots/28-usda-busy-notfound.png' });
-await page.goto(BASE + '#/settings'); await page.waitForFunction(() => document.querySelector('[data-testid=usda-key]')?.value === 'MY-TEST-KEY'); // field shows the saved key
+await page.goto(BASE + '#/settings/keys'); await page.waitForFunction(() => document.querySelector('[data-testid=usda-key]')?.value === 'MY-TEST-KEY'); // field shows the saved key
 await page.fill('[data-testid=usda-key]', ''); await page.locator('[data-testid=usda-key]').blur(); await page.waitForTimeout(300);
 if ((await page.evaluate(() => new Promise((res) => { const r = indexedDB.open('grugfit'); r.onsuccess = () => { const q = r.result.transaction('kv').objectStore('kv').get('settings'); q.onsuccess = () => res(q.result.usdaKey ?? null); }; }))) !== null) fail('clearing the key did not fall back to DEMO_KEY'); else log('key cleared → DEMO_KEY');
 

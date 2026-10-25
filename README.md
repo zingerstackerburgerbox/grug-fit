@@ -56,7 +56,7 @@ Steps are typed in per day (Workout tab › Steps, any date; optional goal in Se
 - **Stars** (`src/stars.ts`, free, instant; only the combined score is sent, and only if you join the leaderboard): Training = consistency 40 (vs Settings › workouts-per-week goal, default 3),
   progressive overload 30, volume balance 20, movement 10; Nutrition = calories 35, protein 35, logging 20, supplements 10. A part that
   doesn't apply is left out and its points shared out. "Rating builds after 7 days" until 7 days of history.
-- **Coach chat cap**: 5 free messages per device per day (15 per network). People using their own xAI key call xAI directly and aren't capped.
+- **Coach chat cap**: 5 free messages per device per day (15 per network). People using their own xAI key call xAI directly and aren't capped. Since v1.13.1 the own-key, owner-token and USDA key fields live on their own screen: Settings › Coach › "API key" row (`#/settings/keys`).
 - **Admin code** (Settings › About › Advanced · Admin code): sent once to `POST /admin`; the worker compares a salted hash kept as a secret
   and returns a per-device admin token (stored as `settings.adminToken`, sent as `X-Admin-Token`) that lifts every cap. The code is
   not stored in the app or this repo. Remove revokes the token.

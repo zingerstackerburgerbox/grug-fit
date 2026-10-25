@@ -96,8 +96,17 @@ await page.evaluate(() => localStorage.removeItem('coachProxyUrl'));
 await page.goto(BASE + '#/coach'); await page.reload(); await page.waitForSelector('.composer'); if (await page.locator('[data-testid=coach-setup]').count()) fail('built-in proxy URL should be live (no setup screen)'); log('default build: proxy mode, composer shown; real proxy calls intercepted:', realHits);
 let xr = null; await ctx.route('https://api.x.ai/v1/chat/completions', (r) => { xr = { h: r.request().headers(), body: JSON.parse(r.request().postData()) }; return r.fulfill({ status: 200, headers: { 'access-control-allow-origin': '*', 'content-type': 'text/event-stream' }, body: sse('Direct reply from xAI.') }); });
 await page.goto(BASE + '#/settings'); await page.waitForSelector('[data-testid=coach-settings]'); { const m = await page.textContent('[data-testid=coach-mode]'); log('settings status (built-in proxy):', m); if (!/coach service/.test(m)) fail('settings should show the coach service mode'); }
+// v1.13.1: key UI is off the main Settings screen; one "API key" row opens it
+for (const t of ['coach-key', 'coach-owner', 'usda-key']) if (await page.locator(`[data-testid=${t}]`).count()) fail(t + ' still on the main Settings screen');
+{ const st = (await page.textContent('[data-testid=api-key-status]')).trim(); log('API key row:', st); if (st !== 'Not set') fail('row status ' + st); }
+await page.click('[data-testid=api-key-row]'); await page.waitForSelector('[data-testid=api-keys-page]'); if (!(await page.url()).includes('#/settings/keys')) fail('keys route');
 await page.fill('[data-testid=coach-key]', 'xai-test-key'); await page.click('[data-testid=coach-key-save]'); await page.waitForTimeout(300);
+await page.click('button[aria-label=Back]'); await page.waitForSelector('[data-testid=coach-settings]');
+{ const st = (await page.textContent('[data-testid=api-key-status]')).trim(), m = await page.textContent('[data-testid=coach-mode]'); log('after saving: row', st, '| status', m); if (st !== 'Using your own key' || !/own xAI key/.test(m)) fail('row/status after save'); }
 await page.goto(BASE + '#/coach'); await page.locator('[data-testid=coach-suggest]').first().click(); await page.waitForSelector('text=Direct reply from xAI.');
 log('own key: auth', xr?.h.authorization, '| model', xr?.body.model, '| max_tokens', xr?.body.max_tokens); if (xr?.h.authorization !== 'Bearer xai-test-key' || !xr.body.model) fail('own-key request');
+await page.goto(BASE + '#/settings/keys'); await page.waitForSelector('[data-testid=coach-key]'); if ((await page.inputValue('[data-testid=coach-key]')) !== 'xai-test-key' || (await page.getAttribute('[data-testid=coach-key]', 'type')) !== 'password') fail('saved key not shown masked on reopen');
+await page.click('text=Remove key'); await page.waitForTimeout(300); await page.goto(BASE + '#/settings'); await page.waitForSelector('[data-testid=api-key-status]');
+{ const st = (await page.textContent('[data-testid=api-key-status]')).trim(); log('after Remove key: row', st); if (st !== 'Not set') fail('remove key'); }
 await b.close();
 if (failed) { console.error(`${failed} failure(s)`); process.exit(1); } console.log('COACH TEST PASSED');

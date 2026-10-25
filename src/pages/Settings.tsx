@@ -118,8 +118,7 @@ export function SettingsPage() {
       <label class="row sm"><input type="checkbox" style="width:24px;min-height:24px" data-testid="fact-setting" checked={(s.factCard || 'open') !== 'off'} onChange={(e) => save({ factCard: e.currentTarget.checked ? 'open' : 'off' })} /> Show “Fitness fact of the day” on Home</label>
       <div class="mut xs">Dates are shown as DD/MM/YYYY. Food quantities in grams.</div></div>
     <h2>Food lookup</h2>
-    <div class="card col"><OfflinePackLine /><UsdaKeyField />
-      <div class="mut xs">Barcodes Open Food Facts doesn't know are checked in USDA FoodData Central (US branded foods). The shared DEMO_KEY allows only ~30 lookups an hour; a <a href="https://fdc.nal.usda.gov/api-key-signup" target="_blank" rel="noopener">free personal key</a> raises that to 1,000.</div></div>
+    <div class="card col"><OfflinePackLine /></div>
     <h2>Coach</h2>
     <CoachSettings />
     <h2>Dose reminders</h2>
@@ -150,22 +149,42 @@ export function SettingsPage() {
 
 function CoachSettings() {
   const [s0, setS0] = useState<Settings | null>(null); useEffect(() => { getSettings().then(setS0); }, []);
-  const q = useQuota(); const [key, setKey] = useState(''); const [tok, setTok] = useState(''); const [showKey, setShowKey] = useState(false);
-  useEffect(() => { if (s0) { setKey(s0.coachKey || ''); setTok(s0.coachOwnerToken || ''); } }, [s0]);
+  const q = useQuota();
   if (!s0) return <div class="card mut sm">Loading…</div>;
   const commit = async (p: Partial<Settings>, msg: string) => { const cur = await getSettings(); const n = { ...cur, ...p }; await put('kv', n); setS0(n); toast(msg); fetchStatus(); };
-  const mode = coachMode({ ...s0, coachKey: key || undefined });
+  const mode = coachMode(s0);
+  const keyStatus = s0.coachKey ? 'Using your own key' : s0.usdaKey ? 'USDA key set' : 'Not set';
   return <div class="card col" data-testid="coach-settings">
     <div class="sm">Status: <b data-testid="coach-mode">{mode === 'own' ? 'Using your own xAI key' : mode === 'proxy' ? 'Using the Lunk coach service' : 'Coach is being set up'}</b>{mode === 'proxy' && q && <> · <span data-testid="coach-remaining">{quotaText(q)}</span></>}</div>
-    <label class="f">Use my own xAI API key (optional)<div class="row"><input type={(showKey ? 'text' : 'password') as any} autocomplete="off" spellcheck={false} value={key} placeholder="xai-…" data-testid="coach-key" onInput={(e) => setKey(e.currentTarget.value.trim())} />
-      <button class="btn sm" type="button" onClick={() => setShowKey(!showKey)}>{showKey ? 'Hide' : 'Show'}</button></div></label>
-    <div class="grid2"><button class="btn sm p" data-testid="coach-key-save" onClick={() => commit({ coachKey: key || undefined }, key ? 'xAI key saved on this device' : 'Own key cleared')}>Save key</button>{s0.coachKey && <button class="btn sm" onClick={() => { setKey(''); commit({ coachKey: undefined }, 'Own key cleared'); }}>Remove key</button>}</div>
-    <div class="mut xs">With your own key the app calls api.x.ai directly from this device (no daily cap; usage billed to your xAI account). The key is stored only on this device and is left out of backups.</div>
-    <label class="f">Owner token (optional)<input type="password" autocomplete="off" value={tok} data-testid="coach-owner" onInput={(e) => setTok(e.currentTarget.value.trim())} placeholder="Only for the app owner" /></label>
-    <button class="btn sm" data-testid="coach-owner-save" onClick={() => commit({ coachOwnerToken: tok || undefined }, tok ? 'Owner token saved' : 'Owner token cleared')}>Save owner token</button>
     <div class="mut xs">The coach sends a summary of your logs (profile, targets, 14 days of nutrition totals, recent workouts, PRs, body weight, supplements and adherence) with each message. Chat history stays on this device; clear it from the Coach tab.</div>
     {s0.coachConsent && <button class="btn g sm" onClick={() => commit({ coachConsent: undefined }, 'Privacy notice will show again')}>Show the privacy notice again</button>}
+    <a class="btn g sm row between" style="justify-content:space-between" href="#/settings/keys" data-testid="api-key-row"><span>API key</span><span class="mut">{<span data-testid="api-key-status">{keyStatus}</span>} ›</span></a>
   </div>;
+}
+
+/** v1.13.1: everything about using your own keys lives on its own screen (Settings › Coach › API key). Behaviour unchanged. */
+export function ApiKeysPage() {
+  const [s0, setS0] = useState<Settings | null>(null); const [key, setKey] = useState(''); const [tok, setTok] = useState(''); const [showKey, setShowKey] = useState(false);
+  // fill the fields in the same update that shows them, so typing right after the screen opens is never overwritten by the load
+  useEffect(() => { getSettings().then((x) => { setKey(x.coachKey || ''); setTok(x.coachOwnerToken || ''); setS0(x); }); }, []);
+  const commit = async (p: Partial<Settings>, msg: string) => { const cur = await getSettings(); const n = { ...cur, ...p }; await put('kv', n); setS0(n); toast(msg); fetchStatus(); };
+  return <><Top title="API key" backBtn /><div class="page" data-testid="api-keys-page">
+    {!s0 ? <div class="card mut sm">Loading…</div> : <>
+      <h2>Coach (xAI)</h2>
+      <div class="card col" data-testid="coach-key-box">
+        <div class="sm">Status: <b data-testid="coach-key-mode">{s0.coachKey ? 'Using your own xAI key' : 'Using the Lunk coach service'}</b></div>
+        <label class="f">Use my own xAI API key (optional)<div class="row"><input type={(showKey ? 'text' : 'password') as any} autocomplete="off" spellcheck={false} value={key} placeholder="xai-…" data-testid="coach-key" onInput={(e) => setKey(e.currentTarget.value.trim())} />
+          <button class="btn sm" type="button" onClick={() => setShowKey(!showKey)}>{showKey ? 'Hide' : 'Show'}</button></div></label>
+        <div class="grid2"><button class="btn sm p" data-testid="coach-key-save" onClick={() => commit({ coachKey: key || undefined }, key ? 'xAI key saved on this device' : 'Own key cleared')}>Save key</button>{s0.coachKey && <button class="btn sm" onClick={() => { setKey(''); commit({ coachKey: undefined }, 'Own key cleared'); }}>Remove key</button>}</div>
+        <div class="mut xs">With your own key the app calls api.x.ai directly from this device (no daily cap; usage billed to your xAI account). The key is stored only on this device and is left out of backups.</div>
+        <label class="f">Owner token (optional)<input type="password" autocomplete="off" value={tok} data-testid="coach-owner" onInput={(e) => setTok(e.currentTarget.value.trim())} placeholder="Only for the app owner" /></label>
+        <button class="btn sm" data-testid="coach-owner-save" onClick={() => commit({ coachOwnerToken: tok || undefined }, tok ? 'Owner token saved' : 'Owner token cleared')}>Save owner token</button>
+      </div>
+      <h2>Food lookup (USDA)</h2>
+      <div class="card col"><UsdaKeyField />
+        <div class="mut xs">Barcodes Open Food Facts doesn't know are checked in USDA FoodData Central (US branded foods). The shared DEMO_KEY allows only ~30 lookups an hour; a <a href="https://fdc.nal.usda.gov/api-key-signup" target="_blank" rel="noopener">free personal key</a> raises that to 1,000.</div></div>
+    </>}
+  </div></>;
 }
 
 function AdminCode() {
