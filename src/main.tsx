@@ -19,6 +19,9 @@ import { initLeaderboard } from './leaderboard';
 import { initOffpack } from './offpack';
 import { CalendarPage, SuppEdit, SuppsPage } from './pages/Supps';
 import { ApiKeysPage, SettingsPage } from './pages/Settings';
+import { InviteGreeting, InvitePage } from './pages/Invite';
+import { captureRef } from './invite';
+captureRef();
 import { Onboarding } from './pages/Onboarding';
 import { getSettings } from './db';
 import { scheduleReminders } from './doses';
@@ -69,7 +72,7 @@ function route(h: string) {
     case 'supps': return <SuppsPage />;
     case 'supp': return <SuppEdit id={p[1]} key={p[1]} />;
     case 'calendar': return <CalendarPage />;
-    case 'settings': return p[1] === 'keys' ? <ApiKeysPage /> : <SettingsPage />;
+    case 'settings': return p[1] === 'keys' ? <ApiKeysPage /> : p[1] === 'invite' ? <InvitePage /> : <SettingsPage />;
     case 'coach': return <CoachPage />;
     case 'review': return <ReviewPage id={p[1] || 'new'} key={p[1]} />;
     case 'leaderboard': return <LeaderboardPage />;
@@ -107,9 +110,9 @@ function App() {
   // private/incognito window (heuristic): block everything until they move to a normal window, or tap "I'm not in incognito"
   if (priv === 'block') return <><PrivateBlock onContinue={() => setPriv('warn')} /><Toaster /></>;
   const banner = priv === 'warn' ? <PrivateBanner /> : null;
-  if (onboard && seg !== 'workout') return <>{banner}<main key="onboarding"><Onboarding onDone={() => { setOnboard(false); armPersist(); protectStorage(); }} /></main><UpdateBanner /><Toaster /></>;
+  if (onboard && seg !== 'workout') return <>{banner}<InviteGreeting /><main key="onboarding"><Onboarding onDone={() => { setOnboard(false); armPersist(); protectStorage(); }} /></main><UpdateBanner /><Toaster /></>;
   return <>
-    {banner}
+    {banner}<InviteGreeting />
     <main key={h}>{route(h)}</main>
     <div class="dock"><RestBar /><WorkoutMiniBar hidden={seg === 'workout'} /></div>
     <nav class="tabs">{TABS.map(([href, label, ic, segs]) => <a href={'#' + href} class={segs.includes(seg) ? 'on' : ''}>{I[ic]}<span>{label}</span></a>)}</nav>

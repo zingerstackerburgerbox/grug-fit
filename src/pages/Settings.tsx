@@ -17,6 +17,7 @@ import { scheduleReminders } from '../doses';
 import { KCAL_EXPLAIN } from '../setKcal';
 import { ImportSection } from './Import';
 import { InstallSetting } from './Install';
+import { InviteRow } from './Invite';
 import { StorageCard } from './Private';
 import { ensurePack, loadPackStatus, packStatus, type PackStatus } from '../offpack';
 import { AppearanceSettings } from './Appearance';
@@ -92,6 +93,7 @@ export function SettingsPage() {
   useEffect(() => { base.current = null; }, [s]);
   const field = (k: string, label: string) => <label class="f">{label}<input inputMode="decimal" value={t[k] ?? ''} data-testid={'target-' + k} onInput={(e) => onField(k, e.currentTarget.value)} /></label>;
   return <><Top title="Settings" /><div class="page col">
+    <InviteRow />
     <InstallSetting />
     <h2>Appearance</h2>
     <AppearanceSettings />
@@ -140,7 +142,7 @@ export function SettingsPage() {
     <button class="btn d" onClick={async () => { if (confirmDo('Delete ALL data (workouts, diary, supplements, settings)? This cannot be undone.') && confirmDo('Really? Export a backup first if unsure.')) { if ((await getSettings()).lbJoin) await leaveBoard(); await clearAll(); localStorage.removeItem('rest'); toast('All data cleared'); } }}>Clear all data</button>
     <h2>About</h2>
     <div class="card col" data-testid="about"><div class="row between"><b>Lunk v<span data-testid="app-version">{APP_VERSION}</span></b><span class="mut sm">built {fmtDate(new Date(BUILD_TIME))} {fmtTime(+new Date(BUILD_TIME))}</span></div>
-      <div class="xs" data-testid="whats-new">New in v1.14: Hevy-style set editing. Swipe a set right to delete it (with Undo), + Add set and + Add exercise when editing a past workout, and a ⋮ menu to reorder, remove or add a note. v1.13: about 30,000 Australian products kept on this device for instant scans.</div>
+      <div class="xs" data-testid="whats-new">New in v1.15: Invite friends (Settings › Invite friends) with a share link and QR code. v1.14: Hevy-style set editing. Swipe a set right to delete it (with Undo), + Add set and + Add exercise when editing a past workout, and a ⋮ menu to reorder, remove or add a note. v1.13: about 30,000 Australian products kept on this device for instant scans.</div>
       <div class="mut xs">Build <span data-testid="build-id">{BUILD_ID}</span> · updates install automatically (checked on launch, when you return to the app, and every 30 min). Your data stays on the device across updates.</div>
       <button class="btn sm" onClick={async () => { const r = await navigator.serviceWorker?.getRegistration(); if (!r) { toast('Updates unavailable (no service worker)'); return; } await r.update().catch(() => {}); toast(r.installing || r.waiting ? 'Update found – installing…' : 'You have the latest version'); }}>Check for updates</button></div>
       <button class="btn sm" data-testid="ocr-offline" onClick={async () => { toast('Downloading label scanner (~6 MB)…'); try { const m = await import('../ocr/ocr'); await m.prefetchOcr(); toast('Label scanning is ready offline'); } catch (e: any) { toast('Download failed: ' + (e?.message || e)); } }}>📷 Make label scanning available offline</button>
