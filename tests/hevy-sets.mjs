@@ -19,7 +19,7 @@ log('editing', latest.name, latest.exercises.length, 'exercises,', latest.exerci
 const card = (i) => page.locator('[data-testid=ex-card]').nth(i); const rows = (i) => card(i).locator('.set-row');
 const nums = async (i) => (await card(i).locator('[data-testid=set-num]').allTextContents()).join(',');
 const vals = async (i, r) => [await rows(i).nth(r).locator('input[aria-label=Weight]').inputValue(), await rows(i).nth(r).locator('input[aria-label=Reps]').inputValue()];
-const swipe = async (loc, dx, dy = 0, steps = 12) => { const bb = await loc.boundingBox(); const x = bb.x + bb.width * 0.62, y = bb.y + bb.height / 2; // start on the Previous column (not an input)
+const swipe = async (loc, dx, dy = 0, steps = 12, at = 0.05) => { const bb = await loc.boundingBox(); const x = bb.x + bb.width * at, y = bb.y + bb.height / 2; // v1.14.1: rightward, starting on the set number by default
   await page.mouse.move(x, y); await page.mouse.down(); for (let k = 1; k <= steps; k++) await page.mouse.move(x + (dx * k) / steps, y + (dy * k) / steps); await page.mouse.up(); await page.waitForTimeout(300); };
 const touchSwipe = async (loc, dx) => { const cdp = await ctx.newCDPSession(page); const bb = await loc.boundingBox(); const x = bb.x + bb.width * 0.3, y = bb.y + bb.height / 2;
   await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y }] });
@@ -43,23 +43,38 @@ log('Add set (edit):', n0, '→', n0 + 1, 'new row', nv.join(' × '), '(previous
 if (nv.join() !== lastVals.join()) fail('new set not prefilled from the previous set');
 if ((await rows(0).nth(n0).locator('button[aria-label="Complete set"]').getAttribute('aria-pressed')) !== 'true') fail('set added while editing a finished workout should be ticked');
 // full swipe deletes, numbers close up, Undo restores at the same place
-const v1 = await vals(0, 1); await swipe(rows(0).nth(1), -330);
+const v1 = await vals(0, 1); await swipe(rows(0).nth(1), 330);
 let nn = await nums(0); log('full swipe on set 2 →', await rows(0).count(), 'rows, numbers', nn, '| snackbar:', (await page.textContent('[data-testid=snackbar]').catch(() => '')).trim());
 if ((await rows(0).count()) !== n0 || nn !== Array.from({ length: n0 }, (_, i) => i + 1).join(',')) fail('full swipe delete / renumber');
 await page.click('[data-testid=snackbar-action]'); await page.waitForTimeout(200);
 if ((await rows(0).count()) !== n0 + 1 || (await vals(0, 1)).join() !== v1.join()) fail('undo'); else log('Undo → set 2 back', (await vals(0, 1)).join(' × '));
 // partial swipe leaves Delete showing; tapping it deletes; snackbar disappears after ~5 s
-await swipe(rows(0).nth(0), -110);
+await swipe(rows(0).nth(0), 110);
 const open = await page.locator('[data-testid=swipe-row][data-open="1"]').count(); log('partial swipe: rows open', open); if (open !== 1) fail('partial swipe should leave the row open');
 await page.screenshot({ path: 'screenshots/60-swipe-delete.png' });
 await card(0).locator('[data-testid=swipe-row][data-open="1"] [data-testid=swipe-delete]').click(); await page.waitForTimeout(300);
 if ((await rows(0).count()) !== n0) fail('tap Delete'); await page.waitForTimeout(5400);
 if (await page.locator('[data-testid=snackbar]').count()) fail('snackbar should hide after ~5 s'); else log('tap Delete removed it; snackbar gone after 5 s');
 // vertical drag never deletes or opens
-const before = await rows(0).count(); await swipe(rows(0).nth(0), -20, 160);
+const before = await rows(0).count(); await swipe(rows(0).nth(0), 20, 160);
 if ((await rows(0).count()) !== before || (await page.locator('[data-testid=swipe-row][data-open="1"]').count())) fail('vertical drag engaged the swipe'); else log('vertical drag: nothing happens');
+// v1.14.1: a leftward swipe does nothing; a rightward swipe started on the set number opens no menu, one started on an input doesn't focus it
+const bl = await rows(0).count(); await swipe(rows(0).nth(0), -300, 0, 12, 0.9);
+if ((await rows(0).count()) !== bl || (await page.locator('[data-testid=swipe-row][data-open="1"]').count())) fail('leftward swipe should do nothing'); else log('leftward swipe: nothing happens');
+await swipe(rows(0).nth(0), 110); const menu = await page.locator('.sheet').count(); log('rightward swipe from the set number: open', await page.locator('[data-testid=swipe-row][data-open="1"]').count(), '| set menu opened:', menu > 0);
+if (menu) fail('swipe on the set number opened the set-type menu'); await rows(0).nth(0).locator('input[aria-label=Reps]').click(); await page.waitForTimeout(250); // tap on an open row closes it
+if (await page.locator('[data-testid=swipe-row][data-open="1"]').count()) fail('tap should close the open row');
+await page.locator('h1').click(); const wb = await rows(0).nth(1).locator('input[aria-label=Weight]').boundingBox(); const rb = await rows(0).nth(1).boundingBox();
+await swipe(rows(0).nth(1), 110, 0, 12, (wb.x + wb.width / 2 - rb.x) / rb.width);
+const foc = await page.evaluate(() => document.activeElement?.getAttribute('aria-label') || document.activeElement?.tagName); log('rightward swipe from the weight box: focused =', foc);
+if (foc === 'Weight') fail('swipe left the weight input focused');
+if (!(await page.locator('[data-testid=swipe-row][data-open="1"]').count())) fail('swipe from the weight box should open the row');
+await rows(0).nth(1).locator('[data-testid=set-prev]').click(); await page.waitForTimeout(250); // tap closes the open row
+await rows(0).nth(1).locator('input[aria-label=Weight]').click(); if ((await page.evaluate(() => document.activeElement?.getAttribute('aria-label'))) !== 'Weight') fail('tap on weight should focus it'); else log('tap still focuses the weight box');
+await card(0).locator('[data-testid=set-num]').first().click(); if (!(await page.locator('.sheet').count())) fail('tap on set number should open the menu'); else log('tap on the set number still opens the menu'); await page.mouse.click(5, 5); await page.waitForTimeout(250); if (await page.locator('.sheet').count()) fail('menu should close');
+if ((await rows(0).count()) !== bl) fail('row count changed by the swipe-direction checks');
 // real touch (CDP touch events, touch-action: pan-y)
-await touchSwipe(rows(0).nth(0), -340); log('touch full swipe:', before, '→', await rows(0).count());
+await touchSwipe(rows(0).nth(0), 300); log('touch full swipe:', before, '→', await rows(0).count());
 if ((await rows(0).count()) !== before - 1) fail('touch swipe delete'); else { await page.click('[data-testid=snackbar-action]'); await page.waitForTimeout(200); }
 // set type menu: warm-up + accessible Delete set
 await card(0).locator('[data-testid=set-num]').first().click(); await page.click('.sheet >> text=Warm-up'); await page.waitForTimeout(150);
@@ -89,7 +104,7 @@ const viewCards = await page.locator('.page .card a.b').count(); log('Cancel edi
 // Save persists: add a set to exercise 1, delete set 1 of exercise 2, add an exercise with one set
 await page.evaluate(() => { window.__lg = []; });
 await page.click('[data-testid=edit-workout]'); await page.waitForSelector('[data-testid=ex-card]');
-await card(0).locator('[data-testid=add-set]').click(); await swipe(rows(1).nth(0), -330);
+await card(0).locator('[data-testid=add-set]').click(); await swipe(rows(1).nth(0), 330);
 await page.click('[data-testid=add-exercise]'); await page.locator('.sheet .item', { hasText: 'Hammer Curl (Dumbbell)' }).first().click(); await page.click('.sheet button.btn.p.grow'); await page.waitForTimeout(200);
 const last = page.locator('[data-testid=ex-card]').last(); await last.locator('input[aria-label=Weight]').fill('31.5'); await last.locator('input[aria-label=Reps]').fill('10'); await last.locator('input[aria-label=Reps]').blur();
 await last.locator('button[aria-label="Complete set"]').click(); await last.locator('[data-testid=add-set]').click(); await last.locator('input[aria-label=Weight]').nth(1).fill('38.5'); await last.locator('input[aria-label=Weight]').nth(1).blur();
@@ -116,7 +131,7 @@ if ((await rows(0).count()) !== 3 || (await vals(0, 2)).join() !== '80,5') fail(
 await rows(0).nth(0).locator('button[aria-label="Complete set"]').click(); await page.waitForTimeout(300);
 const timer = (await page.textContent('[role=timer] .t').catch(() => '')).trim(); log('rest timer after ticking:', timer, '| row tinted:', await rows(0).nth(0).getAttribute('class'));
 if (!/^(3:00|2:5\d)$/.test(timer)) fail('rest timer should start at the 3 min default'); if (!/done/.test(await rows(0).nth(0).getAttribute('class'))) fail('done row not tinted');
-await swipe(rows(0).nth(1), -330); log('live swipe delete:', await rows(0).count(), 'rows, numbers', await nums(0)); if ((await rows(0).count()) !== 2 || (await nums(0)) !== '1,2') fail('live swipe delete/renumber');
+await swipe(rows(0).nth(1), 330); log('live swipe delete:', await rows(0).count(), 'rows, numbers', await nums(0)); if ((await rows(0).count()) !== 2 || (await nums(0)) !== '1,2') fail('live swipe delete/renumber');
 await page.click('[data-testid=snackbar-action]'); await page.waitForTimeout(200); if ((await rows(0).count()) !== 3) fail('live undo');
 const act = await idb(`return (await P(tx('kv').get('active'))).w.exercises[0].sets.length;`); if (act !== 3) fail('live undo not saved'); else log('live Undo saved (3 sets in the active workout)');
 await page.click('button:has-text("Discard workout")'); await page.waitForTimeout(300);

@@ -1,4 +1,4 @@
-// v1.14.0 Hevy-style set rows shared by the live logger and Edit workout: swipe a row left to reveal a red Delete
+// v1.14.0 Hevy-style set rows shared by the live logger and Edit workout: swipe a row RIGHT (v1.14.1) to reveal a red Delete on the left
 // (full swipe deletes), tap the set number for its type (W / 1 / D / F) and "Delete set", tap ✓ to complete (row tinted),
 // a Previous column from last time, and "+ Add set" (copies the previous set's weight and reps).
 import { useEffect, useRef, useState } from 'preact/hooks';
@@ -7,41 +7,44 @@ import { NumInput } from '../ui';
 import { wDisp, wIn } from '../util';
 
 export const SWIPE_OPEN = 88; // px of red Delete area shown when a row is left open
-const ENGAGE = 12; // px of clearly horizontal movement before a swipe takes over (vertical scrolling is never blocked)
+const ENGAGE = 16; // px of clearly horizontal movement before a swipe takes over (vertical scrolling is never blocked)
 let closeOpen: (() => void) | null = null; // only one row open at a time
 
-/** A row that slides left to reveal Delete. Pointer events + `touch-action: pan-y`, so the browser keeps vertical scrolling. */
+/** A row that slides right to reveal Delete on its left (v1.14.1: right-to-left swipes cross too many controls). Pointer events + `touch-action: pan-y`, so the browser keeps vertical scrolling. */
 export function SwipeRow({ onDelete, children, class: cls = '', label }: { onDelete: () => void; children: any; class?: string; label: string }) {
   const row = useRef<HTMLDivElement>(null); const [dx, setDx] = useState(0); const [drag, setDrag] = useState(false); const [gone, setGone] = useState(false);
   const swiped = useRef(0);
-  const g = useRef<{ id: number; x: number; y: number; base: number; on: boolean; off: boolean } | null>(null);
+  const g = useRef<{ id: number; x: number; y: number; base: number; on: boolean; off: boolean; prev: Element | null } | null>(null);
   useEffect(() => () => { if (closeOpen === close) closeOpen = null; }, []);
   function close() { setDx(0); if (closeOpen === close) closeOpen = null; }
-  const remove = () => { setGone(true); setDx(-(row.current?.offsetWidth || 400)); if (closeOpen === close) closeOpen = null; setTimeout(onDelete, 160); };
+  const remove = () => { setGone(true); setDx(row.current?.offsetWidth || 400); if (closeOpen === close) closeOpen = null; setTimeout(() => { onDelete(); setGone(false); setDx(0); }, 160); }; // rows are keyed by index, so reset for the set that slides into this slot
   const down = (e: PointerEvent) => {
     if (e.button > 0 || gone) return;
     if (closeOpen && closeOpen !== close) closeOpen();
-    g.current = { id: e.pointerId, x: e.clientX, y: e.clientY, base: dx, on: false, off: false };
+    g.current = { id: e.pointerId, x: e.clientX, y: e.clientY, base: dx, on: false, off: false, prev: document.activeElement };
   };
   const move = (e: PointerEvent) => {
     const s = g.current; if (!s || s.id !== e.pointerId || s.off) return;
+    if (e.pointerType === 'mouse' && e.buttons === 0) { g.current = null; return; } // button released off this row: drop the stale gesture
     const mx = e.clientX - s.x, my = e.clientY - s.y;
     if (!s.on) {
       if (Math.abs(my) > ENGAGE && Math.abs(my) > Math.abs(mx)) { s.off = true; return; } // a vertical scroll: let it be
       if (Math.abs(mx) < ENGAGE || Math.abs(mx) < Math.abs(my) * 1.5) return;
-      if (mx > 0 && s.base === 0) { s.off = true; return; } // swiping right on a closed row does nothing
+      if (mx < 0 && s.base === 0) { s.off = true; return; } // swiping left on a closed row does nothing
       s.on = true; setDrag(true); try { row.current?.setPointerCapture(e.pointerId); } catch {}
-      (document.activeElement as HTMLElement | null)?.blur?.();
+      // a swipe that started on an input must not leave it focused/selected (a tap still focuses normally)
+      if (document.activeElement !== s.prev) (document.activeElement as HTMLElement | null)?.blur?.();
+      getSelection()?.removeAllRanges();
     }
     e.preventDefault();
-    const w = row.current?.offsetWidth || 360; setDx(Math.max(-w, Math.min(0, s.base + mx)));
+    const w = row.current?.offsetWidth || 360; setDx(Math.min(w, Math.max(0, s.base + mx)));
   };
   const up = (e: PointerEvent) => {
     const s = g.current; g.current = null; if (!s || s.id !== e.pointerId) return;
     if (!s.on) return; setDrag(false); swiped.current = Date.now();
-    const w = row.current?.offsetWidth || 360; const cur = Math.max(-w, Math.min(0, s.base + (e.clientX - s.x)));
-    if (-cur > w * 0.55) remove();
-    else if (-cur > SWIPE_OPEN * 0.5) { setDx(-SWIPE_OPEN); if (closeOpen && closeOpen !== close) closeOpen(); closeOpen = close; }
+    const w = row.current?.offsetWidth || 360; const cur = Math.min(w, Math.max(0, s.base + (e.clientX - s.x)));
+    if (cur > w * 0.55) remove();
+    else if (cur > SWIPE_OPEN * 0.5) { setDx(SWIPE_OPEN); if (closeOpen && closeOpen !== close) closeOpen(); closeOpen = close; }
     else close();
   };
   const cancel = () => { if (g.current?.on) { setDrag(false); close(); } g.current = null; };

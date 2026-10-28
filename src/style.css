@@ -310,7 +310,7 @@ details.tut ol { margin: 6px 0 6px; padding-left: 22px; line-height: 1.5; } deta
 .sets-h span { font-size: 11px; color: var(--mut); font-weight: 600; text-transform: uppercase; padding: 4px 0; text-align: center; }
 .swipe { position: relative; overflow: hidden; border-radius: 10px; }
 .swipe.gone { pointer-events: none; }
-.swipe-del { position: absolute; inset: 0; background: var(--bad); border-radius: 10px; display: flex; justify-content: flex-end; }
+.swipe-del { position: absolute; inset: 0; background: var(--bad); border-radius: 10px; display: flex; justify-content: flex-start; }
 .swipe-del button { width: 88px; border: 0; background: transparent; color: #fff; font: inherit; font-weight: 700; }
 .set-row { position: relative; background: var(--bg2); padding: 3px 2px; border-radius: 10px; touch-action: pan-y; transition: transform .18s ease-out; text-align: center; }
 .set-row.done { background: color-mix(in srgb, var(--acc) 13%, var(--bg2)); }
