@@ -58,11 +58,11 @@ export async function runEstimate(input: { text: string; portion?: string; image
 }
 
 /** Downscale a photo to ≤1024 px JPEG (data URL) in memory, kept well under the Worker's 1.5 MB limit. */
-export async function photoToDataUrl(file: Blob): Promise<string> {
+export async function photoToDataUrl(file: Blob, max = 1024): Promise<string> {
   const url = URL.createObjectURL(file);
   try {
     const img = await new Promise<HTMLImageElement>((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => rej(new Error('Not an image')); i.src = url; });
-    const sc = Math.min(1, 1024 / Math.max(img.naturalWidth, img.naturalHeight)); const c = document.createElement('canvas');
+    const sc = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight)); const c = document.createElement('canvas');
     c.width = Math.max(1, Math.round(img.naturalWidth * sc)); c.height = Math.max(1, Math.round(img.naturalHeight * sc));
     c.getContext('2d')!.drawImage(img, 0, 0, c.width, c.height);
     for (const q of [0.8, 0.65, 0.5]) { const d = c.toDataURL('image/jpeg', q); if (d.length < 1_200_000) return d; }

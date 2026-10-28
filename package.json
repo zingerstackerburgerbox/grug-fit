@@ -1,13 +1,13 @@
 {
   "name": "grug-fit",
-  "version": "1.16.0",
+  "version": "1.17.0",
   "description": "",
   "main": "index.js",
   "scripts": {
     "dev": "node scripts/copy-ocr.mjs && vite",
     "build": "node scripts/copy-ocr.mjs && vite build",
     "preview": "node tests/serve.mjs dist 4173",
-    "test": "node tests/smoke.mjs && node tests/ocr.mjs && node tests/onboarding.mjs && node tests/exviz-audit.mjs && node tests/exviz.mjs && node tests/seed-migration.mjs && node tests/usda.mjs && node tests/safcol.mjs && node tests/offpack-unit.mjs && node tests/offpack.mjs && node tests/facts.mjs && node tests/workout-autoend.mjs && node tests/kcal-unit.mjs && node tests/kcal.mjs && node tests/coach.mjs && node tests/import-unit.mjs && node tests/import.mjs && node tests/reconcile-unit.mjs && node tests/import-native.mjs && node tests/hevy-dates-unit.mjs && node tests/workout-list.mjs && node tests/hevy-sets.mjs && node tests/invite.mjs && node tests/supp-scan.mjs && node coach-proxy/test/supp.mjs && node tests/targets-unit.mjs && node tests/targets.mjs && node tests/steps-unit.mjs && node tests/steps.mjs && node tests/install.mjs && node tests/private-unit.mjs && node tests/private.mjs && node tests/update.mjs && node tests/theme-unit.mjs && node tests/theme.mjs && node tests/halloween.mjs && node tests/estimate.mjs && node tests/stars-unit.mjs && node tests/review-unit.mjs && node tests/review.mjs && node tests/leaderboard.mjs",
+    "test": "node tests/smoke.mjs && node tests/ocr.mjs && node tests/onboarding.mjs && node tests/exviz-audit.mjs && node tests/exviz.mjs && node tests/seed-migration.mjs && node tests/usda.mjs && node tests/safcol.mjs && node tests/offpack-unit.mjs && node tests/offpack.mjs && node tests/facts.mjs && node tests/workout-autoend.mjs && node tests/kcal-unit.mjs && node tests/kcal.mjs && node tests/coach.mjs && node tests/import-unit.mjs && node tests/import.mjs && node tests/reconcile-unit.mjs && node tests/import-native.mjs && node tests/hevy-dates-unit.mjs && node tests/workout-list.mjs && node tests/hevy-sets.mjs && node tests/invite.mjs && node tests/supp-scan.mjs && node coach-proxy/test/supp.mjs && node tests/targets-unit.mjs && node tests/targets.mjs && node tests/steps-unit.mjs && node tests/steps.mjs && node tests/install.mjs && node tests/private-unit.mjs && node tests/private.mjs && node tests/update.mjs && node tests/theme-unit.mjs && node tests/theme.mjs && node tests/halloween.mjs && node tests/estimate.mjs && node tests/stars-unit.mjs && node tests/review-unit.mjs && node tests/review.mjs && node tests/leaderboard.mjs && node tests/nutrients.mjs && node tests/supp-nutrients.mjs",
     "build:offpack": "node scripts/build-au-pack.mjs"
   },
   "keywords": [],

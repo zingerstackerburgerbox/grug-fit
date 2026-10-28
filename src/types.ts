@@ -43,6 +43,8 @@ export type Supplement = {
   id: string; name: string; kind: 'supplement' | 'medication'; doseAmount: number; unit: string; form: string; notes?: string;
   nutrients?: Partial<Nutrients>; stock?: number | null; unitsPerDose: number; lowStock: number; color: string; archived?: boolean;
   /** v1.16.0 barcode it was scanned/entered with (the next scan finds it on this device) */ barcode?: string; brand?: string;
+  /** v1.17.0 ingredients per dose (catalogue key + amount + unit as entered); `nutrients` is kept in sync for the diary */ ingr?: { key: string; amount: number; unit: string; name?: string }[];
+  /** v1.17.0 from the label: serving size text and servings per container */ serving?: string; servings?: number;
 };
 export type Schedule = {
   id: string; suppId: string; type: 'daily' | 'weekdays' | 'interval'; weekdays: number[]; interval: number;

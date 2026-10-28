@@ -1,0 +1,158 @@
+{
+ "name": "Multivitamin for Men",
+ "brand": "nutricost",
+ "form": "Capsule",
+ "serving": {
+  "text": "2 Capsules",
+  "qty": 2,
+  "unit": "capsule"
+ },
+ "servingsPerContainer": 60,
+ "ingredients": [
+  {
+   "key": "vitA",
+   "name": "Vitamin A (as Acetate)",
+   "amount": 6000,
+   "unit": "IU"
+  },
+  {
+   "key": "vitC",
+   "name": "Vitamin C (as Ascorbic Acid)",
+   "amount": 125,
+   "unit": "mg"
+  },
+  {
+   "key": "vitD",
+   "name": "Vitamin D3 (as Cholecalciferol)",
+   "amount": 3000,
+   "unit": "IU"
+  },
+  {
+   "key": "vitE",
+   "name": "Vitamin E (as d-alpha Tocopheryl Succinate)",
+   "amount": 30,
+   "unit": "IU"
+  },
+  {
+   "key": "vitK1",
+   "name": "Vitamin K (as Phytonadione)",
+   "amount": 80,
+   "unit": "µg"
+  },
+  {
+   "key": "b1",
+   "name": "Thiamin (Vitamin B1, as Thiamine Mononitrate)",
+   "amount": 30,
+   "unit": "mg"
+  },
+  {
+   "key": "b2",
+   "name": "Riboflavin (Vitamin B2)",
+   "amount": 34,
+   "unit": "mg"
+  },
+  {
+   "key": "b3",
+   "name": "Niacin (Vitamin B3)",
+   "amount": 30,
+   "unit": "mg"
+  },
+  {
+   "key": "b6",
+   "name": "Vitamin B6 (as Pyridoxine)",
+   "amount": 20,
+   "unit": "mg"
+  },
+  {
+   "key": "folate",
+   "name": "Folic Acid (Vitamin B9)",
+   "amount": 400,
+   "unit": "µg"
+  },
+  {
+   "key": "b12",
+   "name": "Vitamin B12 (as Cyanocobalamin)",
+   "amount": 60,
+   "unit": "µg"
+  },
+  {
+   "key": "b7",
+   "name": "Biotin",
+   "amount": 300,
+   "unit": "µg"
+  },
+  {
+   "key": "b5",
+   "name": "Pantothenic Acid (Vitamin B5, as D-Calcium Pantothenate)",
+   "amount": 25,
+   "unit": "mg"
+  },
+  {
+   "key": "potassium",
+   "name": "Potassium (as Potassium Citrate)",
+   "amount": 40,
+   "unit": "µg"
+  },
+  {
+   "key": "calcium",
+   "name": "Calcium (as Calcium AAC)",
+   "amount": 10,
+   "unit": "mg"
+  },
+  {
+   "key": "iodine",
+   "name": "Iodine (as Potassium Iodine)",
+   "amount": 150,
+   "unit": "µg"
+  },
+  {
+   "key": "magnesium",
+   "name": "Magnesium (as Magnesium Oxide)",
+   "amount": 75,
+   "unit": "mg"
+  },
+  {
+   "key": "zinc",
+   "name": "Zinc (as Zinc AAC)",
+   "amount": 30,
+   "unit": "mg"
+  },
+  {
+   "key": "selenium",
+   "name": "Selenium (as L-Selenomethionine)",
+   "amount": 100,
+   "unit": "µg"
+  },
+  {
+   "key": "copper",
+   "name": "Copper (as Copper AAC)",
+   "amount": 2,
+   "unit": "mg"
+  },
+  {
+   "key": "manganese",
+   "name": "Manganese (as Manganese AAC)",
+   "amount": 2,
+   "unit": "mg"
+  },
+  {
+   "key": "chromium",
+   "name": "Chromium (as Chromium Picolinate)",
+   "amount": 120,
+   "unit": "µg"
+  },
+  {
+   "key": "molybdenum",
+   "name": "Molybdenum (as Molybdenum AAC)",
+   "amount": 75,
+   "unit": "µg"
+  },
+  {
+   "key": "custom",
+   "name": "TestX Blend",
+   "amount": 340,
+   "unit": "mg"
+  }
+ ],
+ "note": "TestX Blend components have no individual amounts and were omitted; potassium is printed as 40mcg."
+}

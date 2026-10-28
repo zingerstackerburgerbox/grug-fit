@@ -7,6 +7,9 @@ import { addDays, fmtDate, fmtDay, fmtDM, fmtTime, MICROS, MONTHS, parseYmd, r1,
 import { adherence, loadDoseData, scheduleReminders, slotsFor, type Slot } from '../doses';
 import { NutrientInputs } from './Nutrition';
 import { Scanner } from '../scanner';
+import { IngredientEditor, DoseTotals } from './SuppNutrients';
+import { legacyNutrients, suppIngredients, totals, type Ingredient } from '../nutrients';
+import { LabelPhoto } from './LabelPhoto';
 import { SRC_LABEL, keyIngredients, lookupSupp, prefill, rememberSupp, type SuppResult } from '../suppscan';
 
 const COLORS = ['#22c55e', '#0ea5e9', '#f59e0b', '#ef4444', '#a78bfa', '#f472b6', '#14b8a6', '#eab308'];
@@ -41,7 +44,7 @@ export function SlotRow({ sl, showDate }: { sl: Slot; showDate?: boolean }) {
 }
 
 export function SuppsPage() {
-  const d = useDoseData(); const today = ymd();
+  const d = useDoseData(); const today = ymd(); const set0 = useSettings();
   const [adhoc, setAdhoc] = useState<Supplement | null>(null);
   if (!d) return <Top title="Supplements" />;
   const supps = d.supps.filter((s) => !s.archived).sort((a, b) => a.name.localeCompare(b.name));
@@ -57,6 +60,7 @@ export function SuppsPage() {
         <div class="mut sm">{s.doseAmount} {s.unit} · {s.form}{sch.length ? ` · ${sch.map(describeSchedule).join('; ')}` : ' · no schedule'}</div>
         {s.stock != null && <div class={'sm ' + (s.stock <= s.lowStock ? '' : 'mut')} style={s.stock <= s.lowStock ? 'color:var(--warn)' : ''}>Stock: {r1(s.stock)} left{doses != null ? ` (~${doses} doses)` : ''}</div>}</a>
         <button class="btn sm p" onClick={() => setAdhoc(s)}>Log</button></div></div>; })}
+    <DoseTotals t={totals(todayLogs.map((l) => [suppIngredients(sm.get(l.suppId) || {}), l.amount || 1] as [Ingredient[], number]))} sex={set0?.profile?.sex} />
     <h2>Taken today</h2>
     <div class="list card" style="padding:4px 12px">{todayLogs.map((l) => <div class="item"><span class="swatch" style={{ background: sm.get(l.suppId)?.color }} /><div class="grow">{sm.get(l.suppId)?.name || '?'} <span class="mut sm">× {l.amount}{l.slot ? ` · ${l.slot} dose` : ' · extra'}</span></div><span class="mut sm">{fmtTime(l.takenAt)}</span><button class="btn ic" onClick={() => unmark(l)} aria-label="Undo">↺</button></div>)}
       {!todayLogs.length && <div class="empty">Nothing logged today</div>}</div>
@@ -79,27 +83,29 @@ export function describeSchedule(s: Schedule) {
 
 export function SuppEdit({ id }: { id: string }) {
   const set = useSettings();
-  const [s, setS, getS] = useLatest<Supplement | null>(null); const [stock, setStock] = useState(''); const [nv, setNv] = useState<Record<string, string>>({});
+  const [s, setS, getS] = useLatest<Supplement | null>(null); const [stock, setStock] = useState(''); const [ingr, setIngr, getIngr] = useLatest<Ingredient[]>([]);
   const [sch, setSch, getSch] = useLatest<Schedule[]>([]); const [removed, setRemoved] = useState<string[]>([]);
   const [scan, setScan] = useState(false); const [busy, setBusy] = useState(''); const [found, setFound] = useState<SuppResult | null>(null); const [fv, setFv] = useState(0);
   useEffect(() => {
     if (id === 'new') { setS({ id: 'sp' + uid(), name: '', kind: 'supplement', doseAmount: 1, unit: 'capsule', form: 'Capsule', unitsPerDose: 1, lowStock: 7, stock: null, color: COLORS[Math.floor(Math.random() * COLORS.length)] }); setSch([]); return; }
-    get<Supplement>('supplements', id).then((x) => { if (!x) return; setS(x); setStock(x.stock != null ? String(x.stock) : ''); const v: any = {}; for (const k in x.nutrients || {}) v[k] = String((x.nutrients as any)[k]); setNv(v); });
+    get<Supplement>('supplements', id).then((x) => { if (!x) return; setS(x); setStock(x.stock != null ? String(x.stock) : ''); setIngr(suppIngredients(x)); });
     all<Schedule>('schedules').then((l) => setSch(l.filter((x) => x.suppId === id)));
   }, [id]);
   if (!s) return <Top title="Supplement" backBtn />;
   const upd = (p: Partial<Supplement>) => setS((o) => o && { ...o, ...p });
   const onCode = async (code: string) => {
     setBusy('Looking up ' + code + '…'); const r = await lookupSupp(code); setBusy(''); setScan(false); setFound(r);
-    if (r.status === 'found') { const p = prefill(r, getS()!); setS(p.supp); setNv((o) => ({ ...o, ...p.nutrients })); setFv((x) => x + 1); }
+    if (r.status === 'found') { const p = prefill(r, getS()!); setS(p.supp); mergeIngr(p.ingr); setFv((x) => x + 1); }
     else if (r.status === 'none') upd({ barcode: code });
   };
+  /** scanned / label-read ingredients replace same-key rows and keep the rest */
+  const mergeIngr = (add: Ingredient[]) => setIngr((o) => [...o.filter((x) => !add.some((a) => a.key === x.key && (a.key !== 'custom' || a.name === x.name))), ...add]);
   const updSch = (i: number, p: Partial<Schedule>) => setSch((l) => l.map((x, j) => (j === i ? { ...x, ...p } : x)));
   const save = async () => {
     const s = getS()!; const sch = getSch();
     if (!s.name.trim()) { toast('Name required'); return; }
-    const nutrients: Partial<Nutrients> = {}; for (const k in nv) { const v = num(nv[k]); if (v != null && v !== 0) (nutrients as any)[k] = v; }
-    await put('supplements', { ...s, name: s.name.trim(), brand: s.brand?.trim() || undefined, stock: num(stock), nutrients });
+    const ing = getIngr().filter((x) => x.amount > 0); const nutrients = legacyNutrients(ing);
+    await put('supplements', { ...s, name: s.name.trim(), brand: s.brand?.trim() || undefined, stock: num(stock), nutrients, ingr: ing });
     if (s.barcode) await rememberSupp(s.barcode, { ...s, name: s.name.trim() });
     for (const x of sch) await put('schedules', { ...x, times: x.times.filter(Boolean).sort() });
     for (const r of removed) await del('schedules', r);
@@ -107,7 +113,8 @@ export function SuppEdit({ id }: { id: string }) {
     scheduleReminders(); toast('Saved'); if (id === 'new') go('/supps'); else history.back();
   };
   return <><Top title={id === 'new' ? 'New supplement' : 'Edit supplement'} backBtn right={<button class="btn p sm" onClick={save}>Save</button>} /><div class="page col">
-    <button class="btn b2 full" data-scan-open data-testid="supp-scan" onClick={() => { setFound(null); setScan(true); }}>▥ Scan barcode</button>
+    <div class="grid2"><button class="btn b2" data-scan-open data-testid="supp-scan" onClick={() => { setFound(null); setScan(true); }}>▥ Scan barcode</button>
+      <LabelPhoto onResult={(r) => { setFound(null); const p = r.apply(getS()!); setS(p.supp); mergeIngr(p.ingr); setFv((x) => x + 1); }} /></div>
     {found?.status === 'found' && <div class="card col" data-testid="supp-found"><div class="sm">Found <b>{found.name}</b>{found.brand ? ` by ${found.brand}` : ''} <span class="mut">(from {SRC_LABEL[found.src]})</span></div>
       {!!keyIngredients(found).length && <div class="xs" data-testid="supp-ingredients">{keyIngredients(found).map((i) => `${i.name} ${i.amount} ${i.unit}`).join(' · ')}</div>}
       <div class="xs mut">Grug filled the form below. Check it against the label, then Save.</div></div>}
@@ -145,8 +152,8 @@ export function SuppEdit({ id }: { id: string }) {
     <button class="btn" onClick={() => setSch([...sch, { id: 'sc' + uid(), suppId: s.id, type: 'daily', weekdays: [1, 3, 5], interval: 2, times: ['08:00'], start: ymd(), reminders: set.reminders, active: true, created: Date.now() }])}>+ Add schedule</button>
 
     <h2>Nutrients per dose (optional)</h2>
-    <div class="mut xs">These count toward your daily nutrition when you mark a dose taken (e.g. Vitamin D 25 µg, Magnesium 300 mg).</div>
-    <details class="card"><summary class="b">Edit nutrients</summary><div style="margin-top:10px"><NutrientInputs vals={nv} set={(k, v) => setNv({ ...nv, [k]: v })} /></div></details>
+    <div class="mut xs">Vitamins, minerals and compounds in one dose. Protein, fibre and the vitamins/minerals the Food diary tracks count toward your daily nutrition when you mark a dose taken.</div>
+    <IngredientEditor ingr={ingr} onChange={setIngr} sex={set.profile?.sex} />
     <button class="btn p" onClick={save}>Save</button>
     {id !== 'new' && <button class="btn d" onClick={async () => { if (confirmDo(`Delete ${s.name}? Its schedules are removed; logged history stays (hidden).`)) { await put('supplements', { ...s, archived: true }); for (const x of sch) await del('schedules', x.id); scheduleReminders(); go('/supps'); } }}>Delete</button>}
     <Scanner open={scan} onClose={() => { setScan(false); setBusy(''); }} onCode={onCode} busy={busy} />

@@ -1,7 +1,8 @@
 // v1.16.0 supplement barcodes. Order: your own doses with that barcode → device cache (incl. ones you entered by hand) →
 // offline AU pack (name/brand, instant) → coach-proxy Worker /supp/barcode (Open Food Facts → NIH DSLD → Open Products Facts,
 // edge-cached). Results are cached on the device; nothing is sent anywhere except the barcode to the Worker.
-import type { Nutrients, Supplement } from './types';
+import type { Supplement } from './types';
+import { toIngredient, type Ingredient } from './nutrients';
 import { all } from './db';
 import { cacheGet, cachePut, normCode, packLookup } from './offpack';
 import { proxyGet } from './foodlookup';
@@ -33,14 +34,11 @@ export const rememberSupp = (code: string, s: Supplement) => cachePut(KEY(code),
 
 const FILLER = /^(calories|total (fat|carbohydrates?)|fat|carbohydrates?|cholesterol|sugars?|total sugars|added sugars|dietary fiber|fibre|saturated fat|trans fat)$/i;
 export const keyIngredients = (h: SuppHit) => (h.ingredients || []).filter((i) => !FILLER.test(i.name.trim()));
-const NUT: [RegExp, keyof Nutrients, string][] = [[/^protein$/i, 'protein', 'g'], [/^vitamin d/i, 'vitD', 'µg'], [/^vitamin c/i, 'vitC', 'mg'], [/^vitamin b-?12|cobalamin/i, 'b12', 'µg'],
-  [/^magnesium/i, 'magnesium', 'mg'], [/^calcium/i, 'calcium', 'mg'], [/^iron/i, 'iron', 'mg'], [/^potassium/i, 'potassium', 'mg'], [/^sodium/i, 'sodium', 'mg'], [/^folate|folic/i, 'folate', 'µg']];
 const UNITS = ['mg', 'µg', 'g', 'IU', 'ml'];
 /** the dose-form fields a hit suggests (the user confirms before saving) */
-export function prefill(h: SuppHit, cur: Supplement): { supp: Supplement; nutrients: Record<string, string> } {
+export function prefill(h: SuppHit, cur: Supplement): { supp: Supplement; ingr: Ingredient[] } {
   const key = keyIngredients(h); const form = h.form || cur.form;
-  const n: Record<string, string> = {};
-  for (const i of h.ingredients || []) for (const [re, k, u] of NUT) if (re.test(i.name) && i.unit === u && n[k] == null) n[k] = String(i.amount);
+  const ingr = key.map((i) => toIngredient(i.name, i.amount, i.unit)); // v1.17.0: every ingredient, mapped onto the catalogue (else custom)
   let doseAmount = cur.doseAmount, unit = cur.unit, unitsPerDose = cur.unitsPerDose;
   const main = key.filter((i) => !/^protein$/i.test(i.name));
   if (main.length === 1 && UNITS.includes(main[0].unit)) { doseAmount = main[0].amount; unit = main[0].unit; } // e.g. creatine 5 g, caffeine 200 mg
@@ -48,5 +46,5 @@ export function prefill(h: SuppHit, cur: Supplement): { supp: Supplement; nutrie
   else if (h.serving?.qty) { doseAmount = h.serving.qty; unit = /scoop/i.test(h.serving.unit || '') ? 'scoop' : form === 'Tablet' ? 'tablet' : form === 'Capsule' || form === 'Softgel' ? 'capsule' : cur.unit; }
   if (form === 'Powder' && unit === 'g') unitsPerDose = doseAmount; else if (unit === 'capsule' || unit === 'tablet') unitsPerDose = doseAmount;
   const lines = [h.serving?.text && `Serving: ${h.serving.text}`, key.length ? `Per serving: ${key.map((i) => `${i.name} ${i.amount} ${i.unit}`).join(', ')}` : ''].filter(Boolean);
-  return { supp: { ...cur, name: h.name, brand: h.brand, form, doseAmount, unit, unitsPerDose, barcode: h.code || cur.barcode, notes: [cur.notes, ...lines].filter(Boolean).join('\n') || undefined }, nutrients: n };
+  return { supp: { ...cur, name: h.name, brand: h.brand, form, doseAmount, unit, unitsPerDose, barcode: h.code || cur.barcode, notes: [cur.notes, ...lines].filter(Boolean).join('\n') || undefined }, ingr };
 }

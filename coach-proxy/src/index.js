@@ -22,6 +22,7 @@
  */
 import { food } from './food.js';
 import { supp } from './supp.js';
+import { label } from './label.js';
 export { food };
 const DEFAULTS = {
   MODEL: 'grok-4.7',
@@ -434,6 +435,8 @@ export default {
     // v1.13.0 food lookups (Open Food Facts, edge-cached): no xAI key, no coach counters
     if (url.pathname.startsWith('/food/')) return food(request, env, cors, url, ip, owner);
     // v1.16.0 supplement barcodes (OFF → NIH DSLD → Open Products Facts, edge-cached): no xAI key, no coach counters
+    // v1.17.0 automated label read (xAI vision): no daily limit for now, only a per-network hourly rate limit + image size cap
+    if (url.pathname === '/supp/label') return label(request, env, cors, ip, owner, (k) => cfg(env, k));
     if (url.pathname.startsWith('/supp/')) return supp(request, env, cors, url, ip, owner);
     const c = await counts(env, device, ip, day);
     const remaining = owner ? null : Math.max(0, Math.min(capD - c.d, capI - c.i, capG - c.g));

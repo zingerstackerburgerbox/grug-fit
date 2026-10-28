@@ -89,14 +89,15 @@ if (LIVE) {
   usdaMode = 'live';
   const cases = [
     { code: '016000224735', why: 'Gushers (not in OFF)', name: /gushers/i, kcal: 360 },
-    { code: '016000196131', why: 'Fruit by the Foot (OFF has it but no nutrition)', name: /fruit by the foot/i },
+    // v1.17.0: 016000196131 (OFF had it without nutrition) was dropped from USDA FoodData Central; Holiday Mini Fruit by the Foot is USDA-only
+    { code: '016000290570', why: 'Holiday Mini Fruit by the Foot (USDA only)', name: /fruit by the foot/i, kcal: 369 },
     { code: '04963406', why: 'Coca-Cola 12 oz can as UPC-E (OFF blocked) → UPC-A 049000006346', name: /coca-cola/i, blockOff: true, unit: 'ml' },
     { code: '999990000014', why: 'bogus code', none: true }
   ];
   for (const c of cases) {
     blockOffFor = new Set(c.blockOff ? [c.code] : []); await typeCode(c.code); const o = await outcome();
     if (c.none) { if (o !== 'notfound') fail('bogus code found?'); else { const note = await page.locator('[data-testid=usda-note]').textContent().catch(() => ''); log(`live ${c.code} (${c.why}): not-found card`, note ? '— ' + note : ''); } continue; }
-    if (o === 'notfound') { const note = await page.locator('[data-testid=usda-note]').textContent().catch(() => ''); if (/busy/.test(note)) log(`WARN live ${c.code}: USDA rate-limited (${note}) — not counted as a failure`); else fail(`live ${c.code} (${c.why}) not found`); continue; }
+    if (o === 'notfound') { const note = await page.locator('[data-testid=usda-note]').textContent().catch(() => ''); if (/busy|lookup failed|timed out|Failed to fetch/i.test(note)) log(`WARN live ${c.code}: USDA unreachable or rate-limited (${note}) — not counted as a failure`); else fail(`live ${c.code} (${c.why}) not found`); continue; }
     const title = await page.locator('.sheet h2').textContent(); const f = await idb('foods', 'fdc_' + c.code);
     log(`live ${c.code} (${c.why}):`, title, '| fdcId', f?.fdcId, '| kcal/100', f?.per100.kcal, f?.unit, '| serving', f?.servings.map((s) => s.grams + ' ' + (s.note || '')).join());
     if (!c.name.test(title) || f?.source !== 'usda') fail('live hit wrong: ' + title);

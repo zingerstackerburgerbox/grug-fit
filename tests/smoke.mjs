@@ -42,8 +42,11 @@ await page.locator('label:has-text("Unit") select').selectOption('µg');
 await page.locator('label:has-text("Stock left") input').fill('9');
 await page.click('text=+ Add schedule');
 await page.locator('input[type=time]').nth(0).fill('23:58');
-await page.click('details summary');
-await page.locator('label:has-text("Vitamin D (µg)") input').fill('25');
+// v1.17: nutrients use the picker instead of the old <details> list
+await page.click('[data-testid=add-nutrient]');
+await page.fill('[data-testid=nutrient-search]', 'vitamin d');
+await page.click('[data-testid=pick-vitD]', { force: true });
+await page.locator('[data-testid=ingr-row][data-key=vitD] input').first().fill('25');
 await page.locator('header >> text=Save').click();
 await page.waitForSelector('text=Vitamin D3');
 log('supplement saved');
@@ -58,8 +61,9 @@ await page.locator('input[type=time]').nth(0).fill('23:50');
 await page.locator('input[type=time]').nth(1).fill('23:55');
 await page.locator('header >> text=Save').click();
 await page.waitForSelector('text=Creatine');
+await page.waitForFunction(() => !location.hash.includes('/supp/')); await page.waitForTimeout(300); // let Save's history.back settle
 await page.goto(BASE + '#/calendar');
-await page.waitForSelector('.card.list .item');
+await page.waitForSelector('.card.list .item').catch(async (e) => { await page.screenshot({ path: '/tmp/smokefail.png' }); throw e; });
 const slots = await page.locator('.card.list .item').count();
 log('slots today on calendar:', slots);
 if (slots < 3) fail('expected 3 dose slots today');
