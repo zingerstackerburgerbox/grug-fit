@@ -7,7 +7,7 @@ import worker from '../coach-proxy/src/index.js';
 const BASE = process.env.BASE || 'http://127.0.0.1:4173/'; const SHOTS = process.env.SHOTS;
 const log = (...a) => console.log('•', ...a); let failed = 0; const fail = (m) => { console.error('FAIL:', m); failed++; };
 const kv = new Map(); const KV = { get: async (k) => kv.get(k) ?? null, put: async (k, v) => { kv.set(k, v); }, delete: async (k) => { kv.delete(k); } };
-const ENV = { COACH_KV: KV, IP_SALT: 'test-salt', ALLOWED_ORIGINS: 'http://127.0.0.1:4173,http://localhost:4173' }; const ORIGIN = new URL(BASE).origin;
+const ENV = { COACH_KV: KV, IP_SALT: 'test-salt', ALLOWED_ORIGINS: 'http://127.0.0.1:4173,http://localhost:4173,' + new URL(BASE).origin }; const ORIGIN = new URL(BASE).origin;
 const PRE = '9300000000123', CRE = '733739020307', MISS = '9311111111116', PACK = '9300652010794';
 const upstream = []; const realFetch = globalThis.fetch;
 globalThis.fetch = async (url, init) => { const u = String(url); upstream.push(u);
