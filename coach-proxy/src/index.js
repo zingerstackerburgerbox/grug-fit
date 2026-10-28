@@ -21,6 +21,7 @@
  * barcode variants in parallel and isolate + KV caching (`food:b:` / `food:s:` keys). No xAI key, no coach counters.
  */
 import { food } from './food.js';
+import { supp } from './supp.js';
 export { food };
 const DEFAULTS = {
   MODEL: 'grok-4.7',
@@ -432,6 +433,8 @@ export default {
     if (url.pathname === '/leaderboard' || url.pathname.startsWith('/leaderboard/')) return leaderboard(request, env, cors, url, device, ip, owner);
     // v1.13.0 food lookups (Open Food Facts, edge-cached): no xAI key, no coach counters
     if (url.pathname.startsWith('/food/')) return food(request, env, cors, url, ip, owner);
+    // v1.16.0 supplement barcodes (OFF → NIH DSLD → Open Products Facts, edge-cached): no xAI key, no coach counters
+    if (url.pathname.startsWith('/supp/')) return supp(request, env, cors, url, ip, owner);
     const c = await counts(env, device, ip, day);
     const remaining = owner ? null : Math.max(0, Math.min(capD - c.d, capI - c.i, capG - c.g));
     const limitHeaders = { 'X-Coach-Remaining': owner ? 'unlimited' : String(remaining), 'X-Coach-Cap': owner ? 'unlimited' : String(capD), 'X-Coach-Reset': resetAt() };

@@ -27,8 +27,8 @@ export const cleanCode = (c) => (/^\d{6,14}$/.test(String(c || '').trim()) ? Str
 export function barcodeVariants(code) { const t = [code]; if (code.length === 12) t.push('0' + code); if (code.length === 13 && code.startsWith('0')) t.push(code.slice(1)); return t; }
 export const cleanQuery = (q) => { const t = String(q || '').toLowerCase().replace(/[\u0000-\u001f]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 60); return t.length >= 2 ? t : null; };
 
-class Upstream extends Error { constructor(kind, msg) { super(msg); this.kind = kind; } }
-async function getJson(url, ms, fetcher) {
+export class Upstream extends Error { constructor(kind, msg) { super(msg); this.kind = kind; } }
+export async function getJson(url, ms, fetcher) {
   const c = new AbortController(); const t = setTimeout(() => c.abort(), ms);
   try {
     const r = await fetcher(url, { headers: { 'User-Agent': UA, Accept: 'application/json' }, signal: c.signal, cf: { cacheTtl: 3600, cacheEverything: true } });
@@ -38,14 +38,14 @@ async function getJson(url, ms, fetcher) {
   } catch (e) { if (e instanceof Upstream) throw e; throw new Upstream(e?.name === 'AbortError' ? 'timeout' : 'network', e?.name === 'AbortError' ? `timed out after ${ms} ms` : 'network error'); }
   finally { clearTimeout(t); }
 }
-const isFound = (j) => j && (j.status === 1 || j.status === 'success' || j.status === 'success_with_warnings') && j.product;
+export const isFound = (j) => j && (j.status === 1 || j.status === 'success' || j.status === 'success_with_warnings') && j.product;
 
 // isolate-local cache in front of KV (KV reads are already edge-cached, this saves even that hop for hot items)
 const mem = new Map(); const MEM_MAX = 500;
 const memGet = (k) => { const e = mem.get(k); if (!e) return null; if (e.exp < Date.now()) { mem.delete(k); return null; } return e.v; };
 const memPut = (k, v, ttl) => { if (mem.size >= MEM_MAX) mem.delete(mem.keys().next().value); mem.set(k, { v, exp: Date.now() + Math.min(ttl, 3600) * 1000 }); };
 export const _clearFoodMem = () => mem.clear();
-async function cached(env, key, ttlFor, load) {
+export async function cached(env, key, ttlFor, load) {
   const m = memGet(key); if (m) return { v: m, src: 'mem' };
   const k = await env.COACH_KV.get(key).catch(() => null);
   if (k) { try { const v = JSON.parse(k); memPut(key, v, 3600); return { v, src: 'kv' }; } catch {} }
@@ -56,7 +56,7 @@ async function cached(env, key, ttlFor, load) {
 
 // short-burst guard per hashed network (isolate-local, approximate): lookups are cheap but OFF asks for polite clients
 const burst = new Map(); export const FOOD_PER_MIN = 60;
-function tooMany(ip, now = Date.now()) { const b = burst.get(ip); if (!b || now - b.t > 60000) { burst.set(ip, { t: now, n: 1 }); if (burst.size > 5000) burst.clear(); return false; } return ++b.n > FOOD_PER_MIN; }
+export function tooMany(ip, now = Date.now()) { const b = burst.get(ip); if (!b || now - b.t > 60000) { burst.set(ip, { t: now, n: 1 }); if (burst.size > 5000) burst.clear(); return false; } return ++b.n > FOOD_PER_MIN; }
 export const _clearFoodBurst = () => burst.clear();
 
 export async function food(request, env, cors, url, ip, owner, fetcher = fetch) {

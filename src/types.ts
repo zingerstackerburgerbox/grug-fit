@@ -42,6 +42,7 @@ export type DiaryEntry = ImportTag & { id: string; date: string; meal: Meal; foo
 export type Supplement = {
   id: string; name: string; kind: 'supplement' | 'medication'; doseAmount: number; unit: string; form: string; notes?: string;
   nutrients?: Partial<Nutrients>; stock?: number | null; unitsPerDose: number; lowStock: number; color: string; archived?: boolean;
+  /** v1.16.0 barcode it was scanned/entered with (the next scan finds it on this device) */ barcode?: string; brand?: string;
 };
 export type Schedule = {
   id: string; suppId: string; type: 'daily' | 'weekdays' | 'interval'; weekdays: number[]; interval: number;

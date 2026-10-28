@@ -6,6 +6,8 @@ import { Bar, NumInput, Seg, Sheet, Top, confirmDo, num, toast } from '../ui';
 import { addDays, fmtDate, fmtDay, fmtDM, fmtTime, MICROS, MONTHS, parseYmd, r1, uid, WD, ymd } from '../util';
 import { adherence, loadDoseData, scheduleReminders, slotsFor, type Slot } from '../doses';
 import { NutrientInputs } from './Nutrition';
+import { Scanner } from '../scanner';
+import { SRC_LABEL, keyIngredients, lookupSupp, prefill, rememberSupp, type SuppResult } from '../suppscan';
 
 const COLORS = ['#22c55e', '#0ea5e9', '#f59e0b', '#ef4444', '#a78bfa', '#f472b6', '#14b8a6', '#eab308'];
 const UNITS = ['mg', 'µg', 'g', 'IU', 'ml', 'capsule', 'tablet', 'scoop', 'drop'];
@@ -79,6 +81,7 @@ export function SuppEdit({ id }: { id: string }) {
   const set = useSettings();
   const [s, setS, getS] = useLatest<Supplement | null>(null); const [stock, setStock] = useState(''); const [nv, setNv] = useState<Record<string, string>>({});
   const [sch, setSch, getSch] = useLatest<Schedule[]>([]); const [removed, setRemoved] = useState<string[]>([]);
+  const [scan, setScan] = useState(false); const [busy, setBusy] = useState(''); const [found, setFound] = useState<SuppResult | null>(null); const [fv, setFv] = useState(0);
   useEffect(() => {
     if (id === 'new') { setS({ id: 'sp' + uid(), name: '', kind: 'supplement', doseAmount: 1, unit: 'capsule', form: 'Capsule', unitsPerDose: 1, lowStock: 7, stock: null, color: COLORS[Math.floor(Math.random() * COLORS.length)] }); setSch([]); return; }
     get<Supplement>('supplements', id).then((x) => { if (!x) return; setS(x); setStock(x.stock != null ? String(x.stock) : ''); const v: any = {}; for (const k in x.nutrients || {}) v[k] = String((x.nutrients as any)[k]); setNv(v); });
@@ -86,29 +89,44 @@ export function SuppEdit({ id }: { id: string }) {
   }, [id]);
   if (!s) return <Top title="Supplement" backBtn />;
   const upd = (p: Partial<Supplement>) => setS((o) => o && { ...o, ...p });
+  const onCode = async (code: string) => {
+    setBusy('Looking up ' + code + '…'); const r = await lookupSupp(code); setBusy(''); setScan(false); setFound(r);
+    if (r.status === 'found') { const p = prefill(r, getS()!); setS(p.supp); setNv((o) => ({ ...o, ...p.nutrients })); setFv((x) => x + 1); }
+    else if (r.status === 'none') upd({ barcode: code });
+  };
   const updSch = (i: number, p: Partial<Schedule>) => setSch((l) => l.map((x, j) => (j === i ? { ...x, ...p } : x)));
   const save = async () => {
     const s = getS()!; const sch = getSch();
     if (!s.name.trim()) { toast('Name required'); return; }
     const nutrients: Partial<Nutrients> = {}; for (const k in nv) { const v = num(nv[k]); if (v != null && v !== 0) (nutrients as any)[k] = v; }
-    await put('supplements', { ...s, name: s.name.trim(), stock: num(stock), nutrients });
+    await put('supplements', { ...s, name: s.name.trim(), brand: s.brand?.trim() || undefined, stock: num(stock), nutrients });
+    if (s.barcode) await rememberSupp(s.barcode, { ...s, name: s.name.trim() });
     for (const x of sch) await put('schedules', { ...x, times: x.times.filter(Boolean).sort() });
     for (const r of removed) await del('schedules', r);
     if (sch.some((x) => x.reminders) && typeof Notification !== 'undefined' && Notification.permission === 'default') await Notification.requestPermission();
     scheduleReminders(); toast('Saved'); if (id === 'new') go('/supps'); else history.back();
   };
   return <><Top title={id === 'new' ? 'New supplement' : 'Edit supplement'} backBtn right={<button class="btn p sm" onClick={save}>Save</button>} /><div class="page col">
+    <button class="btn b2 full" data-scan-open data-testid="supp-scan" onClick={() => { setFound(null); setScan(true); }}>▥ Scan barcode</button>
+    {found?.status === 'found' && <div class="card col" data-testid="supp-found"><div class="sm">Found <b>{found.name}</b>{found.brand ? ` by ${found.brand}` : ''} <span class="mut">(from {SRC_LABEL[found.src]})</span></div>
+      {!!keyIngredients(found).length && <div class="xs" data-testid="supp-ingredients">{keyIngredients(found).map((i) => `${i.name} ${i.amount} ${i.unit}`).join(' · ')}</div>}
+      <div class="xs mut">Grug filled the form below. Check it against the label, then Save.</div></div>}
+    {found?.status === 'saved' && <div class="card col" data-testid="supp-saved"><div class="sm"><b>{found.supp.name}</b> is already in your doses.</div><a class="btn sm" href={'#/supp/' + found.supp.id}>Open it</a></div>}
+    {found?.status === 'none' && <div class="card col" data-testid="supp-notfound"><b class="sm">Not found{found.offline ? ' (offline or lookup unavailable)' : ''}</b>
+      <div class="xs mut">Enter it below. Lunk remembers barcode {s.barcode} on this device, so the next scan finds it.</div>
+      <button class="btn sm" onClick={() => setScan(true)}>Scan again</button></div>}
     <Seg value={s.kind} onChange={(kind) => upd({ kind })} options={[['supplement', 'Supplement'], ['medication', 'Medication']]} />
-    <label class="f">Name<input value={s.name} onInput={(e) => upd({ name: e.currentTarget.value })} placeholder="e.g. Vitamin D3" /></label>
-    <div class="grid3"><label class="f">Dose<NumInput value={s.doseAmount} onValue={(n) => upd({ doseAmount: n || 0 })} /></label>
+    <label class="f">Name<input value={s.name} data-testid="supp-name" onInput={(e) => upd({ name: e.currentTarget.value })} placeholder="e.g. Vitamin D3" /></label>
+    <label class="f">Brand (optional)<input value={s.brand || ''} data-testid="supp-brand" onInput={(e) => upd({ brand: e.currentTarget.value })} /></label>
+    <div class="grid3" key={fv}><label class="f">Dose<NumInput value={s.doseAmount} onValue={(n) => upd({ doseAmount: n || 0 })} /></label>
       <label class="f">Unit<select value={s.unit} onChange={(e) => upd({ unit: e.currentTarget.value })}>{UNITS.map((u) => <option>{u}</option>)}</select></label>
       <label class="f">Form<select value={s.form} onChange={(e) => upd({ form: e.currentTarget.value })}>{FORMS.map((u) => <option>{u}</option>)}</select></label></div>
-    <div class="grid3"><label class="f">Stock left<input inputMode="decimal" value={stock} placeholder="untracked" onInput={(e) => setStock(e.currentTarget.value)} /></label>
+    <div class="grid3" key={"b" + fv}><label class="f">Stock left<input inputMode="decimal" value={stock} placeholder="untracked" onInput={(e) => setStock(e.currentTarget.value)} /></label>
       <label class="f">Units per dose<NumInput value={s.unitsPerDose} onValue={(n) => upd({ unitsPerDose: n || 1 })} /></label>
       <label class="f">Warn at ≤<NumInput value={s.lowStock} onValue={(n) => upd({ lowStock: n || 0 })} /></label></div>
     <div class="mut xs">Stock is counted in {s.form.toLowerCase()}s/units (e.g. 60 capsules, 2 capsules per dose). For powders, use grams.</div>
     <label class="f">Colour<div class="row">{COLORS.map((c) => <button aria-label={c} onClick={() => upd({ color: c })} style={{ width: '36px', height: '36px', borderRadius: '50%', background: c, border: s.color === c ? '3px solid #fff' : '0' }} />)}</div></label>
-    <label class="f">Notes<textarea value={s.notes || ''} onInput={(e) => upd({ notes: e.currentTarget.value })} placeholder="e.g. take with food" /></label>
+    <label class="f">Notes<textarea data-testid="supp-notes" value={s.notes || ''} onInput={(e) => upd({ notes: e.currentTarget.value })} placeholder="e.g. take with food" /></label>
 
     <h2>Schedules</h2>
     {sch.map((x, i) => <div class="card col">
@@ -131,6 +149,7 @@ export function SuppEdit({ id }: { id: string }) {
     <details class="card"><summary class="b">Edit nutrients</summary><div style="margin-top:10px"><NutrientInputs vals={nv} set={(k, v) => setNv({ ...nv, [k]: v })} /></div></details>
     <button class="btn p" onClick={save}>Save</button>
     {id !== 'new' && <button class="btn d" onClick={async () => { if (confirmDo(`Delete ${s.name}? Its schedules are removed; logged history stays (hidden).`)) { await put('supplements', { ...s, archived: true }); for (const x of sch) await del('schedules', x.id); scheduleReminders(); go('/supps'); } }}>Delete</button>}
+    <Scanner open={scan} onClose={() => { setScan(false); setBusy(''); }} onCode={onCode} busy={busy} />
   </div></>;
 }
 

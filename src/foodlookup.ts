@@ -6,7 +6,7 @@ import { cacheGet, cachePut, normCode, packLookup, packSearch } from './offpack'
 import { deviceId, proxyReady, proxyUrl } from './coach';
 
 const usable = (f: Food | null) => !!f && (f.per100.kcal > 0 || f.per100.protein > 0 || f.per100.fat > 0 || f.per100.carbs > 0);
-async function proxyGet(path: string, ms: number) {
+export async function proxyGet(path: string, ms: number) {
   const c = new AbortController(); const t = setTimeout(() => c.abort(), ms);
   let r: Response;
   try { r = await fetch(proxyUrl() + path, { headers: { 'X-Device-Id': deviceId() }, signal: c.signal }); }
