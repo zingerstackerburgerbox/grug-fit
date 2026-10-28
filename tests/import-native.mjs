@@ -66,11 +66,11 @@ const S = (kg, reps, x = {}) => ({ id: Math.random().toString(36).slice(2), type
   const dlSets = lastDl.exercises.filter((e) => e.exerciseId === 'ex012').flatMap((e) => e.sets).filter((s) => s.done);
   const empty = (l, p) => l.map((s, i) => ({ id: p + i, type: s.type, kg: null, reps: null, done: false }));
   await idb(`await p(tx('kv','readwrite').put({ id: 'active', w: arg }));`, { id: 'act1', name: 'Today', start: NOW.getTime(), lastActivityAt: NOW.getTime(), exercises: [{ id: 'a1', exerciseId: 'ex001', restSec: 0, sets: empty(prevSets, 'b') }, { id: 'a2', exerciseId: 'ex012', restSec: 0, sets: empty(dlSets, 'd') }] });
-  await page.goto(BASE + '#/workout/active'); await page.waitForSelector('td.prev');
-  const prev = await page.locator('td.prev').allTextContents(); log('PREVIOUS column:', prev.join(' | '), '← imported', lastBench.name, new Date(lastBench.start).toDateString(), '+', lastDl.name, new Date(lastDl.start).toDateString());
+  await page.goto(BASE + '#/workout/active'); await page.waitForSelector('.set-row .prev');
+  const prev = await page.locator('.set-row .prev').allTextContents(); log('PREVIOUS column:', prev.join(' | '), '← imported', lastBench.name, new Date(lastBench.start).toDateString(), '+', lastDl.name, new Date(lastDl.start).toDateString());
   if (prev.join('|') !== [...prevSets, ...dlSets].map((s) => `${s.kg} × ${s.reps}`).join('|')) fail('PREVIOUS column ≠ imported sets');
   await page.addStyleTag({ content: '.toast{display:none!important}' }); await page.waitForTimeout(150);
-  await page.locator('table.sets').first().screenshot({ path: 'screenshots/52-previous-from-import.png' });
+  await page.locator('.sets').first().screenshot({ path: 'screenshots/52-previous-from-import.png' });
   await page.screenshot({ path: 'screenshots/52b-previous-full.png' });
   await page.locator('button[aria-label="Complete set"]').first().click(); await page.waitForTimeout(200);
   const a = await idb(`return (await p(tx('kv').get('active'))).w.exercises[0].sets[0]`); log('tick fills from previous:', a.kg, '×', a.reps); if (a.kg !== prevSets[0].kg || a.reps !== prevSets[0].reps) fail('tick fill from imported previous');
@@ -127,7 +127,7 @@ const S = (kg, reps, x = {}) => ({ id: Math.random().toString(36).slice(2), type
   await page.goto(BASE + '#/history/' + leg.id + '?edit=1'); await page.waitForSelector('[data-testid=save-workout]');
   await page.locator('input[aria-label=Reps]').first().fill('9'); await page.click('[data-testid=save-workout]'); await page.waitForSelector('[data-testid=edit-workout]');
   const leg2 = await idb(`return await p(tx('workouts').get(arg))`, leg.id); log('edited imported workout reps:', leg2.exercises[0].sets[0].reps, '| source kept:', leg2.importSource); if (leg2.exercises[0].sets[0].reps !== 9 || leg2.importSource !== 'hevy') fail('edit imported');
-  await page.click('[data-testid=repeat-workout]'); await page.waitForURL(/workout\/active/); await page.waitForSelector('td.prev');
+  await page.click('[data-testid=repeat-workout]'); await page.waitForURL(/workout\/active/); await page.waitForSelector('.set-row .prev');
   const act = await idb(`return (await p(tx('kv').get('active'))).w`); log('repeat → active:', act.name, act.exercises.length, 'exercises,', act.exercises.reduce((a, e) => a + e.sets.length, 0), 'sets prefilled, none ticked:', act.exercises.every((e) => e.sets.every((s) => !s.done)));
   if (act.name !== 'Leg Day' || act.exercises.length !== leg2.exercises.length || act.exercises[0].sets[0].kg !== leg2.exercises[0].sets[0].kg) fail('repeat workout');
   await page.locator('button:has-text("Discard workout")').click(); await page.waitForTimeout(200);

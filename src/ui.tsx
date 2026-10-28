@@ -23,6 +23,17 @@ export function Sheet({ open, onClose, children, title }: { open: boolean; onClo
 }
 let toastSet: ((s: string | null) => void) | null = null;
 export const toast = (s: string) => toastSet?.(s);
+type Snack = { msg: string; action?: string; onAction?: () => void; ms: number; k: number };
+let snackSet: ((s: Snack | null) => void) | null = null; let snackK = 0;
+/** v1.14.0: bottom snackbar with one action (e.g. "Set deleted · Undo"), ~5 s. A new snack replaces the current one. */
+export const snack = (msg: string, action?: string, onAction?: () => void, ms = 5000) => snackSet?.({ msg, action, onAction, ms, k: ++snackK });
+export function Snackbar() {
+  const [t, setT] = useState<Snack | null>(null);
+  useEffect(() => { snackSet = setT; return () => { snackSet = null; }; }, []);
+  useEffect(() => { if (t) { const x = setTimeout(() => setT(null), t.ms); return () => clearTimeout(x); } }, [t]);
+  return t ? <div class="snackbar" role="status" data-testid="snackbar" key={t.k}><span>{t.msg}</span>
+    {t.action && <button class="snack-act" data-testid="snackbar-action" onClick={() => { const f = t.onAction; setT(null); f?.(); }}>{t.action}</button>}</div> : null;
+}
 export function Toaster() {
   const [t, setT] = useState<string | null>(null);
   useEffect(() => { toastSet = setT; }, []);

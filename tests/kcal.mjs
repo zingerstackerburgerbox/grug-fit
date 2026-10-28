@@ -32,7 +32,7 @@ await idb(`const s = await p(tx('kv').get('settings')); s.profile = { heightCm: 
 await page.goto(BASE + '#/workout/active'); await page.waitForSelector('[data-testid=live-kcal]'); await page.waitForTimeout(300);
 const live = (await page.textContent('[data-testid=live-kcal]')).trim(); log('live estimate (75 min, long rests):', live);
 if (live !== '31') fail(`live kcal ${live}, want 31 (3×8.74 bench + 4.76 plank)`);
-const heads = await page.locator('table.sets thead').nth(1).textContent(); log('plank columns:', heads); if (!/Sec/.test(heads)) fail('plank should log seconds');
+const heads = await page.locator('.sets .sets-h').nth(1).textContent(); log('plank columns:', heads); if (!/Sec/.test(heads)) fail('plank should log seconds');
 await page.click('text=Finish'); await page.click('text=Finish (discard unticked sets)');
 await page.waitForSelector('[data-testid=workout-kcal-value]'); await page.waitForTimeout(400);
 const sum = (await page.textContent('[data-testid=workout-kcal-value]')).trim(); log('summary:', sum, '|', await page.textContent('[data-testid=kcal-breakdown]'));

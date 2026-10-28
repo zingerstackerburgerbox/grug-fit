@@ -246,9 +246,9 @@ async function doWorkout(kg, reps) {
   await page.click('text=Start routine');
   await page.waitForSelector('text=Bench Press (Barbell)');
   const card = page.locator('.card:has-text("Bench Press (Barbell)")');
-  const rows = card.locator('tbody tr');
+  const rows = card.locator('.set-row');
   for (let i = 0; i < 3; i++) { await rows.nth(i).locator('input[aria-label=Weight]').fill(String(kg)); await rows.nth(i).locator('input[aria-label=Weight]').blur(); await rows.nth(i).locator('input[aria-label=Reps]').fill(String(reps)); await rows.nth(i).locator('button[aria-label="Complete set"]').click(); }
-  const lr = page.locator('.card:has-text("Lateral Raise")').locator('tbody tr').first();
+  const lr = page.locator('.card:has-text("Lateral Raise")').locator('.set-row').first();
   await lr.locator('input[aria-label=Weight]').fill('10'); await lr.locator('input[aria-label=Weight]').blur(); await lr.locator('input[aria-label=Reps]').fill('12'); await lr.locator('button[aria-label="Complete set"]').click();
 }
 await doWorkout(60, 8);
@@ -256,8 +256,8 @@ const restVisible = await page.locator('.rest').isVisible(); log('rest timer vis
 await page.click('header >> text=Finish'); await page.click('.sheet button:has-text("Finish")'); await page.waitForSelector('text=Workout complete');
 await page.click('text=Done');
 await doWorkout(65, 8);
-const prevTxt = await page.locator('.card:has-text("Bench Press (Barbell)") td.prev').first().textContent(); log('previous column:', prevTxt); if (!/60/.test(prevTxt)) fail('previous performance not shown');
-const prevAll = await page.locator('.card:has-text("Bench Press (Barbell)") td.prev').allTextContents(); log('prev all:', prevAll.join(' | ')); if (prevAll.some((t) => t.includes('—'))) fail('a previous set lost its weight');
+const prevTxt = await page.locator('.card:has-text("Bench Press (Barbell)") .set-row .prev').first().textContent(); log('previous column:', prevTxt); if (!/60/.test(prevTxt)) fail('previous performance not shown');
+const prevAll = await page.locator('.card:has-text("Bench Press (Barbell)") .set-row .prev').allTextContents(); log('prev all:', prevAll.join(' | ')); if (prevAll.some((t) => t.includes('—'))) fail('a previous set lost its weight');
 // set type: make first set warm-up
 await page.locator('.card:has-text("Bench Press (Barbell)") button.stype').first().click(); await page.click('.sheet >> text=Warm-up');
 await page.waitForTimeout(200); await shot('03-active-workout');

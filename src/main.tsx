@@ -6,7 +6,7 @@ import { useEffect, useState } from 'preact/hooks';
 import './style.css';
 import { init } from './db';
 import { useHash } from './hooks';
-import { Toaster } from './ui';
+import { Snackbar, Toaster } from './ui';
 import { ymd } from './util';
 import { Home } from './pages/Home';
 import { ActiveWorkout, BodyWeightPage, ExerciseDetail, ExercisesPage, HistoryRedirect, RestBar, RoutineEdit, WorkoutDetail, WorkoutsHome } from './pages/Workouts';
@@ -117,7 +117,7 @@ function App() {
     <UsernameGate />
     <SeasonNotice />
     <UpdateBanner />
-    <Toaster />
+    <Toaster /><Snackbar />
   </>;
 }
 initTheme();

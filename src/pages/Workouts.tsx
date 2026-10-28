@@ -4,7 +4,8 @@ import { all, del, get, put, reconcileNow } from '../db';
 import { mergeExercise } from '../reconcile';
 import { go, useLatest, useNow, useQuery, useSettings } from '../hooks';
 import type { BodyWeight, Exercise, Routine, RoutineEx, SetType, Settings, WExercise, WSet, Workout } from '../types';
-import { Bar, LineChart, NumInput, Seg, Sheet, Top, confirmDo, num, toast } from '../ui';
+import { Bar, LineChart, NumInput, Seg, Sheet, Top, confirmDo, num, snack, toast } from '../ui';
+import { SetTable, TYPE_LABEL } from './SetRows';
 import { e1rm, fmtDate, fmtDM, fmtDur, fmtTime, r1, uid, vibrate, wDisp, wIn, ymd, WD } from '../util';
 import { detectPRs, exerciseHistory, previousSets, workoutSetCount, workoutVolume } from '../workoutLogic';
 import { CustomExerciseForm, ExerciseFilter, ExercisePicker, useExercises } from './ExercisePicker';
@@ -171,12 +172,11 @@ export function RestBar() {
   const [, f] = useState(0); useEffect(() => rest.sub(() => f((x) => x + 1)), []);
   const now = useNow(250); const st = rest.get();
   if (!st) return null; const left = Math.max(0, (st.end - now) / 1000);
-  return <div class="rest" role="timer"><span class="mut sm">Rest</span><span class="t">{Math.floor(left / 60)}:{String(Math.ceil(left % 60) === 60 ? 0 : Math.floor(left % 60)).padStart(2, '0')}</span>
+  return <div class="rest" role="timer"><span class="mut sm">Rest</span><span class="t">{Math.floor(Math.ceil(left) / 60)}:{String(Math.ceil(left) % 60).padStart(2, '0')}</span>
     <div style="width:80px"><Bar value={st.total - left} target={st.total} color="var(--acc2)" /></div>
     <button class="btn sm" onClick={() => rest.add(-15)}>−15</button><button class="btn sm" onClick={() => rest.add(15)}>+15</button><button class="btn sm b2" onClick={() => rest.stop()}>Skip</button></div>;
 }
 
-const TYPE_LABEL: Record<SetType, string> = { W: 'Warm-up', N: 'Normal', D: 'Drop set', F: 'Failure' };
 export function ActiveWorkout() {
   const exList = useExercises(); const exs = exMap(exList); const s = useSettings(); const hist = useWorkouts();
   const [w, setW] = useState<Workout | null | undefined>(undefined);
@@ -200,6 +200,12 @@ export function ActiveWorkout() {
   // all updates read the latest workout from the ref so rapid successive edits never clobber each other
   const updEx = (ei: number, p: Partial<WExercise> | ((e: WExercise) => Partial<WExercise>)) => { const c = cur(); if (!c) return; save({ ...c, exercises: c.exercises.map((e, i) => (i === ei ? { ...e, ...(typeof p === 'function' ? p(e) : p) } : e)) }); };
   const updSet = (ei: number, si: number, p: Partial<WSet>) => updEx(ei, (e) => ({ sets: e.sets.map((x, j) => (j === si ? { ...x, ...p } : x)) }));
+  /** delete a set (swipe or the set menu) with a 5 s Undo that puts it back where it was */
+  const delSet = (exId: string, si: number) => {
+    const c = cur(); const e = c?.exercises.find((x) => x.id === exId); const st = e?.sets[si]; if (!e || !st) return;
+    save({ ...c, exercises: c.exercises.map((x) => (x.id === exId ? { ...x, sets: x.sets.filter((_, j) => j !== si) } : x)) });
+    snack('Set deleted', 'Undo', () => { const c2 = cur(); if (!c2) return; save({ ...c2, exercises: c2.exercises.map((x) => (x.id === exId ? { ...x, sets: [...x.sets.slice(0, si), st, ...x.sets.slice(si)] } : x)) }); });
+  };
   const prevMap = useMemo(() => new Map((w?.exercises || []).map((e) => [e.exerciseId, previousSets(hist, e.exerciseId)])), [hist, w?.exercises.length]);
 
   if (summary) return <WorkoutSummary w={summary} exs={exs} />;
@@ -234,24 +240,12 @@ export function ActiveWorkout() {
       <div class="kpi"><div><span class="mut xs">Duration</span><b>{fmtDur(now - w.start)}</b></div><div><span class="mut xs">Volume</span><b>{Math.round(Number(wDisp(vol, s)))} {s.weightUnit}</b></div><div><span class="mut xs">Sets</span><b>{doneSets}</b></div><div><span class="mut xs">🔥 Est.</span><b data-testid="live-kcal">{workoutKcal(w, liveKg, exs)}</b></div></div>
       {w.exercises.map((e, ei) => {
         const ex = exs.get(e.exerciseId); const prev = prevMap.get(e.exerciseId) || []; const mode = setMode(ex);
-        let n = 0;
-        return <div class="card" style="margin-top:12px;padding:12px 8px">
+        return <div class="card" style="margin-top:12px;padding:12px 8px" data-testid="ex-card">
           <div class="row between" style="padding:0 4px;gap:8px"><ExThumb ex={ex} size={44} onClick={() => setDemo(e.exerciseId)} /><a class="b grow ell" style="color:var(--acc2);text-decoration:none" href={`#/exercise/${e.exerciseId}`}>{ex?.name || 'Unknown exercise'}</a>
             <span class="pill">⏲ {e.restSec ? `${e.restSec}s` : 'off'}</span><button class="btn ic" aria-label="Exercise menu" onClick={() => setExMenu(ei)}>⋮</button></div>
           {e.notes != null && <input placeholder="Notes" value={e.notes} onInput={(x) => updEx(ei, { notes: x.currentTarget.value })} style="margin:4px 0 6px" />}
-          <table class="sets"><thead><tr><th style="width:42px">Set</th><th>Previous</th><th style="width:20%">{mode === 'cardio' ? 'km' : s.weightUnit}</th><th style="width:16%">{mode === 'hold' ? 'Sec' : mode === 'cardio' ? 'Min' : 'Reps'}</th><th style="width:13%">RPE</th><th style="width:46px">✓</th></tr></thead>
-            <tbody>{e.sets.map((st, si) => {
-              const label = st.type === 'N' ? String(++n) : st.type; const pv = prev[si];
-              return <tr class={st.done ? 'done' : ''}>
-                <td><button class={'stype ' + st.type} onClick={() => setSetMenu({ ei, si })} aria-label={`Set ${label} type ${TYPE_LABEL[st.type]}`}>{label}</button></td>
-                <td class="prev" onClick={() => pv && updSet(ei, si, { kg: pv.kg, reps: pv.reps })}>{pv ? `${pv.kg != null ? wDisp(pv.kg, s) : '—'} × ${pv.reps ?? '—'}` : '—'}</td>
-                <td>{mode === 'cardio' ? <NumInput placeholder={pv?.km != null ? String(pv.km) : '0'} value={st.km ?? null} onValue={(v) => updSet(ei, si, { km: v })} aria-label="Distance km" />
-                  : <NumInput placeholder={pv?.kg != null ? String(wDisp(pv.kg, s)) : '0'} value={st.kg != null ? wDisp(st.kg, s) : null} onValue={(v) => updSet(ei, si, { kg: v == null ? null : wIn(v, s) })} aria-label="Weight" />}</td>
-                <td><NumInput int placeholder={pv?.reps != null ? String(pv.reps) : '0'} value={st.reps} onValue={(v) => updSet(ei, si, { reps: v })} aria-label={mode === 'hold' ? 'Seconds' : mode === 'cardio' ? 'Minutes' : 'Reps'} /></td>
-                <td><NumInput placeholder="–" value={st.rpe} onValue={(v) => updSet(ei, si, { rpe: v == null ? null : Math.min(10, Math.max(1, v)) })} aria-label="RPE" /></td>
-                <td><button class={'check ' + (st.done ? 'on' : '')} onClick={() => toggleDone(ei, si)} aria-label="Complete set">✓</button></td></tr>;
-            })}</tbody></table>
-          <button class="btn sm full" style="margin-top:8px" onClick={() => { const last = e.sets[e.sets.length - 1]; updEx(ei, { sets: [...e.sets, newSet({ kg: last?.kg ?? null, reps: last?.reps ?? null })] }); }}>+ Add set</button>
+          <SetTable sets={e.sets} prev={prev} mode={mode} s={s} rpe onUpd={(si, p) => updSet(ei, si, p)} onToggle={(si) => toggleDone(ei, si)} onType={(si) => setSetMenu({ ei, si })}
+            onDelete={(si) => delSet(e.id, si)} onAdd={() => { const c = cur().exercises[ei]; const last = c.sets[c.sets.length - 1]; updEx(ei, { sets: [...c.sets, newSet({ kg: last?.kg ?? null, reps: last?.reps ?? null, ...(last?.km != null ? { km: last.km } : {}) })] }); }} />
         </div>;
       })}
       <button class="btn b2 full" style="margin-top:14px" onClick={() => setPick(true)}>+ Add exercise</button>
@@ -262,7 +256,7 @@ export function ActiveWorkout() {
     <ExercisePicker open={pick} onClose={() => setPick(false)} onAdd={(ids) => save({ ...cur(), exercises: [...w.exercises, ...ids.map((x) => ({ id: uid(), exerciseId: x, restSec: s.defaultRest, sets: [newSet()] }))] })} />
     <Sheet open={!!setMenu} onClose={() => setSetMenu(null)} title="Set type">
       {setMenu && <div class="col">{(['W', 'N', 'D', 'F'] as SetType[]).map((t) => <button class={'btn ' + (w.exercises[setMenu.ei]?.sets[setMenu.si]?.type === t ? 'b2' : '')} onClick={() => { updSet(setMenu.ei, setMenu.si, { type: t }); setSetMenu(null); }}><span class={'stype ' + t}>{t === 'N' ? '1' : t}</span> {TYPE_LABEL[t]}</button>)}
-        <button class="btn d" onClick={() => { const e = w.exercises[setMenu.ei]; updEx(setMenu.ei, { sets: e.sets.filter((_, j) => j !== setMenu.si) }); setSetMenu(null); }}>Delete set</button></div>}
+        <button class="btn d" data-testid="menu-delete-set" onClick={() => { const e = w.exercises[setMenu.ei]; if (e) delSet(e.id, setMenu.si); setSetMenu(null); }}>Delete set</button></div>}
     </Sheet>
     <Sheet open={exMenu != null} onClose={() => setExMenu(null)} title={exMenu != null ? exs.get(w.exercises[exMenu]?.exerciseId)?.name : ''}>
       {exMenu != null && w.exercises[exMenu] && <div class="col">
@@ -310,10 +304,19 @@ const fromLocalInput = (v: string) => { const t = new Date(v).getTime(); return 
 export function WorkoutDetail({ id }: { id: string }) {
   const w0 = useQuery(() => get<Workout>('workouts', id), [id]); const exs = exMap(useExercises()); const s = useSettings(); const hist = useWorkouts();
   const [edit, setEdit] = useState(/[?&]edit=1/.test(location.hash)); const [d, setD] = useState<Workout | null>(null);
+  const [pick, setPick] = useState(false); const [setMenu, setSetMenu] = useState<{ ei: number; si: number } | null>(null); const [exMenu, setExMenu] = useState<number | null>(null);
   useEffect(() => { if (edit && w0 && !d) setD(structuredClone(w0)); }, [edit, w0]);
   const w = edit && d ? d : w0;
   if (!w) return <Top title="Workout" backBtn />;
   const updSet = (ei: number, si: number, p: Partial<WSet>) => setD((o) => o && { ...o, exercises: o.exercises.map((e, i) => (i === ei ? { ...e, sets: e.sets.map((x, j) => (j === si ? { ...x, ...p } : x)) } : e)) });
+  const updEx = (ei: number, f: (e: WExercise) => Partial<WExercise>) => setD((o) => o && { ...o, exercises: o.exercises.map((e, i) => (i === ei ? { ...e, ...f(e) } : e)) });
+  const delSet = (exId: string, si: number) => {
+    const st = d?.exercises.find((x) => x.id === exId)?.sets[si]; if (!st) return;
+    setD((o) => o && { ...o, exercises: o.exercises.map((x) => (x.id === exId ? { ...x, sets: x.sets.filter((_, j) => j !== si) } : x)) });
+    snack('Set deleted', 'Undo', () => setD((o) => o && { ...o, exercises: o.exercises.map((x) => (x.id === exId ? { ...x, sets: [...x.sets.slice(0, si), st, ...x.sets.slice(si)] } : x)) }));
+  };
+  const moveEx = (ei: number, dir: -1 | 1) => setD((o) => { if (!o) return o; const l = [...o.exercises]; const j = ei + dir; if (j < 0 || j >= l.length) return o; [l[j], l[ei]] = [l[ei], l[j]]; return { ...o, exercises: l }; });
+  const earlier = hist.filter((h) => h.id !== id && h.start < w.start);
   const saveEdit = async () => {
     if (!d) return; if (!d.end || d.end <= d.start) { toast('End time must be after the start time'); return; }
     const nw: Workout = { ...d, exercises: d.exercises.map((e) => ({ ...e, sets: e.sets.filter((x) => x.done || x.kg != null || x.reps != null) })).filter((e) => e.sets.length), needsReview: false };
@@ -324,22 +327,40 @@ export function WorkoutDetail({ id }: { id: string }) {
     {w.needsReview && !edit && <div class="card sm" data-testid="autoended-note" style="border-color:var(--acc2)">⏹ Ended automatically at the last completed set after 2 h without activity. <button class="btn g sm" onClick={async () => { await put('workouts', { ...w, needsReview: false }); toast('Marked as reviewed'); }}>Looks right</button></div>}
     {edit && d ? <div class="card col">
       <label class="f">Name<input value={d.name} onInput={(e) => setD({ ...d, name: e.currentTarget.value })} /></label>
-      <div class="grid2"><label class="f">Start<input type="datetime-local" data-testid="edit-start" value={toLocalInput(d.start)} onInput={(e) => { const t = fromLocalInput(e.currentTarget.value); if (t) setD({ ...d, start: t }); }} /></label>
-        <label class="f">End<input type="datetime-local" data-testid="edit-end" value={toLocalInput(d.end || d.start)} onInput={(e) => { const t = fromLocalInput(e.currentTarget.value); if (t) setD({ ...d, end: t }); }} /></label></div>
+      <div class="grid2"><label class="f" style="min-width:0">Start<input type="datetime-local" data-testid="edit-start" style="min-width:0;width:100%" value={toLocalInput(d.start)} onInput={(e) => { const t = fromLocalInput(e.currentTarget.value); if (t) setD({ ...d, start: t }); }} /></label>
+        <label class="f" style="min-width:0">End<input type="datetime-local" data-testid="edit-end" style="min-width:0;width:100%" value={toLocalInput(d.end || d.start)} onInput={(e) => { const t = fromLocalInput(e.currentTarget.value); if (t) setD({ ...d, end: t }); }} /></label></div>
       <div class="mut xs">Duration {fmtDur(Math.max(0, (d.end || d.start) - d.start))} · calories come from the completed sets, not the duration.</div></div>
       : <div class="mut sm">{fmtDate(w.start)} · {fmtTime(w.start)}–{fmtTime(w.end || w.start)}{w.autoEnded ? ' · auto-ended' : ''}{w.importSource ? ' · ' : ''}<SrcTag w={w} /></div>}
     {!edit && w.notes && <div class="sm mut" style="margin-top:4px">{w.notes}</div>}
     <div class="kpi" style="margin-top:8px"><div><span class="mut xs">Duration</span><b data-testid="detail-duration">{fmtDur((w.end || 0) - w.start)}</b></div><div><span class="mut xs">Volume</span><b>{Math.round(Number(wDisp(workoutVolume(w), s)))} {s.weightUnit}</b></div><div><span class="mut xs">Sets</span><b>{workoutSetCount(w)}</b></div></div>
     {!edit && !!w.prs?.length && <div class="card" style="margin-top:12px;border-color:var(--warn)"><h3>🏆 Personal records</h3>{w.prs.map((p) => <div class="row between sm"><span>{exs.get(p.exerciseId)?.name}</span><span class="pill warn">{PR_LABEL[p.kind]}: {p.kind === 'reps' ? p.value : `${wDisp(p.value, s)} ${s.weightUnit}`}</span></div>)}</div>}
     {!edit && <WorkoutKcalCard key={String(w.end) + w.start + JSON.stringify(w.exercises)} w={w} exs={exs} onChange={() => {}} />}
-    {w.exercises.map((e, ei) => { let n = 0; return <div class="card" style="margin-top:12px"><div class="row" style="gap:8px"><ExThumb ex={exs.get(e.exerciseId)} size={40} /><a class="b" style="color:var(--acc2);text-decoration:none" href={`#/exercise/${e.exerciseId}`}>{exs.get(e.exerciseId)?.name}</a></div>
+    {edit && d ? <>
+      {d.exercises.map((e, ei) => { const ex = exs.get(e.exerciseId); return <div class="card" style="margin-top:12px;padding:12px 8px" data-testid="ex-card">
+        <div class="row between" style="padding:0 4px;gap:8px"><ExThumb ex={ex} size={40} /><a class="b grow ell" style="color:var(--acc2);text-decoration:none" href={`#/exercise/${e.exerciseId}`}>{ex?.name || 'Unknown exercise'}</a>
+          <button class="btn ic" aria-label="Exercise menu" data-testid="ex-menu" onClick={() => setExMenu(ei)}>⋮</button></div>
+        {e.notes != null && <input placeholder="Notes" value={e.notes} onInput={(x) => { const v = x.currentTarget.value; updEx(ei, () => ({ notes: v })); }} style="margin:4px 0 6px" data-testid="ex-note" />}
+        <SetTable sets={e.sets} prev={previousSets(earlier, e.exerciseId)} mode={setMode(ex)} s={s} onUpd={(si, p) => updSet(ei, si, p)} onToggle={(si) => updSet(ei, si, { done: !e.sets[si].done })}
+          onType={(si) => setSetMenu({ ei, si })} onDelete={(si) => delSet(e.id, si)}
+          onAdd={() => updEx(ei, (x) => { const last = x.sets[x.sets.length - 1]; return { sets: [...x.sets, newSet({ kg: last?.kg ?? null, reps: last?.reps ?? null, done: !!last, ...(last?.km != null ? { km: last.km } : {}) })] }; })} />
+      </div>; })}
+      <button class="btn b2 full" style="margin-top:14px" data-testid="add-exercise" onClick={() => setPick(true)}>+ Add exercise</button>
+      <ExercisePicker open={pick} onClose={() => setPick(false)} onAdd={(ids) => setD((o) => o && { ...o, exercises: [...o.exercises, ...ids.map((x) => ({ id: uid(), exerciseId: x, restSec: s.defaultRest, sets: [newSet()] }))] })} />
+      <Sheet open={!!setMenu} onClose={() => setSetMenu(null)} title="Set type">
+        {setMenu && <div class="col">{(['W', 'N', 'D', 'F'] as SetType[]).map((t) => <button class={'btn ' + (d.exercises[setMenu.ei]?.sets[setMenu.si]?.type === t ? 'b2' : '')} onClick={() => { updSet(setMenu.ei, setMenu.si, { type: t }); setSetMenu(null); }}><span class={'stype ' + t}>{t === 'N' ? '1' : t}</span> {TYPE_LABEL[t]}</button>)}
+          <button class="btn d" data-testid="menu-delete-set" onClick={() => { const e = d.exercises[setMenu.ei]; if (e) delSet(e.id, setMenu.si); setSetMenu(null); }}>Delete set</button></div>}
+      </Sheet>
+      <Sheet open={exMenu != null} onClose={() => setExMenu(null)} title={exMenu != null ? exs.get(d.exercises[exMenu]?.exerciseId)?.name : ''}>
+        {exMenu != null && d.exercises[exMenu] && <div class="col" data-testid="ex-menu-sheet">
+          <button class="btn" data-testid="ex-add-note" onClick={() => { updEx(exMenu, (x) => ({ notes: x.notes ?? '' })); setExMenu(null); }}>Add note</button>
+          <div class="grid2"><button class="btn" data-testid="ex-up" disabled={exMenu === 0} onClick={() => { moveEx(exMenu, -1); setExMenu(null); }}>Move up</button>
+            <button class="btn" data-testid="ex-down" disabled={exMenu === d.exercises.length - 1} onClick={() => { moveEx(exMenu, 1); setExMenu(null); }}>Move down</button></div>
+          <button class="btn d" data-testid="ex-remove" onClick={() => { const i = exMenu; const gone = d.exercises[i]; setD((o) => o && { ...o, exercises: o.exercises.filter((_, j) => j !== i) }); setExMenu(null);
+            snack('Exercise removed', 'Undo', () => setD((o) => o && { ...o, exercises: [...o.exercises.slice(0, i), gone, ...o.exercises.slice(i)] })); }}>Remove exercise</button></div>}
+      </Sheet></>
+    : w.exercises.map((e) => { let n = 0; return <div class="card" style="margin-top:12px"><div class="row" style="gap:8px"><ExThumb ex={exs.get(e.exerciseId)} size={40} /><a class="b" style="color:var(--acc2);text-decoration:none" href={`#/exercise/${e.exerciseId}`}>{exs.get(e.exerciseId)?.name}</a></div>
       {e.notes && <div class="mut sm">{e.notes}</div>}
-      {e.sets.map((st, si) => edit ? <div class="row sm" style="padding:4px 0;gap:6px"><span class={'stype ' + st.type} style="min-height:0">{st.type === 'N' ? ++n : st.type}</span>
-          <NumInput style="width:70px" value={st.kg != null ? wDisp(st.kg, s) : null} onValue={(v) => updSet(ei, si, { kg: v == null ? null : wIn(v, s) })} aria-label="Weight" /><span class="mut">×</span>
-          <NumInput int style="width:60px" value={st.reps} onValue={(v) => updSet(ei, si, { reps: v })} aria-label="Reps" />
-          <button class={'check ' + (st.done ? 'on' : '')} onClick={() => updSet(ei, si, { done: !st.done })} aria-label="Completed">✓</button>
-          <button class="btn ic" aria-label="Delete set" onClick={() => setD((o) => o && { ...o, exercises: o.exercises.map((x, i) => (i === ei ? { ...x, sets: x.sets.filter((_, j) => j !== si) } : x)) })}>✕</button></div>
-        : <div class={'row between sm' + (st.done ? '' : ' unticked')} style="padding:4px 0"><span class={'stype ' + st.type} style="min-height:0">{st.type === 'N' ? ++n : st.type}</span><span class="grow">{fmtSet(st, exs.get(e.exerciseId), s)}{st.rpe ? ` @ RPE ${st.rpe}` : ''}{!st.done && <span class="pill" style="margin-left:6px">not ticked</span>}</span><span class="mut">{st.done ? `1RM ${r1(Number(wDisp(e1rm(st.kg || 0, st.reps || 0), s)))}` : ''}</span></div>)}</div>; })}
+      {e.sets.map((st) => <div class={'row between sm' + (st.done ? '' : ' unticked')} style="padding:4px 0"><span class={'stype ' + st.type} style="min-height:0">{st.type === 'N' ? ++n : st.type}</span><span class="grow">{fmtSet(st, exs.get(e.exerciseId), s)}{st.rpe ? ` @ RPE ${st.rpe}` : ''}{!st.done && <span class="pill" style="margin-left:6px">not ticked</span>}</span><span class="mut">{st.done ? `1RM ${r1(Number(wDisp(e1rm(st.kg || 0, st.reps || 0), s)))}` : ''}</span></div>)}</div>; })}
     {edit ? <button class="btn full" style="margin-top:20px" onClick={() => { setEdit(false); setD(null); history.replaceState(null, '', `#/history/${id}`); }}>Cancel editing</button>
       : <><button class="btn b2 full" style="margin-top:20px" data-testid="repeat-workout" onClick={() => repeatWorkout(w)}>↻ Repeat workout</button>
         <button class="btn d full" style="margin-top:10px" data-testid="delete-workout" onClick={async () => { if (confirmDo('Delete this workout from history?')) { await del('workouts', w.id); await reconcileNow(); history.back(); } }}>Delete workout</button></>}
